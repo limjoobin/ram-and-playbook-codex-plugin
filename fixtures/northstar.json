@@ -1,0 +1,8 @@
+[
+  {"key":"objective","fact":"Northstar Retail's pilot will help support agents find approved troubleshooting guidance."},
+  {"key":"region","fact":"Northstar Retail's pilot must deploy in the Singapore region."},
+  {"key":"duration","fact":"Northstar Retail's pilot will run for four weeks."},
+  {"key":"participants","fact":"Twenty Northstar Retail support agents will evaluate the pilot."},
+  {"key":"data","fact":"Only synthetic support tickets are permitted in Northstar Retail's pilot."},
+  {"key":"evaluation","fact":"Northstar Retail will evaluate the pilot on answer correctness and accurate source references."}
+]
