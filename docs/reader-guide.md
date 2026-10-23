@@ -10,8 +10,8 @@ Prerequisites are macOS, Claude Desktop opened once, Git, and Node.js 20 or newe
 Claude Code CLI is not required.
 
 ```sh
-git clone https://github.com/redis-field-engineering/cross-user-ram.git
-cd cross-user-ram
+git clone https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin.git
+cd ram-and-playbook-codex-plugin
 ./scripts/install-claude-desktop.sh reader
 ```
 

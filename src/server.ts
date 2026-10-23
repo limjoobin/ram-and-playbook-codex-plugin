@@ -43,6 +43,6 @@ export function createServer(role: Role, getMemory: () => SharedMemory = () => {
   return server;
 }
 
-export async function start(role: Role) {
-  await createServer(role).connect(new StdioServerTransport());
+export async function start(role: Role, getMemory?: () => SharedMemory) {
+  await createServer(role, getMemory).connect(new StdioServerTransport());
 }

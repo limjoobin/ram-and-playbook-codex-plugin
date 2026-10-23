@@ -1,0 +1,31 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "redis-shared-memory-editor",
+  "version": "0.1.1",
+  "description": "Search, publish, and update shared facts in Redis Agent Memory from Codex and ChatGPT desktop.",
+  "author": {
+    "name": "Redis Field Engineering",
+    "url": "https://github.com/redis-field-engineering"
+  },
+  "repository": "https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin",
+  "keywords": ["redis", "agent-memory", "shared-memory", "mcp"],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "Redis Shared Memory — Editor",
+        "shortDescription": "Read and update shared Redis Agent Memory facts.",
+        "longDescription": "A local MCP integration for searching, publishing, and updating a namespace in Redis Agent Memory. Credentials remain in a user-owned .env file outside the plugin.",
+        "developerName": "Redis Field Engineering",
+        "category": "Developer Tools",
+        "capabilities": ["Read", "Write"],
+        "websiteURL": "https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin",
+        "defaultPrompt": [
+          "Check the Redis Shared Memory connection status.",
+          "Search shared memory before answering this customer-specific question.",
+          "Publish this user-approved fact to shared memory."
+        ]
+      }
+    }
+  }
+}

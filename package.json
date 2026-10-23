@@ -6,7 +6,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/memory.test.ts",
-    "build": "node scripts/build.mjs",
+    "build": "node scripts/build.mjs && node scripts/build-codex.mjs",
+    "build:codex": "node scripts/build-codex.mjs",
     "test:packages": "node --import tsx --test tests/packages.test.ts",
     "test:live": "node --import tsx scripts/live-test.ts",
     "check": "npm run typecheck && npm test && npm run build && npm run test:packages"

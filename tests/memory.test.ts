@@ -5,7 +5,11 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CreateMemoryRecord, MemoryRecord, SearchLongTermMemoryRequestContent, UpdateLongTermMemoryRequestContent } from '@redis-iris/agent-memory/models';
 import { SharedMemory, RAMClient } from '../src/memory.js';
 import { Config, loadConfig, publicError } from '../src/config.js';
+import { loadCredentialFile } from '../src/credential-file.js';
 import { createServer } from '../src/server.js';
+import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const config: Config = { endpoint: 'https://example.test', apiKey: 'test-secret-never-display', storeId: 'store', namespace: 'northstar-pilot-qa', participant: 'hillary' };
 function record(id = 'region', namespace = config.namespace, text = 'Singapore'): MemoryRecord {
@@ -116,6 +120,26 @@ test('unknown persistence does not trigger a blind second publish', async () => 
 test('configuration rejects missing settings and credential-bearing endpoints', () => {
   assert.throws(() => loadConfig({}), /Complete these/);
   assert.throws(() => loadConfig({ RAM_ENDPOINT: 'https://user:secret@example.test', RAM_STORE_ID: 'store', RAM_NAMESPACE: 'ns', RAM_PARTICIPANT: 'me', RAM_API_KEY: 'secret' }), /without credentials/);
+});
+test('credential files must be user-private regular files with known fields', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'ram-credentials-'));
+  const path = join(dir, 'editor.env');
+  const contents = 'RAM_ENDPOINT=https://example.test\nRAM_STORE_ID=store\nRAM_NAMESPACE=ns\nRAM_PARTICIPANT=me\nRAM_API_KEY=secret\n';
+  try {
+    writeFileSync(path, contents, { mode: 0o644 });
+    assert.throws(() => loadCredentialFile(path), /0600/);
+    chmodSync(path, 0o600);
+    assert.equal(loadCredentialFile(path).participant, 'me');
+    writeFileSync(path, `${contents}UNEXPECTED=value\n`, { mode: 0o600 });
+    assert.throws(() => loadCredentialFile(path), /unexpected or duplicate/);
+    const target = join(dir, 'target.env');
+    writeFileSync(target, contents, { mode: 0o600 });
+    const link = join(dir, 'link.env');
+    symlinkSync(target, link);
+    assert.throws(() => loadCredentialFile(link), /regular file/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 test('errors do not disclose SDK headers, credentials, or payloads', () => {
   for (const statusCode of [401, 403, 404, 408, 429, 500]) {

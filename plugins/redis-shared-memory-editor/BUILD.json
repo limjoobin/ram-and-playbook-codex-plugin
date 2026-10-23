@@ -1,0 +1,5 @@
+{
+  "version": "0.1.1",
+  "source_sha256": "484d8ec76b993f12b9fd3e39ee7fa14ee430ba69198feaa374ff7cb1a0fbb8b2",
+  "entry_point": "server/index.cjs"
+}

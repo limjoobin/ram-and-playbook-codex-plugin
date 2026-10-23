@@ -23,8 +23,8 @@ Do not paste the API key into Claude, email, or a GitHub repository.
 ## 1. Clone the repository
 
 ```sh
-git clone https://github.com/redis-field-engineering/cross-user-ram.git
-cd cross-user-ram
+git clone https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin.git
+cd ram-and-playbook-codex-plugin
 ```
 
 ## 2. Install one role

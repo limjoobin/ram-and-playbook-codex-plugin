@@ -23,7 +23,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   for (const name of ['RAM_STORE_ID', 'RAM_NAMESPACE', 'RAM_PARTICIPANT'] as const) {
     if (!SLUG.test(env[name]!.trim())) throw new DemoError('configuration_invalid', `${name} must contain 1–64 letters, digits, or hyphens.`);
   }
-  if (env.RAM_API_KEY!.startsWith('__encrypted__:')) throw new DemoError('credential_unavailable', 'The configured RAM credential is unavailable. Run the role installer again.');
+  if (env.RAM_API_KEY!.startsWith('__encrypted__:')) throw new DemoError('credential_unavailable', 'The configured RAM credential is unavailable. Replace it in the local .env file.');
   return { endpoint: endpoint.replace(/\/+$/, ''), storeId: env.RAM_STORE_ID!.trim(),
     namespace: env.RAM_NAMESPACE!.trim(), participant: env.RAM_PARTICIPANT!.trim(), apiKey: env.RAM_API_KEY!.trim() };
 }
@@ -35,7 +35,7 @@ export function publicError(error: unknown): PublicError {
   if (error instanceof DemoError) return { code: error.code, message: error.message };
   const e = error as { statusCode?: number; status?: number; name?: string; type?: string; response$?: { status?: number } } | null;
   const status = e?.statusCode ?? e?.status ?? e?.response$?.status;
-  if (status === 401) return { code: 'authentication_failed', message: 'RAM rejected the API key. Run the role installer again with the correct credential.' };
+  if (status === 401) return { code: 'authentication_failed', message: 'RAM rejected the API key. Replace it in the local .env file.' };
   if (status === 403) return { code: 'access_denied', message: 'RAM denied access. Check that the API key can access the configured store.' };
   if (status === 404) return { code: 'not_found', message: 'The RAM store or memory was not found. Check the store ID and memory ID.' };
   if (status === 429) return { code: 'rate_limited', message: 'RAM is rate limited. Wait briefly before trying again.' };

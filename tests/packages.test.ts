@@ -6,7 +6,47 @@ import { chmod, mkdir, readFile, writeFile, mkdtemp, rm, stat, symlink } from 'n
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { once } from 'node:events';
-import { openPackage, call } from './package-harness.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { openPackage, call, root } from './package-harness.js';
+
+test('Codex marketplace installs a write-capable local plugin without secrets or hooks', async () => {
+  const pluginDir = join(root, 'plugins', 'redis-shared-memory-editor');
+  const marketplace = JSON.parse(await readFile(join(root, '.agents/plugins/marketplace.json'), 'utf8'));
+  const manifest = JSON.parse(await readFile(join(pluginDir, 'plugin.json'), 'utf8'));
+  const mcp = JSON.parse(await readFile(join(pluginDir, 'mcp.json'), 'utf8'));
+
+  assert.equal(marketplace.plugins[0].name, manifest.name);
+  assert.equal(marketplace.plugins[0].source.path, './plugins/redis-shared-memory-editor');
+  assert.deepEqual(manifest.extensions['com.openai'].interface.capabilities, ['Read', 'Write']);
+  assert.equal(manifest.extensions['com.openai'].requires_local_executor, true);
+  assert.equal(manifest.extensions['com.openai'].hooks, undefined);
+  assert.equal(mcp.mcpServers['redis-shared-memory-editor'].type, 'stdio');
+  assert.equal(mcp.mcpServers['redis-shared-memory-editor'].command, 'node');
+  assert.deepEqual(mcp.mcpServers['redis-shared-memory-editor'].args, ['${PLUGIN_ROOT}/server/index.cjs']);
+
+  const fakeHome = await mkdtemp(join(tmpdir(), 'ram-codex-home-'));
+  let stderr = '';
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [join(pluginDir, 'server/index.cjs')],
+    cwd: pluginDir,
+    env: { HOME: fakeHome, PATH: '/usr/bin:/bin' },
+    stderr: 'pipe',
+  });
+  transport.stderr?.on('data', chunk => { stderr += chunk.toString(); });
+  const client = new Client({ name: 'codex-plugin-test', version: '1' });
+  try {
+    await client.connect(transport);
+    assert.deepEqual((await client.listTools()).tools.map(tool => tool.name),
+      ['editor_status', 'editor_search', 'editor_publish', 'editor_update']);
+    assert.equal((await call(client, 'editor_status')).data.code, 'configuration_missing');
+    assert.equal(stderr, '');
+  } finally {
+    await client.close();
+    await rm(fakeHome, { recursive: true, force: true });
+  }
+});
 
 test('exact artifacts launch outside repo, have independent identities and no embedded secrets/paths', async () => {
   const packages = await Promise.all([openPackage('editor'), openPackage('reader')]);

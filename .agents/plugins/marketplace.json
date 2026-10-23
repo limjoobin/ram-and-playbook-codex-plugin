@@ -1,0 +1,20 @@
+{
+  "name": "redis-field-engineering-local",
+  "interface": {
+    "displayName": "Redis Field Engineering"
+  },
+  "plugins": [
+    {
+      "name": "redis-shared-memory-editor",
+      "source": {
+        "source": "local",
+        "path": "./plugins/redis-shared-memory-editor"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
