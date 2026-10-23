@@ -14,7 +14,6 @@ const sources = execFileSync('git', ['ls-files', '--cached', '--others', '--excl
   cwd: root, encoding: 'utf8',
 }).trim().split('\n').filter(path => path
   && !path.startsWith('reports/')
-  && path !== 'plugins/redis-shared-memory-editor/server/index.cjs'
   && path !== 'plugins/redis-shared-memory-editor/BUILD.json').sort();
 const sourceHash = createHash('sha256');
 for (const path of sources) {

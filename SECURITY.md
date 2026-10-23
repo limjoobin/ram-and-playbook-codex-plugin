@@ -9,7 +9,7 @@ Agent Memory endpoint configured in the user's external credential file.
 The desktop plugin exposes read and write tools. Installation therefore grants
 code-execution and network access appropriate to that local server. Enterprise
 administrators should review and allowlist the exact repository and Git ref,
-the Node.js runtime, and the permitted Redis endpoint before deployment.
+the Python runtime, and the permitted Redis endpoint before deployment.
 
 ## Credentials and identity
 
@@ -64,11 +64,15 @@ outcome when it cannot prove persistence.
 
 - Pin customer installations to a reviewed tag or commit instead of an
   unbounded branch.
-- Use `npm ci` and the committed lockfile for development builds.
-- The installed plugin uses the committed dependency bundle and does not run
-  `npm install`, package lifecycle hooks, or runtime downloads.
-- `BUILD.json` records a digest of the source set used for the bundle. Rebuild
-  with `npm run check`; never modify `server/index.cjs` directly.
+- The installed plugin uses committed Python standard-library source and does
+  not run `pip install`, `npm install`, package lifecycle hooks, or runtime
+  downloads.
+- The MCP command uses Python isolated mode (`-I`) so `PYTHONPATH` and
+  user-installed site packages cannot inject code into the plugin process.
+- `BUILD.json` records a digest of the reviewed source set. Refresh it with
+  `npm run build:plugin` and verify the result with `npm run check`.
+- The inherited Claude packages still use locked Node dependencies; use
+  `npm ci` and the committed lockfile when testing the complete repository.
 - Adding lifecycle hooks, installers, telemetry, native executables, a new
   network destination, or an arbitrary upstream MCP proxy requires a new
   security review.

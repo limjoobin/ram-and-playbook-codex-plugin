@@ -23,9 +23,9 @@ behavior.
 
 ## 2. Add the service operation
 
-Implement RAM behavior on `SharedMemory` in `src/memory.ts`. The service layer
+Implement RAM behavior on `SharedMemory` in `ram_plugin/ram.py`. The service layer
 owns scope checks, safe retries, verification, and the minimal result shape.
-MCP handlers in `src/server.ts` should remain thin.
+MCP handlers in `ram_plugin/mcp_server.py` should remain thin.
 
 For a read:
 
@@ -35,7 +35,7 @@ For a read:
 
 For a write:
 
-- Call `requireEditor()` before accessing RAM.
+- Keep writes available only through explicitly registered `editor_*` tools.
 - Read the current record before updating it.
 - Preserve fields that the user did not ask to change.
 - Never replay an uncertain mutation merely because it timed out.
@@ -47,27 +47,39 @@ adapter instead of adding unrelated methods to `SharedMemory`.
 
 ## 3. Register the MCP tool
 
-Register the tool in `src/server.ts`. A typical read tool has this shape:
+Register the tool in the `TOOLS` list in `ram_plugin/mcp_server.py`. A typical
+read tool has this shape:
 
-```ts
-server.registerTool(
-  'editor_get_example',
-  {
-    title: 'Get example',
-    description:
-      'Retrieve one example from the configured Redis memory namespace by its exact ID. No writes.',
-    inputSchema: z.object({
-      memory_id: z.string().regex(SLUG),
-    }).strict(),
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: true,
+```python
+{
+    "name": "editor_get_example",
+    "title": "Get example",
+    "description": (
+        "Retrieve one example from the configured Redis memory namespace "
+        "by its exact ID. No writes."
+    ),
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "memory_id": {
+                "type": "string",
+                "pattern": "^[a-zA-Z0-9-]{1,64}$",
+            }
+        },
+        "required": ["memory_id"],
+        "additionalProperties": False,
     },
-  },
-  ({ memory_id }) => wrap(memory => memory.getExample(memory_id))(),
-);
+    "annotations": {
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "openWorldHint": True,
+    },
+}
 ```
+
+Then add exact argument validation in `_validate_arguments()` and map the name
+to its `SharedMemory` method in `call_tool()`. The advertised JSON Schema and
+runtime validation must agree.
 
 For every tool:
 
@@ -87,7 +99,7 @@ but it does not replace the three required safety annotations.
 
 ## 4. Test the contract
 
-Add tests to `tests/memory.test.ts` for:
+Add tests to `tests/test_python_plugin.py` for:
 
 - the successful operation;
 - invalid and boundary inputs;
@@ -115,8 +127,8 @@ Update these files as needed:
 
 If a new setting is required, add it to all of these places:
 
-1. `Config` and `loadConfig()` in `src/config.ts`;
-2. the allowlist in `src/credential-file.ts`;
+1. `Config` and `load_config()` in `ram_plugin/config.py`;
+2. `SETTING_NAMES` and the loader in `ram_plugin/credentials.py`;
 3. `plugins/redis-shared-memory-editor/.env.example`;
 4. configuration and security documentation; and
 5. tests for missing, invalid, duplicate, and unexpected values.
@@ -132,10 +144,9 @@ npm ci
 npm run check
 ```
 
-The build compiles TypeScript and bundles runtime dependencies into
-`plugins/redis-shared-memory-editor/server/index.cjs`. Review the TypeScript
-source, tests, manifest changes, and `BUILD.json` source digest. Do not edit the
-bundle manually.
+The desktop plugin is committed as dependency-free Python source; there is no
+generated executable or vendored Python environment. Review the source, tests,
+manifest changes, and `BUILD.json` source digest.
 
 Before sharing a ref, install that exact ref in a clean checkout and invoke each
 new tool with representative, invalid, out-of-scope, and dependency-failure

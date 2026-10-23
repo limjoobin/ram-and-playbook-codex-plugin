@@ -1,5 +1,6 @@
 {
-  "version": "0.1.1",
-  "source_sha256": "d2a978eef0c3d5a271239bf69149b424a02f9883801621ad884f909c8258ec57",
-  "entry_point": "server/index.cjs"
+  "version": "0.2.0",
+  "source_sha256": "c0cb2993130b591597b11ff335ef4f84507c68e3696b9360b7a56250b95ea6b1",
+  "entry_point": "server/main.py",
+  "runtime": "python>=3.10"
 }

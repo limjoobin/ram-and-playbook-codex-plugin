@@ -10,10 +10,10 @@ plugin. The shipped plugin exposes four MCP tools:
 - `editor_publish`
 - `editor_update`
 
-The plugin talks directly to Redis Agent Memory through the official
-TypeScript SDK. It is not a generic MCP proxy, and it does not yet expose
-Playbook operations. Do not claim either capability until its API contract,
-authorization model, implementation, and tests exist.
+The plugin talks directly to the reviewed Redis Agent Memory HTTPS data-plane
+operations from dependency-free Python. It is not a generic MCP proxy, and it
+does not yet expose Playbook operations. Do not claim either capability until
+its API contract, authorization model, implementation, and tests exist.
 
 Before changing the plugin, read:
 
@@ -27,17 +27,18 @@ Before changing the plugin, read:
 
 | Path | Responsibility |
 | --- | --- |
-| `src/server.ts` | MCP server instructions, tool names, schemas, descriptions, annotations, and response envelope |
-| `src/memory.ts` | RAM reads/writes, namespace enforcement, retry policy, and write verification |
-| `src/config.ts` | Configuration contract, validation, version, and public error mapping |
-| `src/credential-file.ts` | Secure parsing and validation of the external credential file |
-| `src/codex-editor.ts` | Local desktop entry point and credential-file location |
-| `tests/memory.test.ts` | Unit and MCP contract tests |
+| `plugins/redis-shared-memory-editor/server/main.py` | Local desktop entry point |
+| `plugins/redis-shared-memory-editor/server/ram_plugin/mcp_server.py` | MCP protocol, tool names, schemas, descriptions, annotations, validation, and response envelope |
+| `plugins/redis-shared-memory-editor/server/ram_plugin/ram.py` | RAM HTTPS operations, namespace enforcement, retry policy, and write verification |
+| `plugins/redis-shared-memory-editor/server/ram_plugin/config.py` | Plugin configuration contract, version, validation, and public error mapping |
+| `plugins/redis-shared-memory-editor/server/ram_plugin/credentials.py` | Secure parsing and validation of the external credential file |
+| `tests/test_python_plugin.py` | Python unit and tool-contract tests |
+| `tests/memory.test.ts` | Unit and MCP contract tests for the inherited Claude implementation |
 | `tests/packages.test.ts` | Packaged-artifact and end-to-end HTTPS tests |
 | `plugins/redis-shared-memory-editor/plugin.json` | Portable plugin identity and desktop presentation metadata |
 | `plugins/redis-shared-memory-editor/mcp.json` | Bundled stdio MCP launch configuration |
-| `scripts/build-codex.mjs` | Reproducible plugin bundle and source digest build |
-| `plugins/redis-shared-memory-editor/server/index.cjs` | Generated runtime bundle; never edit by hand |
+| `scripts/build-plugin.py` | Plugin version check and reproducible source digest |
+| `plugins/redis-shared-memory-editor/BUILD.json` | Generated source digest; never edit by hand |
 
 The original Claude Reader/Editor packaging remains in this repository. A
 desktop-plugin change must not silently alter the Claude packages, and a Claude
@@ -74,8 +75,8 @@ Follow `docs/adding-tools.md`. In summary:
 
 1. Define one recognizable user action. Do not add a generic executor or a
    tool that discovers and invokes hidden operations.
-2. Put RAM behavior in `src/memory.ts`, not directly in the MCP handler.
-3. Register the operation in `src/server.ts` with a stable action-oriented
+2. Put RAM behavior in `ram_plugin/ram.py`, not directly in the MCP handler.
+3. Register the operation in `ram_plugin/mcp_server.py` with a stable action-oriented
    name, an exact description, a strict bounded input schema, and explicit
    `readOnlyHint`, `destructiveHint`, and `openWorldHint` booleans.
 4. Enforce authorization and scope in code. Do not rely on prompt text or the
@@ -83,7 +84,8 @@ Follow `docs/adding-tools.md`. In summary:
 5. Return only task-relevant fields through the existing sanitized response
    envelope.
 6. Add positive, invalid-input, unauthorized/out-of-scope, dependency-failure,
-   and MCP-listing tests. Add uncertain-write tests for every mutation.
+   and MCP-listing tests. Add uncertain-write tests for every mutation. The
+   Python runtime must continue to pass without third-party Python packages.
 7. Update the tool list and examples in the plugin README and installation
    guide when user-visible behavior changes.
 8. Rebuild the generated runtime and run the complete check before committing.
@@ -110,24 +112,20 @@ For a focused iteration:
 
 ```sh
 npm run typecheck
-npm test
-npm run build:codex
+python3 -m unittest discover -s tests -p 'test_python_*.py'
+npm run build:plugin
 npm run test:packages
 ```
 
-After a build, commit both generated files when they change:
-
-- `plugins/redis-shared-memory-editor/server/index.cjs`
-- `plugins/redis-shared-memory-editor/BUILD.json`
-
-Do not hand-edit either file. Review source changes and test results instead.
+After a build, commit `plugins/redis-shared-memory-editor/BUILD.json` when it
+changes. Do not hand-edit it; review the Python source and test results instead.
 
 ## Version and release checklist
 
 When the shipped plugin behavior changes:
 
-1. Keep the versions in `package.json`, `package-lock.json`,
-   `src/config.ts`, and the plugin manifest aligned.
+1. Keep the versions in `ram_plugin/config.py` and the plugin manifest aligned.
+   The inherited Claude package version is independent.
 2. Preserve backward-compatible tool names and schemas unless a coordinated
    breaking release is intentional.
 3. Run `npm run check` from a clean dependency install.

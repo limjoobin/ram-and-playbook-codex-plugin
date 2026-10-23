@@ -1,12 +1,12 @@
 # Codex and ChatGPT desktop installation
 
-This local plugin is a direct Codex packaging of the existing Claude Desktop
-Editor MCP server. It supports reads and writes and uses the same external
+This local plugin is a Python implementation of the existing shared-memory
+Editor behavior. It supports reads and writes and uses the same external
 credential file as an installed Claude Editor.
 
 ## Prerequisites
 
-- macOS with Node.js 20 or newer.
+- macOS with Python 3.10 or newer available as `python3`.
 - Codex CLI and the ChatGPT desktop app.
 - A RAM HTTPS endpoint, store ID, namespace, participant ID, and API key.
 - Permission from your enterprise administrator to use this repository as a
@@ -64,9 +64,20 @@ prompt/approval policy.
 
 ## Development
 
-The committed `server/index.cjs` is a dependency-bundled artifact, so installing
-the marketplace does not run `npm install`, download code, or execute a package
-lifecycle script. Rebuild and verify it from source with:
+The committed server is dependency-free Python source. Installing the
+marketplace does not run `pip install`, `npm install`, download code, or execute
+a package lifecycle script. Verify the Python source and refresh its source
+digest with:
+
+```sh
+npm ci
+npm run build:plugin
+npm test
+npm run test:packages
+```
+
+Or run the complete repository check, which also rebuilds the inherited Claude
+packages:
 
 ```sh
 npm ci

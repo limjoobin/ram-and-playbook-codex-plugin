@@ -3,8 +3,8 @@
   "mcpServers": {
     "redis-shared-memory-editor": {
       "type": "stdio",
-      "command": "node",
-      "args": ["${PLUGIN_ROOT}/server/index.cjs"],
+      "command": "python3",
+      "args": ["-I", "${PLUGIN_ROOT}/server/main.py"],
       "cwd": "${PLUGIN_ROOT}"
     }
   }

@@ -9,8 +9,9 @@ write-capable tools:
 - `editor_publish`
 - `editor_update`
 
-The plugin has no lifecycle hooks or installer scripts. It runs the bundled MCP
-server with the computer's existing Node.js runtime and reads credentials from:
+The plugin has no lifecycle hooks or installer scripts. It runs readable,
+dependency-free source with the computer's existing Python 3.10+ runtime and
+reads credentials from:
 
 ```text
 ~/.config/redis-shared-memory/editor.env

@@ -22,29 +22,108 @@ test('Codex marketplace installs a write-capable local plugin without secrets or
   assert.equal(manifest.extensions['com.openai'].requires_local_executor, true);
   assert.equal(manifest.extensions['com.openai'].hooks, undefined);
   assert.equal(mcp.mcpServers['redis-shared-memory-editor'].type, 'stdio');
-  assert.equal(mcp.mcpServers['redis-shared-memory-editor'].command, 'node');
-  assert.deepEqual(mcp.mcpServers['redis-shared-memory-editor'].args, ['${PLUGIN_ROOT}/server/index.cjs']);
+  assert.equal(mcp.mcpServers['redis-shared-memory-editor'].command, 'python3');
+  assert.deepEqual(mcp.mcpServers['redis-shared-memory-editor'].args, ['-I', '${PLUGIN_ROOT}/server/main.py']);
+  await stat(join(pluginDir, 'server/main.py'));
+  await assert.rejects(stat(join(pluginDir, 'server/index.cjs')));
 
-  const fakeHome = await mkdtemp(join(tmpdir(), 'ram-codex-home-'));
+  const fakeHome = await mkdtemp(join(tmpdir(), 'ram-plugin-home-'));
   let stderr = '';
   const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [join(pluginDir, 'server/index.cjs')],
+    command: 'python3',
+    args: ['-I', join(pluginDir, 'server/main.py')],
     cwd: pluginDir,
-    env: { HOME: fakeHome, PATH: '/usr/bin:/bin' },
+    env: { HOME: fakeHome, PATH: process.env.PATH ?? '/usr/bin:/bin' },
     stderr: 'pipe',
   });
   transport.stderr?.on('data', chunk => { stderr += chunk.toString(); });
-  const client = new Client({ name: 'codex-plugin-test', version: '1' });
+  const client = new Client({ name: 'desktop-plugin-test', version: '1' });
   try {
     await client.connect(transport);
-    assert.deepEqual((await client.listTools()).tools.map(tool => tool.name),
+    const tools = (await client.listTools()).tools;
+    assert.deepEqual(tools.map(tool => tool.name),
       ['editor_status', 'editor_search', 'editor_publish', 'editor_update']);
+    assert.deepEqual(tools.map(tool => tool.annotations), [
+      { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+      { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
+      { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    ]);
     assert.equal((await call(client, 'editor_status')).data.code, 'configuration_missing');
     assert.equal(stderr, '');
   } finally {
     await client.close();
     await rm(fakeHome, { recursive: true, force: true });
+  }
+});
+
+test('Python desktop plugin performs scoped HTTPS reads and writes without installed packages', async () => {
+  const pluginDir = join(root, 'plugins', 'redis-shared-memory-editor');
+  const dir = await mkdtemp(join(tmpdir(), 'ram-python-plugin-'));
+  await writeFile(join(dir, 'openssl.cnf'), '[req]\ndistinguished_name=dn\nx509_extensions=ext\nprompt=no\n[dn]\nCN=localhost\n[ext]\nsubjectAltName=DNS:localhost\nbasicConstraints=critical,CA:TRUE\nkeyUsage=critical,digitalSignature,keyEncipherment,keyCertSign\n');
+  execFileSync('/usr/bin/openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-config', join(dir, 'openssl.cnf'), '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'cert.pem')], { stdio: 'ignore' });
+  const records = new Map<string, Record<string, unknown>>();
+  const service = createServer({ key: await readFile(join(dir, 'key.pem')), cert: await readFile(join(dir, 'cert.pem')) }, async (req, res) => {
+    const send = (code: number, data: unknown) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(data)); };
+    if (req.headers.authorization !== 'Bearer python-test-only-key') return send(401, { status: 401 });
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    const body = raw ? JSON.parse(raw) : {};
+    const base = '/v1/stores/python-store/long-term-memory';
+    if (req.url === `${base}/search`) {
+      return send(200, { items: [...records.values()].filter(record => record.namespace === body.filter?.namespace?.eq) });
+    }
+    if (req.url === base && req.method === 'POST') {
+      for (const record of body.memories) records.set(record.id, { ...record, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      return send(201, { created: body.memories.map((record: { id: string }) => record.id), errors: [] });
+    }
+    const id = req.url?.slice(base.length + 1) ?? '';
+    if (!records.has(id)) return send(404, { status: 404 });
+    if (req.method === 'PATCH') records.set(id, { ...records.get(id), ...body, updatedAt: new Date().toISOString() });
+    return send(200, records.get(id));
+  });
+  service.listen(0, '127.0.0.1'); await once(service, 'listening');
+  const credential = join(dir, 'editor.env');
+  await writeFile(credential, [
+    `RAM_ENDPOINT=https://localhost:${(service.address() as { port: number }).port}`,
+    'RAM_STORE_ID=python-store',
+    'RAM_NAMESPACE=python-plugin-qa',
+    'RAM_PARTICIPANT=python-user',
+    'RAM_API_KEY=python-test-only-key',
+    '',
+  ].join('\n'), { mode: 0o600 });
+  await chmod(credential, 0o600);
+  let stderr = '';
+  const transport = new StdioClientTransport({
+    command: 'python3',
+    args: ['-I', join(pluginDir, 'server/main.py')],
+    cwd: pluginDir,
+    env: {
+      HOME: dir,
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      REDIS_SHARED_MEMORY_CONFIG: credential,
+      SSL_CERT_FILE: join(dir, 'cert.pem'),
+    },
+    stderr: 'pipe',
+  });
+  transport.stderr?.on('data', chunk => { stderr += chunk.toString(); });
+  const client = new Client({ name: 'python-plugin-integration-test', version: '1' });
+  try {
+    await client.connect(transport);
+    assert.equal((await call(client, 'editor_status')).data.connection, 'verified');
+    const created = (await call(client, 'editor_publish', { fact: 'Python plugin fact' })).data;
+    assert.equal(created.outcome, 'saved_and_searchable');
+    const memoryId = created.memory.memory_id;
+    const updated = (await call(client, 'editor_update', { memory_id: memoryId, fact: 'Updated Python plugin fact' })).data;
+    assert.equal(updated.outcome, 'saved_and_searchable');
+    assert.equal((await call(client, 'editor_search', { query: 'updated' })).data.memories[0].fact, 'Updated Python plugin fact');
+    records.set('outside', { ...records.get(memoryId), id: 'outside', namespace: 'other-project' });
+    assert.equal((await call(client, 'editor_update', { memory_id: 'outside', fact: 'Denied' })).data.code, 'scope_denied');
+    assert.equal(stderr, '');
+  } finally {
+    await client.close();
+    service.closeAllConnections();
+    await new Promise<void>(resolve => service.close(() => resolve()));
+    await rm(dir, { recursive: true, force: true });
   }
 });
 
