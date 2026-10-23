@@ -10,7 +10,7 @@ from urllib.error import URLError
 from urllib.parse import urlsplit
 
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 SETTING_NAMES = (
     "RAM_ENDPOINT",
@@ -123,17 +123,17 @@ def public_error(error: BaseException) -> dict[str, object]:
             return {
                 "code": "dependency_unavailable",
                 "dependency_type": "database_out_of_memory",
-                "message": "RAM reports that database capacity is unavailable. Contact the Redis service owner before seeding or retrying.",
+                "message": "RAM reports that database capacity is unavailable. Contact the Redis service owner before retrying.",
             }
         if error_type == "/errors/resource-unavailable":
             return {
                 "code": "dependency_unavailable",
                 "dependency_type": "resource_unavailable",
-                "message": "RAM reports that a required resource is unavailable. If this store is empty or was flushed, seed memories and then retry search; otherwise wait briefly and retry.",
+                "message": "RAM reports that a required resource is unavailable. Wait briefly, retry a read, or contact the Redis service owner.",
             }
         return {
             "code": "dependency_unavailable",
-            "message": "RAM could not complete the request because a dependency is unavailable. If this store is empty or was flushed, seed memories and then retry search; otherwise check the Redis service.",
+            "message": "RAM could not complete the request because a dependency is unavailable. Retry a read or contact the Redis service owner.",
         }
     if status == 408 or isinstance(error, (TimeoutError, socket.timeout)):
         return {

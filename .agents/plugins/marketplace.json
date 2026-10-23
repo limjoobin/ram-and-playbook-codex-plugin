@@ -1,5 +1,5 @@
 {
-  "name": "redis-field-engineering-local",
+  "name": "redis-field-engineering",
   "interface": {
     "displayName": "Redis Field Engineering"
   },

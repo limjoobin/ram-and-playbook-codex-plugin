@@ -1,6 +1,0 @@
-{
-  "version": "0.2.0",
-  "source_sha256": "c0cb2993130b591597b11ff335ef4f84507c68e3696b9360b7a56250b95ea6b1",
-  "entry_point": "server/main.py",
-  "runtime": "python>=3.10"
-}

@@ -56,7 +56,8 @@ def load_credential_file(path: Path) -> Config:
     allowed = set(SETTING_NAMES)
     values: dict[str, str] = {}
     for line in text.splitlines():
-        if not line:
+        line = line.strip()
+        if not line or line.startswith("#"):
             continue
         key, separator, value = line.partition("=")
         if not separator:
@@ -66,5 +67,5 @@ def load_credential_file(path: Path) -> Config:
                 "credential_file_contents",
                 "The local Redis Shared Memory .env contains an unexpected or duplicate setting.",
             )
-        values[key] = value
+        values[key] = value.strip()
     return load_config(values)
