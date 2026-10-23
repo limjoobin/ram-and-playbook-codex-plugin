@@ -27,3 +27,6 @@ place the populated file inside this repository or the Codex plugin cache.
 actual credential; OAuth-derived user identity is a later authentication phase.
 
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.
+Maintainers and coding agents should also read `AGENTS.md`, `SECURITY.md`, and
+`docs/adding-tools.md` at the repository root before changing tools or
+configuration.
