@@ -31,6 +31,10 @@ private source is referenced, not moved, updated, or deleted.
   `personal-to-shared-promotion-v1` envelope and copy its observation exactly.
 - `RAM_AGENDA_OWNER_ID` must remain the management-state owner lane used by the
   existing projection/reconciliation implementation.
+- Session extraction first makes the observation available through
+  `ram_search_state(view="history")`. The shared central projector—not this
+  plugin—must process that observation before it appears in `current` or
+  `conflicts`. This preserves one reconciliation implementation.
 
 ## Identity and isolation
 
@@ -68,8 +72,9 @@ the event contracts and trust flow in the
    kind, lifecycle, subject, and optional owner/dates. Promote it once.
 5. Repeat the identical promotion call. Verify it returns
    `already_submitted` and adds no source event.
-6. After RAM extraction, query `ram_search_state`; verify one result, exact
-   observation fields, the participant, and traversable source evidence.
+6. After RAM extraction, query `ram_search_state` with `view="history"`; verify
+   one observation with exact fields, participant attribution, and traversable
+   source evidence. Run the central projector, then verify the `current` view.
 7. Repeat from a second user with a different participant and personal
    namespace. Verify private candidates stay isolated while both confirmed
    observations enter the same shared namespace.

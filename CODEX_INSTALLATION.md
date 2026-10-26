@@ -13,7 +13,8 @@ You need:
 - the Codex CLI;
 - Python 3.10 or newer available as `python3`;
 - the shared RAM endpoint, store ID, namespace, and management-state owner;
-- a unique private RAM namespace for this user;
+- preferably a unique private RAM namespace for this user (otherwise it is
+  derived from the participant ID);
 - the shared Redis Agent Playbook MCP URL;
 - a participant ID plus RAM and Playbook API keys for this user; and
 - enterprise approval for the Git repository/ref, local Python execution, and
@@ -127,7 +128,7 @@ The values have these roles:
 | `RAM_ENDPOINT` | Shared | HTTPS RAM data-plane endpoint. URLs with embedded credentials, a query, or a fragment are rejected. |
 | `RAM_STORE_ID` | Shared | Store used by the team. |
 | `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write. |
-| `RAM_PERSONAL_NAMESPACE` | Per user | Private namespace for this user's captured session events and RAM-derived personal memory. Never reuse another person's value. |
+| `RAM_PERSONAL_NAMESPACE` | Per user, optional | Private namespace for this user's captured session events and RAM-derived personal memory. It defaults to `private-{RAM_PARTICIPANT}`. Set it explicitly when participant IDs are not globally unique. |
 | `RAM_PARTICIPANT` | Per user | Contributor attribution. It is not authenticated identity. |
 | `RAM_API_KEY` | Per user when supported | Credential that authenticates RAM requests. |
 | `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing immutable `organizational_state` observations and derived `organizational_state_projection` records. |
@@ -217,9 +218,10 @@ Yes, promote that inspected candidate as an open action_item for project-demo.
 
 Expected: the agent calls `memory_candidate_promote` once, the result says
 `promotion_submitted`, a repeated call says `already_submitted`, and after the
-RAM extraction window `ram_search_state` finds one source-linked observation.
-The original private events still exist. Reject a second candidate and confirm
-that it never appears in shared organizational state.
+RAM extraction window `ram_search_state` with `view="history"` finds one
+source-linked observation. The central projector must run before the current
+view changes. The original private events still exist. Reject a second
+candidate and confirm that it never appears in shared organizational state.
 
 Before asking users to install a release, the maintainer should also run in a
 clean checkout:
@@ -272,7 +274,7 @@ remove it through the laptop's approved file-management process.
 | --- | --- |
 | Marketplace or plugin is not visible | Run `codex plugin marketplace list`, confirm the approved ref and Git access, then restart ChatGPT desktop. |
 | Local server will not start | Run the Python version check above and confirm enterprise policy permits `python3`. |
-| `configuration_missing` | Create the file at the exact path above and fill all nine settings. |
+| `configuration_missing` | Create the file at the exact path above and fill the eight required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
 | Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. |
 | Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
 | Promotion is accepted but state is not searchable yet | Wait for the RAM custom-extraction window, then verify the store's `organizational_state` extractor accepts `personal-to-shared-promotion-v1`. Do not resubmit. |

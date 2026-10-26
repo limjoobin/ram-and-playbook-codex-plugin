@@ -122,6 +122,10 @@ class PluginTests(unittest.TestCase):
         with self.assertRaisesRegex(PluginError, "must differ"):
             load_config(values)
 
+        values["RAM_NAMESPACE"] = "shared"
+        values.pop("RAM_PERSONAL_NAMESPACE")
+        self.assertEqual(load_config(values).personal_namespace, "private-participant")
+
     def test_credential_file_is_private_and_accepts_comments(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "editor.env"

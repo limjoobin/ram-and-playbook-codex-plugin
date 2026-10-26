@@ -751,7 +751,8 @@ class PromotionService:
             "observation_contract": OBSERVATION_SCHEMA,
             "message": (
                 "RAM accepted the confirmed source events. Custom extraction is asynchronous; "
-                "query organizational state after the store's extraction window. Do not resubmit this candidate."
+                "query the history view after the store's extraction window. The current view changes only "
+                "after the central projector processes the new observation. Do not resubmit this candidate."
             ),
         }
 

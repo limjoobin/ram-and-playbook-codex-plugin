@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import re
 import socket
 from typing import Mapping
@@ -22,6 +23,9 @@ SETTING_NAMES = (
     "RAM_AGENDA_OWNER_ID",
     "PLAYBOOK_MCP_URL",
     "PLAYBOOK_API_KEY",
+)
+REQUIRED_SETTING_NAMES = tuple(
+    name for name in SETTING_NAMES if name != "RAM_PERSONAL_NAMESPACE"
 )
 
 
@@ -69,7 +73,7 @@ def _validated_url(name: str, value: str) -> tuple[str, SplitResult]:
 
 
 def load_config(values: Mapping[str, str | None]) -> Config:
-    missing = [name for name in SETTING_NAMES if not (values.get(name) or "").strip()]
+    missing = [name for name in REQUIRED_SETTING_NAMES if not (values.get(name) or "").strip()]
     if missing:
         raise PluginError(
             "configuration_missing",
@@ -87,22 +91,26 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             "PLAYBOOK_MCP_URL must identify /v1/playbooks/{playbookId}/mcp.",
         )
 
-    for name in (
-        "RAM_STORE_ID",
-        "RAM_NAMESPACE",
-        "RAM_PERSONAL_NAMESPACE",
-        "RAM_PARTICIPANT",
-        "RAM_AGENDA_OWNER_ID",
+    participant = (values["RAM_PARTICIPANT"] or "").strip()
+    configured_personal = (values.get("RAM_PERSONAL_NAMESPACE") or "").strip()
+    personal_namespace = configured_personal or f"private-{participant}"
+    if len(personal_namespace) > 64:
+        personal_namespace = f"private-{hashlib.sha256(participant.encode()).hexdigest()[:40]}"
+
+    for name, value in (
+        ("RAM_STORE_ID", values["RAM_STORE_ID"]),
+        ("RAM_NAMESPACE", values["RAM_NAMESPACE"]),
+        ("RAM_PERSONAL_NAMESPACE", personal_namespace),
+        ("RAM_PARTICIPANT", participant),
+        ("RAM_AGENDA_OWNER_ID", values["RAM_AGENDA_OWNER_ID"]),
     ):
-        if not SLUG.fullmatch((values[name] or "").strip()):
+        if not SLUG.fullmatch((value or "").strip()):
             raise PluginError(
                 "configuration_invalid",
                 f"{name} must contain 1–64 letters, digits, or hyphens.",
             )
 
-    if (values["RAM_PERSONAL_NAMESPACE"] or "").strip().lower() == (
-        values["RAM_NAMESPACE"] or ""
-    ).strip().lower():
+    if personal_namespace.lower() == (values["RAM_NAMESPACE"] or "").strip().lower():
         raise PluginError(
             "configuration_invalid",
             "RAM_PERSONAL_NAMESPACE must differ from the shared RAM_NAMESPACE.",
@@ -120,8 +128,8 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         endpoint=endpoint,
         store_id=(values["RAM_STORE_ID"] or "").strip(),
         namespace=(values["RAM_NAMESPACE"] or "").strip(),
-        personal_namespace=(values["RAM_PERSONAL_NAMESPACE"] or "").strip(),
-        participant=(values["RAM_PARTICIPANT"] or "").strip(),
+        personal_namespace=personal_namespace,
+        participant=participant,
         api_key=api_key,
         agenda_owner_id=(values["RAM_AGENDA_OWNER_ID"] or "").strip(),
         playbook_mcp_url=playbook_url,
