@@ -85,6 +85,14 @@ instructs the agent not to repeat the write automatically.
 - Adding an installer, executable, dependency, telemetry, network destination,
   or generic upstream proxy requires a new security review.
 
+## Release evidence
+
+The offline evaluation uses synthetic records and fake endpoints; it needs no
+credential and sends no network request. Its deterministic report is a
+regression check, not proof of customer-environment acceptance. Installation
+from the approved ref, endpoint reachability, least-privilege credentials, and
+the manual cross-user checks still require review on the target environment.
+
 ## Reporting a vulnerability
 
 Do not open a public issue containing credentials, private memory, or exploit

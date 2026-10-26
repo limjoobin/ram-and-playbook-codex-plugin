@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "meeting_date": "2026-11-01",
+  "playbook": {
+    "entry_id": "entry-agenda-evaluation",
+    "version": 7,
+    "digest": "sha256:evaluation-skill-digest"
+  },
+  "cases": [
+    {
+      "id": "normal-01",
+      "category": "normal",
+      "state_kind": "risk",
+      "subject": "Supplier lead time threatens the committed prototype date",
+      "requested_decision": "Approve the alternate supplier",
+      "impact": "The committed prototype date is at risk",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-02",
+      "category": "normal",
+      "state_kind": "approval",
+      "subject": "Industrial design direction needs leadership approval",
+      "requested_decision": "Approve the selected design direction",
+      "impact": "Detailed design cannot begin without approval",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-03",
+      "category": "normal",
+      "state_kind": "dependency",
+      "subject": "Interface work depends on unresolved button placement",
+      "requested_decision": "Confirm the cross-team button placement",
+      "impact": "Interface and industrial design work remain blocked",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-04",
+      "category": "normal",
+      "state_kind": "decision",
+      "subject": "Remote control target segment needs confirmation",
+      "requested_decision": "Confirm the target customer segment",
+      "impact": "Market research and product requirements may diverge",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-05",
+      "category": "normal",
+      "state_kind": "issue",
+      "subject": "Feature scope exceeds the available design capacity",
+      "requested_decision": "Choose which feature to defer",
+      "impact": "The team cannot meet both scope and schedule commitments",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-06",
+      "category": "normal",
+      "state_kind": "action_item",
+      "subject": "Leadership must assign the usability test environment",
+      "requested_decision": "Confirm the test environment commitment",
+      "impact": "Usability validation cannot be scheduled",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-07",
+      "category": "normal",
+      "state_kind": "risk",
+      "subject": "Market research delivery is behind the design checkpoint",
+      "requested_decision": "Approve a reduced research scope",
+      "impact": "The design checkpoint may proceed without customer evidence",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-08",
+      "category": "normal",
+      "state_kind": "approval",
+      "subject": "Prototype budget requires an exception",
+      "requested_decision": "Approve the prototype budget exception",
+      "impact": "Prototype procurement is paused",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-09",
+      "category": "normal",
+      "state_kind": "dependency",
+      "subject": "Final design depends on an external component specification",
+      "requested_decision": "Select the fallback component",
+      "impact": "Final design cannot be baselined",
+      "expected_agenda": true
+    },
+    {
+      "id": "normal-10",
+      "category": "normal",
+      "state_kind": "decision",
+      "subject": "Product name must be fixed before customer testing",
+      "requested_decision": "Select the customer-test product name",
+      "impact": "Testing materials cannot be finalized",
+      "expected_agenda": true
+    },
+    {
+      "id": "stale-resolved",
+      "category": "stale_conflict",
+      "state_kind": "risk",
+      "subject": "A previously delayed transcript has been delivered",
+      "requested_decision": "Acknowledge the completed delivery",
+      "impact": "No current delivery impact remains",
+      "lifecycle_status": "resolved",
+      "expected_agenda": false
+    },
+    {
+      "id": "stale-superseded",
+      "category": "stale_conflict",
+      "state_kind": "decision",
+      "subject": "An older design choice was replaced",
+      "requested_decision": "Reconsider the older design choice",
+      "impact": "The older choice no longer governs the project",
+      "lifecycle_status": "superseded",
+      "expected_agenda": false
+    },
+    {
+      "id": "current-conflict",
+      "category": "stale_conflict",
+      "state_kind": "risk",
+      "subject": "Two current sources disagree about prototype readiness",
+      "requested_decision": "Confirm which readiness statement is authoritative",
+      "impact": "The prototype gate cannot be assessed reliably",
+      "conflict": true,
+      "expected_agenda": false
+    },
+    {
+      "id": "insufficient-owner",
+      "category": "insufficient_evidence",
+      "state_kind": "issue",
+      "subject": "A concern has no defensible accountable owner",
+      "requested_decision": "Assign an owner",
+      "impact": "The concern may remain unaddressed",
+      "owner": "",
+      "expected_agenda": false
+    },
+    {
+      "id": "insufficient-source",
+      "category": "insufficient_evidence",
+      "state_kind": "risk",
+      "subject": "A material claim has no traversable source evidence",
+      "requested_decision": "Approve a mitigation",
+      "impact": "The delivery commitment may be affected",
+      "evidence_available": false,
+      "expected_agenda": false
+    }
+  ]
+}

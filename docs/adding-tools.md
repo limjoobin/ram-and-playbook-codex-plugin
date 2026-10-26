@@ -59,10 +59,17 @@ Add tests to `tests/test_plugin.py` for:
 - sanitized authentication, network, and dependency failures; and
 - timeout or ambiguous persistence for every mutation.
 
+If a change affects state retrieval, evidence traversal, Playbook attestation,
+or agenda output, run `python3 evaluation/run.py`. Add or change a fixed case
+only for a reviewed product-contract change; do not lower a threshold to hide
+a regression. Regenerate `evaluation/results.json` with `--write` and inspect
+the diff.
+
 Run:
 
 ```sh
 python3 -m unittest discover -s tests -v
+python3 evaluation/run.py
 ```
 
 The runtime must continue to work with Python 3.10+ and no third-party package.

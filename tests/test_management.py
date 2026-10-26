@@ -189,12 +189,14 @@ class ManagementTests(unittest.TestCase):
             text="milestone risk",
             project_id="remote control project",
             accountable_entity="Project Manager",
+            limit=100,
         )
         filters = ram.requests[0]["filter"]
         self.assertEqual(filters["ownerId"]["eq"], "ami-project-office")
         self.assertEqual(filters["memoryType"]["eq"], "organizational_state")
         self.assertEqual(filters["attributes"]["schema_version"]["string"], "organizational-state-v1")
         self.assertEqual(filters["attributes"]["project_id"]["string"], "project-ami-es2002")
+        self.assertEqual(ram.requests[0]["limit"], 100)
         self.assertEqual(result["states"][0]["state_id"], "state-a")
 
     def test_evidence_contract_and_playbook_allowlist_wrappers(self):

@@ -36,6 +36,11 @@ public plugin directory. See OpenAI's
 [desktop deployment guide](https://developers.openai.com/plugins/deploy/desktop-only)
 for the supported installation model.
 
+For a multi-user deployment, both configured endpoints must be reachable from
+every approved laptop. A loopback `http://127.0.0.1` or `http://localhost`
+endpoint is accepted only for local development and cannot provide a shared
+team service across laptops. Customer rollout endpoints should use HTTPS.
+
 ## 1. Add the marketplace
 
 The current development ref is:
@@ -151,6 +156,19 @@ Expected: both upstreams are available, entity resolution returns
 `project-ami-es2002`, Playbook discovery returns an exact version without
 exposing either endpoint or credential, and agenda output either contains
 source-evidence references for every item or explicitly defers the candidate.
+
+These checks are the manual acceptance gate. Passing repository tests and the
+offline evaluation does not prove that a customer's network, credentials,
+store contents, Playbook publication, or desktop policy is configured
+correctly.
+
+Before asking users to install a release, the maintainer should also run in a
+clean checkout:
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 evaluation/run.py
+```
 
 ## Update
 

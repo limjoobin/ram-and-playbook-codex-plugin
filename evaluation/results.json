@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "case_count": 15,
+  "category_counts": {
+    "normal": 10,
+    "stale_conflict": 3,
+    "insufficient_evidence": 2
+  },
+  "metrics": {
+    "ram_recall_at_20": {
+      "value": 1.0,
+      "threshold": 0.85,
+      "passed": true
+    },
+    "agenda_precision": {
+      "value": 1.0,
+      "threshold": 0.8,
+      "passed": true
+    },
+    "agenda_recall": {
+      "value": 1.0,
+      "threshold": 0.8,
+      "passed": true
+    },
+    "evidence_coverage": {
+      "value": 1.0,
+      "threshold": 1.0,
+      "passed": true
+    },
+    "stale_conflict_inclusions": {
+      "value": 0,
+      "threshold": 0,
+      "passed": true
+    },
+    "playbook_attestation": {
+      "value": 1.0,
+      "threshold": 1.0,
+      "passed": true
+    },
+    "insufficient_evidence_abstentions": {
+      "value": 2,
+      "threshold": 2,
+      "passed": true
+    }
+  },
+  "overall_passed": true,
+  "non_gating": {
+    "estimated_tokens": 5749,
+    "wall_clock_latency_ms": null,
+    "latency_note": "Measured and printed by each run; excluded from the committed deterministic report."
+  },
+  "cases": [
+    {
+      "id": "normal-01",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-02",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-03",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-04",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-05",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-06",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-07",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-08",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-09",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "normal-10",
+      "category": "normal",
+      "retrieved_at_20": true,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
+      "playbook_attested": true
+    },
+    {
+      "id": "stale-resolved",
+      "category": "stale_conflict",
+      "retrieved_at_20": true,
+      "agenda_item_count": 0,
+      "expected_agenda": false,
+      "playbook_attested": true
+    },
+    {
+      "id": "stale-superseded",
+      "category": "stale_conflict",
+      "retrieved_at_20": true,
+      "agenda_item_count": 0,
+      "expected_agenda": false,
+      "playbook_attested": true
+    },
+    {
+      "id": "current-conflict",
+      "category": "stale_conflict",
+      "retrieved_at_20": true,
+      "agenda_item_count": 0,
+      "expected_agenda": false,
+      "playbook_attested": true
+    },
+    {
+      "id": "insufficient-owner",
+      "category": "insufficient_evidence",
+      "retrieved_at_20": true,
+      "agenda_item_count": 0,
+      "expected_agenda": false,
+      "playbook_attested": true
+    },
+    {
+      "id": "insufficient-source",
+      "category": "insufficient_evidence",
+      "retrieved_at_20": true,
+      "agenda_item_count": 0,
+      "expected_agenda": false,
+      "playbook_attested": true
+    }
+  ]
+}

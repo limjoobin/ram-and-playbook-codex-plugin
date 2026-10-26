@@ -26,6 +26,21 @@ The local MCP server is dependency-free Python 3.10+ source. Installation does
 not run a package manager, installer script, lifecycle hook, or first-run
 download.
 
+## Quality gate
+
+The repository includes a credential-free 15-case evaluation covering normal
+agenda generation, stale/conflicted exclusion, insufficient-evidence
+abstention, evidence coverage, and exact Playbook attestation:
+
+```sh
+python3 evaluation/run.py
+```
+
+The committed deterministic result is in
+[evaluation/results.json](evaluation/results.json); see
+[evaluation/README.md](evaluation/README.md) before changing cases or
+thresholds.
+
 ## Install
 
 Follow [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) for Git marketplace and

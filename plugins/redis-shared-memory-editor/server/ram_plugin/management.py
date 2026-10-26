@@ -488,7 +488,7 @@ class PluginService:
             }.items()
             if value is not None
         }
-        request = self._state_request(text, attributes, max(limit * 5, 100), similarity_threshold)
+        request = self._state_request(text, attributes, 100, similarity_threshold)
         records = _items(self.ram.search(request))
         result = reconcile_states(records, self.config, lifecycle_status, limit)
         result.update(

@@ -43,6 +43,9 @@ Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
 | `plugins/redis-shared-memory-editor/mcp.json` | Stdio MCP launch configuration |
 | `.agents/plugins/marketplace.json` | Repository marketplace catalog |
 | `tests/test_plugin.py` | Runtime, manifest, security, and MCP contract tests |
+| `evaluation/cases.json` | Fixed offline agenda quality corpus |
+| `evaluation/run.py` | Dependency-free quality-gate runner |
+| `evaluation/results.json` | Deterministic committed gate result |
 
 Paths beginning with `server/` in the table are relative to
 `plugins/redis-shared-memory-editor/`.
@@ -93,6 +96,7 @@ The repository has no install-time dependencies. Run:
 
 ```sh
 python3 -m unittest discover -s tests -v
+python3 evaluation/run.py
 ```
 
 Before release, also check:
@@ -116,3 +120,4 @@ When shipped behavior changes:
 4. Confirm no credential, local absolute path, cache, or temporary artifact is
    tracked.
 5. Pin and test the exact release ref.
+6. Confirm the committed evaluation report still matches a fresh run.
