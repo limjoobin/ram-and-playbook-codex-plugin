@@ -1,8 +1,9 @@
 # ChatGPT desktop plugin installation
 
 This plugin lets multiple users and their agents work from one Redis Agent
-Memory store. Every user installs the same plugin and configures the same RAM
-endpoint, store ID, and namespace. Credentials stay on that user's computer.
+Memory store and approved Redis Agent Playbook. Every user installs the same
+plugin and configures the same service endpoints, RAM store ID, and namespace.
+Credentials stay on that user's computer.
 
 ## Before you begin
 
@@ -11,10 +12,11 @@ You need:
 - ChatGPT desktop with Codex plugin support;
 - the Codex CLI;
 - Python 3.10 or newer available as `python3`;
-- the shared RAM endpoint, store ID, and namespace;
-- a participant ID and RAM API key for this user; and
+- the shared RAM endpoint, store ID, namespace, and management-state owner;
+- the shared Redis Agent Playbook MCP URL;
+- a participant ID plus RAM and Playbook API keys for this user; and
 - enterprise approval for the Git repository/ref, local Python execution, and
-  outbound HTTPS access to the RAM endpoint.
+  outbound HTTPS access to both service endpoints.
 
 Check the local prerequisites:
 
@@ -75,6 +77,9 @@ RAM_STORE_ID=shared-store
 RAM_NAMESPACE=shared-namespace
 RAM_PARTICIPANT=your-user-id
 RAM_API_KEY=your-user-api-key
+RAM_AGENDA_OWNER_ID=ami-project-office
+PLAYBOOK_MCP_URL=https://your-playbook-endpoint.redis.io/v1/playbooks/your-playbook-id/mcp
+PLAYBOOK_API_KEY=your-user-playbook-api-key
 ```
 
 Do not paste the API key into a ChatGPT conversation or commit it to Git.
@@ -88,8 +93,12 @@ The values have these roles:
 | `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write. |
 | `RAM_PARTICIPANT` | Per user | Contributor attribution. It is not authenticated identity. |
 | `RAM_API_KEY` | Per user when supported | Credential that authenticates RAM requests. |
+| `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing `organizational_state` records. |
+| `PLAYBOOK_MCP_URL` | Shared | Full approved Playbook MCP URL ending in `/v1/playbooks/{playbookId}/mcp`. |
+| `PLAYBOOK_API_KEY` | Per user when supported | Credential that authenticates Playbook MCP requests. |
 
-Store ID, namespace, and participant accept 1–64 letters, digits, or hyphens.
+Store ID, namespace, participant, and agenda owner accept 1–64 letters,
+digits, or hyphens.
 Issue a different API key to each user when the service supports it so access
 can be revoked and audited independently. If users share an API key,
 `RAM_PARTICIPANT` remains self-asserted metadata; do not treat it as a security
@@ -101,7 +110,7 @@ changing the tool model.
 1. Restart ChatGPT desktop after adding the marketplace.
 2. Open the Plugins directory.
 3. Choose **Redis Field Engineering**.
-4. Install **Redis Shared Memory — Editor**.
+4. Install **Redis Shared Memory + Playbook**.
 5. Start a new chat.
 
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
@@ -129,6 +138,18 @@ for the shared store. A second user configured with the same endpoint, store,
 and namespace should be able to retrieve it. Their participant and preferably
 their API key should be different.
 
+Verify the management read surface separately:
+
+```text
+Run system_status. Do not display endpoints or credentials.
+Resolve the "remote control project" entity, then search its current organizational state.
+Discover the prepare-management-review-agenda Playbook entry and report only its ID and version.
+```
+
+Expected: both upstreams are available, entity resolution returns
+`project-ami-es2002`, and Playbook discovery returns an exact version without
+exposing either endpoint or credential.
+
 ## Update
 
 For a marketplace that tracks an approved branch or tag:
@@ -144,7 +165,7 @@ checkout alone does not update an already installed copy.
 
 ## Remove
 
-Uninstall **Redis Shared Memory — Editor** in the Plugins directory, then remove
+Uninstall **Redis Shared Memory + Playbook** in the Plugins directory, then remove
 the marketplace if it is no longer needed:
 
 ```sh
@@ -161,10 +182,10 @@ remove it through the laptop's approved file-management process.
 | --- | --- |
 | Marketplace or plugin is not visible | Run `codex plugin marketplace list`, confirm the approved ref and Git access, then restart ChatGPT desktop. |
 | Local server will not start | Run the Python version check above and confirm enterprise policy permits `python3`. |
-| `configuration_missing` | Create the file at the exact path above and fill all five settings. |
+| `configuration_missing` | Create the file at the exact path above and fill all eight settings. |
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
-| `authentication_failed` or `access_denied` | Replace or reissue this user's API key and confirm it can access the configured store. |
-| `network_error` | Check the HTTPS endpoint, VPN, DNS, proxy, and enterprise allowlist. |
+| `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
+| `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |
 | `dependency_unavailable` | Retry a read once; if it persists, contact the Redis service owner. Do not blindly retry a write. |
 | A repository change is not visible | Upgrade the marketplace, restart the app, and start a new chat. |
 

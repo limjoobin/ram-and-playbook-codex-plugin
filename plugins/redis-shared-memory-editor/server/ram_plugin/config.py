@@ -7,10 +7,10 @@ import re
 import socket
 from typing import Mapping
 from urllib.error import URLError
-from urllib.parse import urlsplit
+from urllib.parse import SplitResult, urlsplit
 
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 SETTING_NAMES = (
     "RAM_ENDPOINT",
@@ -18,6 +18,9 @@ SETTING_NAMES = (
     "RAM_NAMESPACE",
     "RAM_PARTICIPANT",
     "RAM_API_KEY",
+    "RAM_AGENDA_OWNER_ID",
+    "PLAYBOOK_MCP_URL",
+    "PLAYBOOK_API_KEY",
 )
 
 
@@ -36,6 +39,31 @@ class Config:
     namespace: str
     participant: str
     api_key: str
+    agenda_owner_id: str
+    playbook_mcp_url: str
+    playbook_api_key: str
+
+
+def _validated_url(name: str, value: str) -> tuple[str, SplitResult]:
+    try:
+        url = urlsplit(value)
+        _ = url.port
+    except ValueError as error:
+        raise PluginError("configuration_invalid", f"{name} must be an HTTP(S) URL.") from error
+    loopback = url.hostname in {"127.0.0.1", "localhost", "::1"}
+    if (
+        url.scheme not in ({"https", "http"} if loopback else {"https"})
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise PluginError(
+            "configuration_invalid",
+            f"{name} must use HTTPS, except for loopback development, and must not contain credentials, a query, or a fragment.",
+        )
+    return value.rstrip("/"), url
 
 
 def load_config(values: Mapping[str, str | None]) -> Config:
@@ -46,26 +74,18 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             f"Complete these local connection settings: {', '.join(missing)}.",
         )
 
-    endpoint = (values["RAM_ENDPOINT"] or "").strip()
-    try:
-        url = urlsplit(endpoint)
-        _ = url.port
-    except ValueError as error:
-        raise PluginError("configuration_invalid", "RAM endpoint must be an HTTPS URL.") from error
-    if (
-        url.scheme != "https"
-        or not url.hostname
-        or url.username
-        or url.password
-        or url.query
-        or url.fragment
-    ):
+    endpoint, _ = _validated_url("RAM_ENDPOINT", (values["RAM_ENDPOINT"] or "").strip())
+    playbook_url, playbook_parts = _validated_url(
+        "PLAYBOOK_MCP_URL", (values["PLAYBOOK_MCP_URL"] or "").strip()
+    )
+    segments = [segment for segment in playbook_parts.path.split("/") if segment]
+    if len(segments) != 4 or segments[:2] != ["v1", "playbooks"] or segments[3] != "mcp":
         raise PluginError(
             "configuration_invalid",
-            "Use an HTTPS endpoint without credentials, query parameters, or fragments.",
+            "PLAYBOOK_MCP_URL must identify /v1/playbooks/{playbookId}/mcp.",
         )
 
-    for name in ("RAM_STORE_ID", "RAM_NAMESPACE", "RAM_PARTICIPANT"):
+    for name in ("RAM_STORE_ID", "RAM_NAMESPACE", "RAM_PARTICIPANT", "RAM_AGENDA_OWNER_ID"):
         if not SLUG.fullmatch((values[name] or "").strip()):
             raise PluginError(
                 "configuration_invalid",
@@ -73,18 +93,22 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             )
 
     api_key = (values["RAM_API_KEY"] or "").strip()
-    if api_key.startswith("__encrypted__:"):
+    playbook_api_key = (values["PLAYBOOK_API_KEY"] or "").strip()
+    if api_key.startswith("__encrypted__:") or playbook_api_key.startswith("__encrypted__:"):
         raise PluginError(
             "credential_unavailable",
-            "The configured RAM credential is unavailable. Replace it in the local .env file.",
+            "A configured service credential is unavailable. Replace it in the local .env file.",
         )
 
     return Config(
-        endpoint=endpoint.rstrip("/"),
+        endpoint=endpoint,
         store_id=(values["RAM_STORE_ID"] or "").strip(),
         namespace=(values["RAM_NAMESPACE"] or "").strip(),
         participant=(values["RAM_PARTICIPANT"] or "").strip(),
         api_key=api_key,
+        agenda_owner_id=(values["RAM_AGENDA_OWNER_ID"] or "").strip(),
+        playbook_mcp_url=playbook_url,
+        playbook_api_key=playbook_api_key,
     )
 
 

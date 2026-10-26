@@ -26,6 +26,13 @@ class RAMOperations(Protocol):
     def get(self, memory_id: str) -> dict[str, Any]: ...
     def create(self, memories: list[dict[str, Any]]) -> dict[str, Any]: ...
     def update(self, memory_id: str, changes: dict[str, Any]) -> dict[str, Any]: ...
+    def evidence(
+        self,
+        memory_id: str,
+        source_id: str,
+        limit: int = 100,
+        page_token: str | None = None,
+    ) -> dict[str, Any]: ...
 
 
 class RAMClient:
@@ -86,6 +93,20 @@ class RAMClient:
 
     def update(self, memory_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         return self._request("PATCH", f"{self.base_url}/{quote(memory_id, safe='')}", changes)
+
+    def evidence(
+        self,
+        memory_id: str,
+        source_id: str,
+        limit: int = 100,
+        page_token: str | None = None,
+    ) -> dict[str, Any]:
+        query = f"?limit={limit}"
+        if page_token:
+            query += f"&pageToken={quote(page_token, safe='')}"
+        memory = quote(memory_id, safe="")
+        source = quote(source_id, safe="")
+        return self._request("GET", f"{self.base_url}/{memory}/sources/{source}/evidence{query}")
 
 
 def _field(record: dict[str, Any], camel: str, snake: str) -> Any:

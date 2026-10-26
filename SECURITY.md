@@ -3,13 +3,14 @@
 ## Trust boundary
 
 The plugin runs a bundled stdio MCP server with the signed-in operating-system
-user's privileges. It makes authenticated HTTPS requests to the RAM endpoint
-in that user's private configuration file. Installing it therefore grants the
-reviewed Python source local execution and access to that endpoint.
+user's privileges. It makes authenticated requests to the RAM endpoint and
+the configured Playbook MCP endpoint in that user's private configuration
+file. Installing it therefore grants the reviewed Python source local
+execution and access to those destinations.
 
 Enterprise administrators should approve the exact repository and Git ref,
-the Python runtime, and the permitted RAM domain. A release should be pinned to
-a reviewed tag or commit, not an unbounded branch.
+the Python runtime, and the permitted RAM and Playbook domains. A release
+should be pinned to a reviewed tag or commit, not an unbounded branch.
 
 ## Credentials and identity
 
@@ -23,8 +24,9 @@ The loader accepts only a regular, non-symlink file owned by the current user
 with mode `0600`. Never put credentials in chat, source control, plugin
 metadata, command arguments, or logs.
 
-`RAM_API_KEY` authenticates a request to RAM. Prefer one key per user for
-independent revocation and audit. `RAM_PARTICIPANT` is client-supplied
+`RAM_API_KEY` authenticates a request to RAM and `PLAYBOOK_API_KEY`
+authenticates a request to Playbook. Prefer one key per user for independent
+revocation and audit. `RAM_PARTICIPANT` is client-supplied
 contributor attribution and can be spoofed by someone who controls the local
 file; it is not authenticated human identity. Until server-validated OAuth is
 added, authorization must come from the API key and RAM service policy.
@@ -35,8 +37,8 @@ when supported, distinct API keys.
 
 ## Data and authorization boundaries
 
-- The endpoint must use HTTPS and cannot contain URL credentials, a query, or
-  a fragment.
+- Endpoints must use HTTPS, except for explicit loopback development, and
+  cannot contain URL credentials, a query, or a fragment.
 - The store and namespace come from local configuration, never tool arguments.
 - Every RAM request includes the configured namespace, and returned records
   are checked again before disclosure or mutation.
@@ -46,6 +48,13 @@ when supported, distinct API keys.
 - Namespace checks in the plugin do not replace server-side least privilege.
   Restrict each API key to the required store and operations whenever RAM
   supports that policy.
+- Organizational-state reads are fixed to the configured owner,
+  `organizational_state` memory type, and `organizational-state-v1` schema.
+  Unnamespaced ingestion records are accepted only inside that exact lane; a
+  named namespace must match configuration.
+- Playbook access is fixed to `discover_entries`, `load_skill`, and
+  `fetch_resource`. The model cannot supply a destination, credential, header,
+  or arbitrary upstream operation.
 
 ## Write safety
 

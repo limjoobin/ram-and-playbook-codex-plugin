@@ -27,6 +27,9 @@ CONFIG = Config(
     namespace="shared-namespace",
     participant="alice",
     api_key="test-secret-never-display",
+    agenda_owner_id="ami-project-office",
+    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared-playbook/mcp",
+    playbook_api_key="playbook-secret-never-display",
 )
 
 
@@ -69,6 +72,9 @@ class FakeRAM:
         self.records[memory_id].update(changes)
         return self.records[memory_id].copy()
 
+    def evidence(self, memory_id, source_id, limit=100, page_token=None):
+        return {"source": {"sourceId": source_id, "evidence": []}}
+
 
 class PluginTests(unittest.TestCase):
     def test_marketplace_and_manifest_launch_python_plugin(self):
@@ -101,8 +107,11 @@ class PluginTests(unittest.TestCase):
             "RAM_NAMESPACE": "namespace",
             "RAM_PARTICIPANT": "participant",
             "RAM_API_KEY": "secret",
+            "RAM_AGENDA_OWNER_ID": "ami-project-office",
+            "PLAYBOOK_MCP_URL": "https://playbook.example.test/v1/playbooks/shared/mcp",
+            "PLAYBOOK_API_KEY": "secret",
         }
-        with self.assertRaisesRegex(PluginError, "without credentials"):
+        with self.assertRaisesRegex(PluginError, "must not contain credentials"):
             load_config(values)
 
     def test_credential_file_is_private_and_accepts_comments(self):
@@ -112,7 +121,10 @@ class PluginTests(unittest.TestCase):
                 "# Shared connection\n"
                 "RAM_ENDPOINT=https://example.test\n"
                 "RAM_STORE_ID=store\nRAM_NAMESPACE=namespace\n"
-                "RAM_PARTICIPANT=participant\nRAM_API_KEY=secret\n",
+                "RAM_PARTICIPANT=participant\nRAM_API_KEY=secret\n"
+                "RAM_AGENDA_OWNER_ID=ami-project-office\n"
+                "PLAYBOOK_MCP_URL=https://playbook.example.test/v1/playbooks/shared/mcp\n"
+                "PLAYBOOK_API_KEY=secret\n",
                 encoding="utf-8",
             )
             path.chmod(0o644)
@@ -174,13 +186,18 @@ class PluginTests(unittest.TestCase):
     def test_tool_contract_is_write_capable_strict_and_sanitized(self):
         self.assertEqual(
             [tool["name"] for tool in TOOLS],
-            ["editor_status", "editor_search", "editor_publish", "editor_update"],
+            [
+                "editor_status", "editor_search", "editor_publish", "editor_update",
+                "system_status", "context_resolve_entities", "ram_search_state",
+                "ram_get_evidence", "playbook_discover", "playbook_load_skill",
+                "playbook_fetch_resource",
+            ],
         )
         self.assertEqual(
             [tool["annotations"]["readOnlyHint"] for tool in TOOLS],
-            [True, True, False, False],
+            [True, True, False, False, True, True, True, True, True, True, True],
         )
-        self.assertTrue(TOOLS[-1]["annotations"]["destructiveHint"])
+        self.assertTrue(TOOLS[3]["annotations"]["destructiveHint"])
         client = FakeRAM()
         service = SharedMemory(CONFIG, client, visibility_ms=1, poll_ms=1)
         invalid = call_tool(
@@ -228,7 +245,12 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(responses[0]["result"]["serverInfo"]["version"], VERSION)
         self.assertEqual(
             [tool["name"] for tool in responses[1]["result"]["tools"]],
-            ["editor_status", "editor_search", "editor_publish", "editor_update"],
+            [
+                "editor_status", "editor_search", "editor_publish", "editor_update",
+                "system_status", "context_resolve_entities", "ram_search_state",
+                "ram_get_evidence", "playbook_discover", "playbook_load_skill",
+                "playbook_fetch_resource",
+            ],
         )
         self.assertEqual(
             responses[2]["result"]["structuredContent"]["code"],
