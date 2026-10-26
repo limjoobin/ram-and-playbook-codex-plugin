@@ -25,6 +25,15 @@ python3 -c 'import sys; print(sys.version); raise SystemExit(sys.version_info < 
 codex --version
 ```
 
+If `codex` is not on `PATH` on macOS but ChatGPT desktop is installed, use the
+bundled executable explicitly:
+
+```sh
+"/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex" --version
+```
+
+Use that full executable path in place of `codex` in the commands below.
+
 macOS does not guarantee a suitable Python version. On a managed laptop, use
 the Python distribution approved by your administrator.
 
@@ -188,10 +197,21 @@ python3 evaluation/run.py
 
 ## Update
 
-For a marketplace that tracks an approved branch or tag:
+For a Git marketplace that Codex cloned and tracks itself:
 
 ```sh
 codex plugin marketplace upgrade redis-field-engineering
+```
+
+If `codex plugin marketplace list` shows a normal local checkout as the
+marketplace root, `marketplace upgrade` does not pull that checkout. Update it
+and refresh the installed cache explicitly:
+
+```sh
+cd /path/reported/for/redis-field-engineering
+git pull --ff-only origin plugin-wireframe
+codex plugin remove redis-shared-memory-editor@redis-field-engineering
+codex plugin add redis-shared-memory-editor@redis-field-engineering
 ```
 
 Restart ChatGPT desktop and start a new chat. Installations pinned to a commit
