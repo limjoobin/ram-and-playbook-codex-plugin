@@ -55,6 +55,13 @@ when supported, distinct API keys.
 - Playbook access is fixed to `discover_entries`, `load_skill`, and
   `fetch_resource`. The model cannot supply a destination, credential, header,
   or arbitrary upstream operation.
+- Agenda preparation pins `prepare-management-review-agenda`, loads its exact
+  discovered version, fetches only the five required policy resources, and
+  verifies SHA-256 digests before use. Loaded content is policy data, not a
+  command that can expand process or network permissions.
+- An agenda item is emitted only after its current RAM state has at least one
+  successfully traversed source-evidence reference. Conflicts, terminal or
+  superseded state, and insufficient evidence are reported separately.
 
 ## Write safety
 

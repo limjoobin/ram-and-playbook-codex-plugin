@@ -169,6 +169,21 @@ TOOLS = [
         ),
         "annotations": READ_ANNOTATIONS,
     },
+    {
+        "name": "agenda_prepare",
+        "title": "Prepare management review agenda",
+        "description": "Prepare a decision-focused agenda from reconciled RAM state, traversed source evidence, and the exact runtime version of the approved Playbook Skill. Candidates without sufficient evidence are deferred, not invented.",
+        "inputSchema": _object_schema(
+            {
+                "meeting_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Agenda meeting date in YYYY-MM-DD form.", "examples": ["2026-11-15"]},
+                "lookback_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 30},
+                "max_items": {"type": "integer", "minimum": 1, "maximum": 20, "default": 8},
+                "focus": {"type": "string", "minLength": 1, "maxLength": 1000, "description": "Optional semantic focus used to rank state retrieval; it does not change scope."},
+            },
+            ["meeting_date"],
+        ),
+        "annotations": READ_ANNOTATIONS,
+    },
 ]
 
 INSTRUCTIONS = (
@@ -287,6 +302,21 @@ def _validate_arguments(name: str, arguments: Any) -> dict[str, Any]:
     if name == "playbook_fetch_resource":
         values = _shape(arguments, {"uri"}, {"uri"})
         return {"uri": _text(values, "uri", 2048, True)}
+    if name == "agenda_prepare":
+        values = _shape(
+            arguments,
+            {"meeting_date", "lookback_days", "max_items", "focus"},
+            {"meeting_date"},
+        )
+        meeting_date = _text(values, "meeting_date", 10, True)
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", meeting_date or ""):
+            raise PluginError("invalid_input", "meeting_date must use YYYY-MM-DD.")
+        return {
+            "meeting_date": meeting_date,
+            "lookback_days": _integer(values, "lookback_days", 30, 1, 365),
+            "max_items": _integer(values, "max_items", 8, 1, 20),
+            "focus": _text(values, "focus", 1000),
+        }
     raise PluginError("unknown_tool", "The requested tool is not exposed by this plugin.")
 
 

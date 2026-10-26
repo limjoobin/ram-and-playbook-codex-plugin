@@ -541,3 +541,14 @@ class PluginService:
     def playbook_fetch_resource(self, uri: str) -> dict[str, Any]:
         return {"ok": True, **self.playbook.call("fetch_resource", {"uri": uri})}
 
+    def agenda_prepare(
+        self,
+        meeting_date: str,
+        lookback_days: int = 30,
+        max_items: int = 8,
+        focus: str | None = None,
+    ) -> dict[str, Any]:
+        from .agenda import prepare_agenda
+
+        return prepare_agenda(self, meeting_date, lookback_days, max_items, focus)
+

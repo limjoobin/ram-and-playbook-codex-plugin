@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "redis-shared-memory-editor",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Connect ChatGPT desktop agents to shared Redis Agent Memory and Redis Agent Playbook.",
   "author": {
     "name": "Redis Field Engineering",
@@ -24,6 +24,7 @@
           "Check the Redis Shared Memory connection status.",
           "Search shared memory before answering this question.",
           "Find the current source-grounded management state for this project.",
+          "Prepare a cited management review agenda for the next meeting.",
           "Publish this user-approved fact to shared memory."
         ]
       }

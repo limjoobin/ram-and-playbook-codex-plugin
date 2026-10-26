@@ -15,6 +15,7 @@ Memory store and Redis Agent Playbook:
 - `playbook_discover`
 - `playbook_load_skill`
 - `playbook_fetch_resource`
+- `agenda_prepare`
 
 Teams share RAM and Playbook endpoints, a RAM store, and a namespace. Each
 person keeps service API keys and a participant value in a private local file.
@@ -39,4 +40,7 @@ Read [AGENTS.md](AGENTS.md) before changing code. Use
 data scope, or network behavior.
 
 The plugin calls reviewed RAM operations directly over HTTPS and allows only
-three read-only Playbook MCP operations. It is not a generic HTTP or MCP proxy.
+three read-only Playbook MCP operations. `agenda_prepare` loads the exact
+published workflow and its required resources at runtime, verifies their
+digests, and emits only agenda items backed by traversable source evidence. It
+is not a generic HTTP or MCP proxy.

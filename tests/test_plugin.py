@@ -190,12 +190,12 @@ class PluginTests(unittest.TestCase):
                 "editor_status", "editor_search", "editor_publish", "editor_update",
                 "system_status", "context_resolve_entities", "ram_search_state",
                 "ram_get_evidence", "playbook_discover", "playbook_load_skill",
-                "playbook_fetch_resource",
+                "playbook_fetch_resource", "agenda_prepare",
             ],
         )
         self.assertEqual(
             [tool["annotations"]["readOnlyHint"] for tool in TOOLS],
-            [True, True, False, False, True, True, True, True, True, True, True],
+            [True, True, False, False, True, True, True, True, True, True, True, True],
         )
         self.assertTrue(TOOLS[3]["annotations"]["destructiveHint"])
         client = FakeRAM()
@@ -249,7 +249,7 @@ class PluginTests(unittest.TestCase):
                 "editor_status", "editor_search", "editor_publish", "editor_update",
                 "system_status", "context_resolve_entities", "ram_search_state",
                 "ram_get_evidence", "playbook_discover", "playbook_load_skill",
-                "playbook_fetch_resource",
+                "playbook_fetch_resource", "agenda_prepare",
             ],
         )
         self.assertEqual(

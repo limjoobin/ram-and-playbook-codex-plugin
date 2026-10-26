@@ -144,11 +144,13 @@ Verify the management read surface separately:
 Run system_status. Do not display endpoints or credentials.
 Resolve the "remote control project" entity, then search its current organizational state.
 Discover the prepare-management-review-agenda Playbook entry and report only its ID and version.
+Prepare the management review agenda for 2026-11-15 with at most 8 items.
 ```
 
 Expected: both upstreams are available, entity resolution returns
-`project-ami-es2002`, and Playbook discovery returns an exact version without
-exposing either endpoint or credential.
+`project-ami-es2002`, Playbook discovery returns an exact version without
+exposing either endpoint or credential, and agenda output either contains
+source-evidence references for every item or explicitly defers the candidate.
 
 ## Update
 
