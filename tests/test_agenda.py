@@ -20,6 +20,7 @@ CONFIG = Config(
     endpoint="https://memory.example.test",
     store_id="shared-store",
     namespace="shared-namespace",
+    personal_namespace="private-alice",
     participant="alice",
     api_key="ram-secret",
     agenda_owner_id="ami-project-office",

@@ -42,7 +42,8 @@ class RAMClient:
         self.config = config
         self.timeout_ms = timeout_ms
         store_id = quote(config.store_id, safe="")
-        self.base_url = f"{config.endpoint}/v1/stores/{store_id}/long-term-memory"
+        self.store_url = f"{config.endpoint}/v1/stores/{store_id}"
+        self.base_url = f"{self.store_url}/long-term-memory"
 
     def _request(
         self,
@@ -107,6 +108,46 @@ class RAMClient:
         memory = quote(memory_id, safe="")
         source = quote(source_id, safe="")
         return self._request("GET", f"{self.base_url}/{memory}/sources/{source}/evidence{query}")
+
+    def add_session_event(
+        self,
+        *,
+        session_id: str,
+        actor_id: str,
+        namespace: str,
+        role: str,
+        text: str,
+        created_at: str,
+        metadata: dict[str, Any],
+        idempotency_key: str,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """Append one attributed session event using the public RAM contract."""
+
+        return self._request(
+            "POST",
+            f"{self.store_url}/session-memory/events",
+            {
+                "idempotencyKey": idempotency_key,
+                "sessionId": session_id,
+                "actorId": actor_id,
+                "namespace": namespace,
+                "role": role,
+                "content": [{"text": text}],
+                "createdAt": created_at,
+                "metadata": metadata,
+            },
+            timeout_ms,
+        )
+
+    def get_session(self, session_id: str, timeout_ms: int | None = None) -> dict[str, Any]:
+        """Read a session for idempotency and promotion provenance checks."""
+
+        return self._request(
+            "GET",
+            f"{self.store_url}/session-memory/{quote(session_id, safe='')}",
+            timeout_ms=timeout_ms,
+        )
 
 
 def _field(record: dict[str, Any], camel: str, snake: str) -> Any:

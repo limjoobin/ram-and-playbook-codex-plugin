@@ -25,6 +25,7 @@ CONFIG = Config(
     endpoint="https://memory.example.test",
     store_id="shared-store",
     namespace="shared-namespace",
+    personal_namespace="private-alice",
     participant="alice",
     api_key="test-secret-never-display",
     agenda_owner_id="ami-project-office",
@@ -105,6 +106,7 @@ class PluginTests(unittest.TestCase):
             "RAM_ENDPOINT": "https://user:password@example.test/path?secret=yes",
             "RAM_STORE_ID": "store",
             "RAM_NAMESPACE": "namespace",
+            "RAM_PERSONAL_NAMESPACE": "private-participant",
             "RAM_PARTICIPANT": "participant",
             "RAM_API_KEY": "secret",
             "RAM_AGENDA_OWNER_ID": "ami-project-office",
@@ -114,6 +116,12 @@ class PluginTests(unittest.TestCase):
         with self.assertRaisesRegex(PluginError, "must not contain credentials"):
             load_config(values)
 
+        values["RAM_ENDPOINT"] = "https://example.test"
+        values["RAM_NAMESPACE"] = "same-namespace"
+        values["RAM_PERSONAL_NAMESPACE"] = "same-namespace"
+        with self.assertRaisesRegex(PluginError, "must differ"):
+            load_config(values)
+
     def test_credential_file_is_private_and_accepts_comments(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "editor.env"
@@ -121,6 +129,7 @@ class PluginTests(unittest.TestCase):
                 "# Shared connection\n"
                 "RAM_ENDPOINT=https://example.test\n"
                 "RAM_STORE_ID=store\nRAM_NAMESPACE=namespace\n"
+                "RAM_PERSONAL_NAMESPACE=private-participant\n"
                 "RAM_PARTICIPANT=participant\nRAM_API_KEY=secret\n"
                 "RAM_AGENDA_OWNER_ID=ami-project-office\n"
                 "PLAYBOOK_MCP_URL=https://playbook.example.test/v1/playbooks/shared/mcp\n"
@@ -190,12 +199,14 @@ class PluginTests(unittest.TestCase):
                 "editor_status", "editor_search", "editor_publish", "editor_update",
                 "system_status", "context_resolve_entities", "ram_search_state",
                 "ram_get_evidence", "playbook_discover", "playbook_load_skill",
-                "playbook_fetch_resource", "agenda_prepare",
+                "playbook_fetch_resource", "agenda_prepare", "memory_candidate_list",
+                "memory_candidate_inspect", "memory_candidate_promote", "memory_candidate_reject",
             ],
         )
         self.assertEqual(
             [tool["annotations"]["readOnlyHint"] for tool in TOOLS],
-            [True, True, False, False, True, True, True, True, True, True, True, True],
+            [True, True, False, False, True, True, True, True, True, True, True, True,
+             True, True, False, False],
         )
         self.assertTrue(TOOLS[3]["annotations"]["destructiveHint"])
         client = FakeRAM()
@@ -249,7 +260,8 @@ class PluginTests(unittest.TestCase):
                 "editor_status", "editor_search", "editor_publish", "editor_update",
                 "system_status", "context_resolve_entities", "ram_search_state",
                 "ram_get_evidence", "playbook_discover", "playbook_load_skill",
-                "playbook_fetch_resource", "agenda_prepare",
+                "playbook_fetch_resource", "agenda_prepare", "memory_candidate_list",
+                "memory_candidate_inspect", "memory_candidate_promote", "memory_candidate_reject",
             ],
         )
         self.assertEqual(

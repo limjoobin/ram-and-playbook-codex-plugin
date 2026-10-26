@@ -10,12 +10,13 @@ from urllib.error import URLError
 from urllib.parse import SplitResult, urlsplit
 
 
-VERSION = "0.7.0"
+VERSION = "0.8.0"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 SETTING_NAMES = (
     "RAM_ENDPOINT",
     "RAM_STORE_ID",
     "RAM_NAMESPACE",
+    "RAM_PERSONAL_NAMESPACE",
     "RAM_PARTICIPANT",
     "RAM_API_KEY",
     "RAM_AGENDA_OWNER_ID",
@@ -37,6 +38,7 @@ class Config:
     endpoint: str
     store_id: str
     namespace: str
+    personal_namespace: str
     participant: str
     api_key: str
     agenda_owner_id: str
@@ -85,12 +87,26 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             "PLAYBOOK_MCP_URL must identify /v1/playbooks/{playbookId}/mcp.",
         )
 
-    for name in ("RAM_STORE_ID", "RAM_NAMESPACE", "RAM_PARTICIPANT", "RAM_AGENDA_OWNER_ID"):
+    for name in (
+        "RAM_STORE_ID",
+        "RAM_NAMESPACE",
+        "RAM_PERSONAL_NAMESPACE",
+        "RAM_PARTICIPANT",
+        "RAM_AGENDA_OWNER_ID",
+    ):
         if not SLUG.fullmatch((values[name] or "").strip()):
             raise PluginError(
                 "configuration_invalid",
                 f"{name} must contain 1–64 letters, digits, or hyphens.",
             )
+
+    if (values["RAM_PERSONAL_NAMESPACE"] or "").strip().lower() == (
+        values["RAM_NAMESPACE"] or ""
+    ).strip().lower():
+        raise PluginError(
+            "configuration_invalid",
+            "RAM_PERSONAL_NAMESPACE must differ from the shared RAM_NAMESPACE.",
+        )
 
     api_key = (values["RAM_API_KEY"] or "").strip()
     playbook_api_key = (values["PLAYBOOK_API_KEY"] or "").strip()
@@ -104,6 +120,7 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         endpoint=endpoint,
         store_id=(values["RAM_STORE_ID"] or "").strip(),
         namespace=(values["RAM_NAMESPACE"] or "").strip(),
+        personal_namespace=(values["RAM_PERSONAL_NAMESPACE"] or "").strip(),
         participant=(values["RAM_PARTICIPANT"] or "").strip(),
         api_key=api_key,
         agenda_owner_id=(values["RAM_AGENDA_OWNER_ID"] or "").strip(),

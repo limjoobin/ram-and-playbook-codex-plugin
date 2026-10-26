@@ -1,0 +1,54 @@
+{
+  "description": "Capture private session evidence and create reviewable promotion candidates. No hook publishes shared memory.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
+            "timeout": 3,
+            "statusMessage": "Capturing private memory intent",
+            "additionalContextLimit": 300
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
+            "timeout": 3,
+            "statusMessage": "Capturing private completed-work evidence"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
+            "timeout": 3,
+            "statusMessage": "Extracting a private memory candidate",
+            "additionalContextLimit": 300
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

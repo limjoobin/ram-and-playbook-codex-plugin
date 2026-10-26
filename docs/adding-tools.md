@@ -32,6 +32,11 @@ Add Playbook or another service behind its own module and authorization
 boundary. Do not add unrelated methods to `SharedMemory` or pass arbitrary
 operations, URLs, or headers from model input.
 
+Session capture and personal-to-shared promotion belong in `promotion.py`.
+Keep capture private-only. A promotion must create a new shared observation,
+retain private-source identifiers, require explicit confirmation, and use
+deterministic idempotency. Do not add a second organizational-state reconciler.
+
 ## 3. Register the MCP contract
 
 Add the tool to `TOOLS` in `ram_plugin/mcp_server.py`, validate its arguments in

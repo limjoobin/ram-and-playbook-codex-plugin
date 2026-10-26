@@ -35,6 +35,14 @@ All users in a collaboration group intentionally configure the same endpoint,
 store, and namespace. They should configure distinct participant values and,
 when supported, distinct API keys.
 
+Every user must also configure a distinct `RAM_PERSONAL_NAMESPACE`. Session
+hooks append prompts, bounded tool evidence, assistant completion, and a
+session-end marker there. Hooks never target `RAM_NAMESPACE`. Hook payloads are
+untrusted: secret-shaped fields are redacted, transcript contents are not
+parsed, event sizes are bounded, and failures do not block the user's session.
+The local append-only candidate ledger lives under the plugin data directory
+with mode `0600`; its parent is mode `0700`.
+
 ## Data and authorization boundaries
 
 - Endpoints must use HTTPS, except for explicit loopback development, and
@@ -80,11 +88,20 @@ a mutation, the plugin reads the exact record and separately checks search
 visibility. If persistence cannot be proved, it returns `write_unverified` and
 instructs the agent not to repeat the write automatically.
 
+Private candidates are not shared facts. Listing and inspection are read-only.
+Promotion requires `confirmed: true` and the exact structured observation in
+the same tool call. It creates a new shared session event; it never moves,
+updates, or deletes the private RAM record. Deterministic candidate IDs,
+session IDs, event markers, and idempotency keys prevent a retry from creating
+a second observation. Rejection changes only the local review state and leaves
+private RAM evidence intact.
+
 ## Supply chain
 
 - The installed runtime is committed Python standard-library source.
-- The plugin does not run `pip install`, `npm install`, lifecycle hooks,
-  installer scripts, telemetry, or runtime downloads.
+- The plugin does not run `pip install`, `npm install`, installer scripts,
+  telemetry, or runtime downloads. Its reviewed command hooks are declared in
+  `hooks/hooks.json` and must be trusted by the user or enterprise policy.
 - Python starts in isolated mode (`-I`), so `PYTHONPATH` and user-site packages
   cannot inject code into the process.
 - Adding an installer, executable, dependency, telemetry, network destination,

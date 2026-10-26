@@ -16,15 +16,22 @@ Memory store and Redis Agent Playbook:
 - `playbook_load_skill`
 - `playbook_fetch_resource`
 - `agenda_prepare`
+- `memory_candidate_list`
+- `memory_candidate_inspect`
+- `memory_candidate_promote`
+- `memory_candidate_reject`
 
 Teams share RAM and Playbook endpoints, a RAM store, and a namespace. Each
 person keeps service API keys and a participant value in a private local file.
 API keys authenticate requests; the participant value records attribution but
 is not proof of identity.
 
-The local MCP server is dependency-free Python 3.10+ source. Installation does
-not run a package manager, installer script, lifecycle hook, or first-run
-download.
+The local MCP server and reviewed capture hooks are dependency-free Python
+3.10+ source. Installation does not run a package manager, installer script,
+or first-run download. Hooks capture prompts, selected tool evidence, turn
+completion, and session end into a per-user private namespace; they never
+publish shared memory. Promotion is a separate MCP write requiring explicit
+confirmation.
 
 ## Quality gate
 
@@ -53,6 +60,9 @@ Read [AGENTS.md](AGENTS.md) before changing code. Use
 [docs/adding-tools.md](docs/adding-tools.md) when adding an MCP tool, and review
 [SECURITY.md](SECURITY.md) before changing identity, credentials, permissions,
 data scope, or network behavior.
+
+The private-to-shared contract, trust boundary, and manual acceptance cases
+are documented in [docs/private-session-promotion.md](docs/private-session-promotion.md).
 
 The plugin calls reviewed RAM operations directly over HTTPS and allows only
 three read-only Playbook MCP operations. `agenda_prepare` loads the exact

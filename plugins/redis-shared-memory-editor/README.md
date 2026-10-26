@@ -15,9 +15,15 @@ Redis Agent Memory store and namespace. It exposes:
 - `playbook_load_skill`
 - `playbook_fetch_resource`
 - `agenda_prepare`
+- `memory_candidate_list`
+- `memory_candidate_inspect`
+- `memory_candidate_promote`
+- `memory_candidate_reject`
 
-The MCP server is dependency-free Python 3.10+ source. It has no lifecycle
-hook, installer, package-manager step, or runtime download.
+The MCP server and reviewed session-capture hooks are dependency-free Python
+3.10+ source. It has no installer, package-manager step, or runtime download.
+Hooks write only to the configured personal namespace. A separate MCP tool
+promotes an inspected candidate after explicit user confirmation.
 
 Each user creates a private configuration file at:
 
@@ -27,7 +33,8 @@ Each user creates a private configuration file at:
 
 Users in one collaboration group configure the same `RAM_ENDPOINT`,
 `RAM_STORE_ID`, `RAM_NAMESPACE`, `RAM_AGENDA_OWNER_ID`, and
-`PLAYBOOK_MCP_URL`. Each user configures their own `RAM_PARTICIPANT` and,
+`PLAYBOOK_MCP_URL`. Each user configures their own `RAM_PERSONAL_NAMESPACE`,
+`RAM_PARTICIPANT`, and,
 preferably, their own service API keys.
 
 `RAM_API_KEY` and `PLAYBOOK_API_KEY` authenticate requests.
@@ -43,6 +50,13 @@ conflicting, terminal, superseded, or uncited candidates are returned as
 deferrals or warnings. `ram_search_state` also exposes an explicit `history`
 view for source-event breadcrumbs and a `conflicts` view for unresolved current
 projections.
+
+Session events first enter RAM under `RAM_PERSONAL_NAMESPACE`, where RAM owns
+native session memory and any configured personal extraction. The local
+candidate ledger is only a bounded review queue. `memory_candidate_promote`
+does not move or mutate private memory: it appends a new, confirmed shared
+session observation with deterministic provenance and lets RAM's
+`organizational_state` custom extractor create the shared observation.
 
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.
 Maintainers should read `AGENTS.md`, `SECURITY.md`, and

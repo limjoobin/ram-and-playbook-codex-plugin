@@ -38,6 +38,7 @@ CONFIG = Config(
     endpoint="https://memory.evaluation.invalid",
     store_id="evaluation-store",
     namespace="evaluation-namespace",
+    personal_namespace="private-evaluation-user",
     participant="evaluation-user",
     api_key="not-a-real-key",
     agenda_owner_id="ami-project-office",

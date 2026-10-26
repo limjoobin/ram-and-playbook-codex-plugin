@@ -13,6 +13,7 @@ You need:
 - the Codex CLI;
 - Python 3.10 or newer available as `python3`;
 - the shared RAM endpoint, store ID, namespace, and management-state owner;
+- a unique private RAM namespace for this user;
 - the shared Redis Agent Playbook MCP URL;
 - a participant ID plus RAM and Playbook API keys for this user; and
 - enterprise approval for the Git repository/ref, local Python execution, and
@@ -39,11 +40,18 @@ the Python distribution approved by your administrator.
 
 Adding a Git marketplace installs code that runs locally. An administrator can
 allowlist the repository and an exact tag or commit. This repository contains
-readable standard-library Python and no install hooks, downloaded runtime, or
-package-manager step. Local installation is separate from publication in the
+readable standard-library Python, reviewed runtime hooks, and no downloaded
+runtime or package-manager step. Local installation is separate from publication in the
 public plugin directory. See OpenAI's
 [desktop deployment guide](https://developers.openai.com/plugins/deploy/desktop-only)
 for the supported installation model.
+
+The plugin contains `UserPromptSubmit`, `PostToolUse`, `Stop`, and
+`SessionEnd` command hooks. Codex requires review/trust before non-managed
+plugin hooks run. Inspect the installed `hooks/hooks.json` and
+`hooks/capture.py`, then approve only if their private-capture behavior matches
+your policy. See OpenAI's [hooks documentation](https://learn.chatgpt.com/docs/hooks)
+and [plugin build guide](https://developers.openai.com/plugins/build/plugins).
 
 For a multi-user deployment, both configured endpoints must be reachable from
 every approved laptop. A loopback `http://127.0.0.1` or `http://localhost`
@@ -102,6 +110,7 @@ command. Add these settings in the local editor:
 RAM_ENDPOINT=https://your-memory-endpoint.redis.io
 RAM_STORE_ID=shared-store
 RAM_NAMESPACE=shared-namespace
+RAM_PERSONAL_NAMESPACE=private-your-user-id
 RAM_PARTICIPANT=your-user-id
 RAM_API_KEY=your-user-api-key
 RAM_AGENDA_OWNER_ID=ami-project-office
@@ -118,6 +127,7 @@ The values have these roles:
 | `RAM_ENDPOINT` | Shared | HTTPS RAM data-plane endpoint. URLs with embedded credentials, a query, or a fragment are rejected. |
 | `RAM_STORE_ID` | Shared | Store used by the team. |
 | `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write. |
+| `RAM_PERSONAL_NAMESPACE` | Per user | Private namespace for this user's captured session events and RAM-derived personal memory. Never reuse another person's value. |
 | `RAM_PARTICIPANT` | Per user | Contributor attribution. It is not authenticated identity. |
 | `RAM_API_KEY` | Per user when supported | Credential that authenticates RAM requests. |
 | `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing immutable `organizational_state` observations and derived `organizational_state_projection` records. |
@@ -141,7 +151,9 @@ changing the tool model.
 5. Start a new chat.
 
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
-a fact, and `editor_update` replaces an existing fact by exact memory ID.
+a fact, `editor_update` replaces an existing fact by exact memory ID, and
+`memory_candidate_promote` creates a new shared source event after explicit
+confirmation. Hooks themselves never write the shared namespace.
 
 ## 4. Verify one user, then the group
 
@@ -186,6 +198,28 @@ These checks are the manual acceptance gate. Passing repository tests and the
 offline evaluation does not prove that a customer's network, credentials,
 store contents, Playbook publication, or desktop policy is configured
 correctly.
+
+Verify private capture and confirmed promotion separately:
+
+```text
+Complete a small local task, but do not share it with the team.
+List my pending private memory candidates.
+Inspect the relevant candidate and show me its evidence. Do not promote it.
+```
+
+Expected: any captured candidate names the per-user personal namespace and no
+new shared result is returned by `ram_search_state`. Then explicitly confirm
+one non-sensitive candidate and supply canonical project and lifecycle fields:
+
+```text
+Yes, promote that inspected candidate as an open action_item for project-demo.
+```
+
+Expected: the agent calls `memory_candidate_promote` once, the result says
+`promotion_submitted`, a repeated call says `already_submitted`, and after the
+RAM extraction window `ram_search_state` finds one source-linked observation.
+The original private events still exist. Reject a second candidate and confirm
+that it never appears in shared organizational state.
 
 Before asking users to install a release, the maintainer should also run in a
 clean checkout:
@@ -238,7 +272,10 @@ remove it through the laptop's approved file-management process.
 | --- | --- |
 | Marketplace or plugin is not visible | Run `codex plugin marketplace list`, confirm the approved ref and Git access, then restart ChatGPT desktop. |
 | Local server will not start | Run the Python version check above and confirm enterprise policy permits `python3`. |
-| `configuration_missing` | Create the file at the exact path above and fill all eight settings. |
+| `configuration_missing` | Create the file at the exact path above and fill all nine settings. |
+| Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. |
+| Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
+| Promotion is accepted but state is not searchable yet | Wait for the RAM custom-extraction window, then verify the store's `organizational_state` extractor accepts `personal-to-shared-promotion-v1`. Do not resubmit. |
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
 | `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
 | `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |
