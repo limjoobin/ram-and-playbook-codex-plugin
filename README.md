@@ -59,3 +59,12 @@ three read-only Playbook MCP operations. `agenda_prepare` loads the exact
 published workflow and its required resources at runtime, verifies their
 digests, and emits only agenda items backed by traversable source evidence. It
 is not a generic HTTP or MCP proxy.
+
+Management state uses two RAM lanes. `organizational_state` is the immutable,
+source-linked observation ledger. `organizational_state_projection` is a
+deterministic current-state view built by the ingestion pipeline from a
+versioned state-family policy. `ram_search_state` returns projections by
+default; `view: history` returns the underlying breadcrumbs and `view:
+conflicts` returns only unresolved current conflicts. Business ordering uses
+the source date, meeting sequence, and transcript-relative offset; RAM creation
+time remains system/ingestion time.

@@ -46,7 +46,7 @@ def record(
         "memoryType": "organizational_state",
         "sources": [{"sourceId": f"source-{memory_id}"}] if sources else [],
         "attributes": {
-            "schema_version": "organizational-state-v1",
+            "schema_version": "organizational-state-v2",
             "state_id": state_id,
             "state_kind": "risk",
             "lifecycle_status": status,
@@ -55,6 +55,8 @@ def record(
             "project_id": "project-ami-es2002",
             "accountable_entity_id": "employee-laura-project-manager",
             "observed_at": "2026-10-20T09:00:00Z",
+            "event_sequence": 1,
+            "source_offset_ms": 0,
             "due_at": "2026-11-05",
             "requested_decision": requested,
             "impact": impact,
@@ -66,14 +68,58 @@ def record(
     }
 
 
+def projection_record(records):
+    current = records[-1]
+    attributes = current["attributes"]
+    conflicts = [item["id"] for item in records if item["attributes"]["evidence_role"] == "contradicts"]
+    return {
+        "id": f"projection-{attributes['state_id']}",
+        "text": attributes["subject"],
+        "ownerId": "ami-project-office",
+        "memoryType": "organizational_state_projection",
+        "attributes": {
+            "schema_version": "organizational-state-projection-v1",
+            "state_id": attributes["state_id"],
+            "state_kind": attributes["state_kind"],
+            "lifecycle_status": attributes["lifecycle_status"],
+            "subject": attributes["subject"],
+            "project_id": attributes["project_id"],
+            "project_step_id": "",
+            "meeting_id": "",
+            "accountable_entity_id": attributes["accountable_entity_id"],
+            "related_entity_ids": [],
+            "valid_at": attributes["observed_at"],
+            "event_sequence": 1,
+            "source_offset_ms": 0,
+            "due_at": attributes["due_at"],
+            "resolved_at": "",
+            "requested_decision": attributes["requested_decision"],
+            "impact": attributes["impact"],
+            "conflict_status": "unresolved" if conflicts else "none",
+            "supporting_memory_ids": [item["id"] for item in records],
+            "conflicting_memory_ids": conflicts,
+            "observation_count": len(records),
+            "current_memory_id": current["id"],
+            "resolution_policy_id": "test-policy-v1",
+        },
+    }
+
+
 class AgendaRAM:
     def __init__(self, records, evidence=True):
-        self.records = records
+        self.supporting = {item["id"]: item for item in records}
+        grouped = {}
+        for item in records:
+            grouped.setdefault(item["attributes"]["state_id"], []).append(item)
+        self.records = [projection_record(items) for items in grouped.values()]
         self.has_evidence = evidence
         self.evidence_calls = []
 
     def search(self, request, timeout_ms=None):
         return {"items": self.records}
+
+    def get(self, memory_id):
+        return self.supporting[memory_id]
 
     def evidence(self, memory_id, source_id, limit=100, page_token=None):
         self.evidence_calls.append((memory_id, source_id))

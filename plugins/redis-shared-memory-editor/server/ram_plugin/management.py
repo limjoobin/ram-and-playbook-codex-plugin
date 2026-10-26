@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from typing import Any
 
@@ -12,8 +11,11 @@ from .playbook import ALLOWED_TOOLS, PlaybookClient
 from .ram import RAMClient, _field, _items
 
 
-STATE_TYPE = "organizational_state"
-STATE_SCHEMA = "organizational-state-v1"
+OBSERVATION_TYPE = "organizational_state"
+OBSERVATION_SCHEMA = "organizational-state-v2"
+PROJECTION_TYPE = "organizational_state_projection"
+PROJECTION_SCHEMA = "organizational-state-projection-v1"
+STATE_VIEWS = frozenset({"current", "history", "conflicts"})
 STATE_KINDS = frozenset(
     {"action_item", "decision", "risk", "issue", "dependency", "approval", "conflict"}
 )
@@ -206,6 +208,12 @@ def _sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
     attributes = _attributes(record)
     return (
         str(attributes.get("observed_at", "")),
+        attributes.get("event_sequence", 0)
+        if isinstance(attributes.get("event_sequence", 0), int)
+        else 0,
+        attributes.get("source_offset_ms", 0)
+        if isinstance(attributes.get("source_offset_ms", 0), int)
+        else 0,
         _revision_key(attributes.get("source_revision")),
         ROLE_PRECEDENCE.get(str(attributes.get("evidence_role", "")), -1),
         str(_field(record, "updatedAt", "updated_at") or ""),
@@ -221,25 +229,24 @@ def _scope_matches(record: dict[str, Any], config: Config) -> bool:
     )
     return (
         _field(record, "ownerId", "owner_id") == config.agenda_owner_id
-        and _field(record, "memoryType", "memory_type") == STATE_TYPE
-        and attributes.get("schema_version") == STATE_SCHEMA
+        and _field(record, "memoryType", "memory_type") == OBSERVATION_TYPE
+        and attributes.get("schema_version") == OBSERVATION_SCHEMA
         and namespace_matches
     )
 
 
-def _duplicate_key(record: dict[str, Any]) -> str:
+def _projection_scope_matches(record: dict[str, Any], config: Config) -> bool:
     attributes = _attributes(record)
-    material = {
-        "text": record.get("text"),
-        "state_id": attributes.get("state_id"),
-        "evidence_role": attributes.get("evidence_role"),
-        "subject": attributes.get("subject"),
-        "observed_at": attributes.get("observed_at"),
-        "source_artifact_id": attributes.get("source_artifact_id"),
-        "source_revision": attributes.get("source_revision"),
-        "evidence_locator": attributes.get("evidence_locator"),
-    }
-    return json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
+    namespace = record.get("namespace")
+    namespace_matches = namespace in {None, ""} or (
+        isinstance(namespace, str) and namespace.casefold() == config.namespace.casefold()
+    )
+    return (
+        _field(record, "ownerId", "owner_id") == config.agenda_owner_id
+        and _field(record, "memoryType", "memory_type") == PROJECTION_TYPE
+        and attributes.get("schema_version") == PROJECTION_SCHEMA
+        and namespace_matches
+    )
 
 
 def _observation(record: dict[str, Any]) -> dict[str, Any]:
@@ -250,6 +257,8 @@ def _observation(record: dict[str, Any]) -> dict[str, Any]:
         "evidence_role": attributes.get("evidence_role"),
         "lifecycle_status": attributes.get("lifecycle_status"),
         "observed_at": attributes.get("observed_at"),
+        "event_sequence": attributes.get("event_sequence"),
+        "source_offset_ms": attributes.get("source_offset_ms"),
         "effective_at": attributes.get("effective_at"),
         "source_artifact_id": attributes.get("source_artifact_id"),
         "source_revision": attributes.get("source_revision"),
@@ -258,92 +267,41 @@ def _observation(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def reconcile_states(
-    records: list[dict[str, Any]],
-    config: Config,
-    lifecycle_status: str | None = None,
-    limit: int = 20,
-) -> dict[str, Any]:
-    """Reconcile ranked observations without hiding conflicts or terminal states."""
-
-    scoped = [record for record in records if _scope_matches(record, config)]
-    rejected = len(records) - len(scoped)
-
-    unique_by_key: dict[str, dict[str, Any]] = {}
-    duplicates = 0
-    for record in scoped:
-        key = _duplicate_key(record)
-        previous = unique_by_key.get(key)
-        if previous is not None:
-            duplicates += 1
-        if previous is None or _sort_key(record) > _sort_key(previous):
-            unique_by_key[key] = record
-    unique = list(unique_by_key.values())
-
-    latest_revision: dict[str, tuple[tuple[int, Any], ...]] = {}
-    for record in unique:
-        attributes = _attributes(record)
-        artifact = attributes.get("source_artifact_id")
-        if isinstance(artifact, str) and artifact:
-            latest_revision[artifact] = max(
-                latest_revision.get(artifact, ()),
-                _revision_key(attributes.get("source_revision")),
-            )
-    current_revision: list[dict[str, Any]] = []
-    old_revisions = 0
-    for record in unique:
-        attributes = _attributes(record)
-        artifact = attributes.get("source_artifact_id")
-        if (
-            isinstance(artifact, str)
-            and artifact
-            and _revision_key(attributes.get("source_revision")) < latest_revision[artifact]
-        ):
-            old_revisions += 1
+def _projection_state(
+    record: dict[str, Any], config: Config, ram: RAMClient
+) -> tuple[dict[str, Any], int]:
+    attributes = _attributes(record)
+    support_ids = attributes.get("supporting_memory_ids")
+    conflict_ids = attributes.get("conflicting_memory_ids")
+    if not isinstance(support_ids, list) or not isinstance(conflict_ids, list):
+        raise PluginError(
+            "ram_contract_error", "RAM returned an incompatible current-state projection."
+        )
+    observations: list[dict[str, Any]] = []
+    unavailable = 0
+    for memory_id in support_ids:
+        if not isinstance(memory_id, str) or not memory_id:
+            unavailable += 1
             continue
-        current_revision.append(record)
-
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    state_rank: dict[str, int] = {}
-    for rank, record in enumerate(current_revision):
-        state_id = _attributes(record).get("state_id")
-        if isinstance(state_id, str) and state_id:
-            grouped.setdefault(state_id, []).append(record)
-            state_rank.setdefault(state_id, rank)
-
-    superseded_by: dict[str, set[str]] = {}
-    for replacement_id, evidence in grouped.items():
-        for record in evidence:
-            replaced = _attributes(record).get("supersedes_state_ids")
-            if isinstance(replaced, list):
-                for state_id in replaced:
-                    if isinstance(state_id, str) and state_id:
-                        superseded_by.setdefault(state_id, set()).add(replacement_id)
-
-    states: list[dict[str, Any]] = []
-    conflict_count = 0
-    for state_id in sorted(grouped, key=state_rank.get):
-        ordered = sorted(grouped[state_id], key=_sort_key)
-        current = ordered[-1]
-        attributes = _attributes(current)
-        contradictions = [
-            _observation(record)
-            for record in ordered
-            if _attributes(record).get("evidence_role") == "contradicts"
-        ]
-        status = str(attributes.get("lifecycle_status") or "unknown")
-        replacement_ids = sorted(superseded_by.get(state_id, set()))
-        if replacement_ids:
-            status = "superseded"
-        conflict = bool(contradictions)
-        if conflict:
-            conflict_count += 1
-        state = {
-            "state_id": state_id,
+        try:
+            supporting = ram.get(memory_id)
+        except Exception:
+            unavailable += 1
+            continue
+        if not _scope_matches(supporting, config):
+            unavailable += 1
+            continue
+        observations.append(_observation(supporting))
+    by_id = {item.get("memory_id"): item for item in observations}
+    conflicts = [by_id[memory_id] for memory_id in conflict_ids if memory_id in by_id]
+    status = str(attributes.get("lifecycle_status") or "unknown")
+    return (
+        {
+            "state_id": attributes.get("state_id"),
             "state_kind": attributes.get("state_kind"),
             "lifecycle_status": status,
             "terminal": status in TERMINAL_STATUSES,
-            "subject": attributes.get("subject") or current.get("text"),
+            "subject": attributes.get("subject") or record.get("text"),
             "project_id": attributes.get("project_id"),
             "project_step_id": attributes.get("project_step_id"),
             "meeting_id": attributes.get("meeting_id"),
@@ -352,28 +310,18 @@ def reconcile_states(
             "impact": attributes.get("impact"),
             "due_at": attributes.get("due_at"),
             "resolved_at": attributes.get("resolved_at"),
-            "superseded_by": replacement_ids,
-            "has_conflict": conflict,
-            "conflicting_observations": contradictions,
-            "observation_count": len(ordered),
-            "observations": [_observation(record) for record in ordered],
-        }
-        if lifecycle_status is None or status == lifecycle_status:
-            states.append(state)
-
-    return {
-        "ok": True,
-        "states": states[:limit],
-        "has_more": len(states) > limit,
-        "diagnostics": {
-            "retrieved_observations": len(records),
-            "out_of_scope_rejected": rejected,
-            "duplicates_removed": duplicates,
-            "old_source_revisions_removed": old_revisions,
-            "reconciled_states": len(grouped),
-            "conflicted_states": conflict_count,
+            "valid_at": attributes.get("valid_at"),
+            "event_sequence": attributes.get("event_sequence"),
+            "source_offset_ms": attributes.get("source_offset_ms"),
+            "has_conflict": attributes.get("conflict_status") == "unresolved",
+            "conflicting_observations": conflicts,
+            "observation_count": attributes.get("observation_count"),
+            "observations": observations,
+            "projection_memory_id": record.get("id"),
+            "resolution_policy_id": attributes.get("resolution_policy_id"),
         },
-    }
+        unavailable,
+    )
 
 
 class PluginService:
@@ -411,7 +359,11 @@ class PluginService:
             "required_operations": ["search", "get", "evidence"],
         }
         try:
-            self.ram.search(self._state_request(None, {}, 1, None))
+            self.ram.search(
+                self._state_request(
+                    None, {}, 1, None, PROJECTION_TYPE, PROJECTION_SCHEMA
+                )
+            )
         except Exception:
             ram_status["status"] = "unavailable"
 
@@ -451,12 +403,14 @@ class PluginService:
         attributes: dict[str, str],
         limit: int,
         similarity_threshold: float | None,
+        memory_type: str,
+        schema_version: str,
     ) -> dict[str, Any]:
         filters: dict[str, Any] = {
             "ownerId": {"eq": self.config.agenda_owner_id},
-            "memoryType": {"eq": STATE_TYPE},
+            "memoryType": {"eq": memory_type},
             "attributes": {
-                "schema_version": {"string": STATE_SCHEMA},
+                "schema_version": {"string": schema_version},
                 **{key: {"string": value} for key, value in attributes.items()},
             },
         }
@@ -475,6 +429,7 @@ class PluginService:
         project_id: str | None = None,
         meeting_id: str | None = None,
         accountable_entity: str | None = None,
+        view: str = "current",
         limit: int = 20,
         similarity_threshold: float | None = None,
     ) -> dict[str, Any]:
@@ -488,17 +443,71 @@ class PluginService:
             }.items()
             if value is not None
         }
-        request = self._state_request(text, attributes, 100, similarity_threshold)
-        records = _items(self.ram.search(request))
-        result = reconcile_states(records, self.config, lifecycle_status, limit)
-        result.update(
-            {
-                "schema_version": STATE_SCHEMA,
+        if view == "history":
+            history_attributes = dict(attributes)
+            if lifecycle_status is not None:
+                history_attributes["lifecycle_status"] = lifecycle_status
+            request = self._state_request(
+                text,
+                history_attributes,
+                100,
+                similarity_threshold,
+                OBSERVATION_TYPE,
+                OBSERVATION_SCHEMA,
+            )
+            records = _items(self.ram.search(request))
+            scoped = [record for record in records if _scope_matches(record, self.config)]
+            ordered = scoped if text is not None else sorted(scoped, key=_sort_key)
+            observations = [_observation(record) for record in ordered]
+            return {
+                "ok": True,
+                "view": view,
+                "schema_version": OBSERVATION_SCHEMA,
                 "owner_id": self.config.agenda_owner_id,
-                "applied_filters": attributes,
+                "applied_filters": history_attributes,
+                "observations": observations[:limit],
+                "has_more": len(observations) > limit,
+                "diagnostics": {
+                    "retrieved_observations": len(records),
+                    "out_of_scope_rejected": len(records) - len(scoped),
+                },
             }
+
+        projection_attributes = dict(attributes)
+        if lifecycle_status is not None:
+            projection_attributes["lifecycle_status"] = lifecycle_status
+        if view == "conflicts":
+            projection_attributes["conflict_status"] = "unresolved"
+        request = self._state_request(
+            text,
+            projection_attributes,
+            min(100, max(limit * 2, limit)),
+            similarity_threshold,
+            PROJECTION_TYPE,
+            PROJECTION_SCHEMA,
         )
-        return result
+        records = _items(self.ram.search(request))
+        scoped = [record for record in records if _projection_scope_matches(record, self.config)]
+        states: list[dict[str, Any]] = []
+        unavailable_supports = 0
+        for record in scoped[:limit]:
+            state, unavailable = _projection_state(record, self.config, self.ram)
+            states.append(state)
+            unavailable_supports += unavailable
+        return {
+            "ok": True,
+            "view": view,
+            "schema_version": PROJECTION_SCHEMA,
+            "owner_id": self.config.agenda_owner_id,
+            "applied_filters": projection_attributes,
+            "states": states,
+            "has_more": len(scoped) > limit,
+            "diagnostics": {
+                "retrieved_projections": len(records),
+                "out_of_scope_rejected": len(records) - len(scoped),
+                "supporting_observations_unavailable": unavailable_supports,
+            },
+        }
 
     def ram_get_evidence(
         self,

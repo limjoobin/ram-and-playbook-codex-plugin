@@ -111,7 +111,7 @@ The values have these roles:
 | `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write. |
 | `RAM_PARTICIPANT` | Per user | Contributor attribution. It is not authenticated identity. |
 | `RAM_API_KEY` | Per user when supported | Credential that authenticates RAM requests. |
-| `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing `organizational_state` records. |
+| `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing immutable `organizational_state` observations and derived `organizational_state_projection` records. |
 | `PLAYBOOK_MCP_URL` | Shared | Full approved Playbook MCP URL ending in `/v1/playbooks/{playbookId}/mcp`. |
 | `PLAYBOOK_API_KEY` | Per user when supported | Credential that authenticates Playbook MCP requests. |
 
@@ -160,15 +160,18 @@ Verify the management read surface separately:
 
 ```text
 Run system_status. Do not display endpoints or credentials.
-Resolve the "remote control project" entity, then search its current organizational state.
+Resolve the "remote control project" entity, then search its current organizational state using the default current view.
+Search the same project with the history view and confirm it returns immutable observations with source-event ordering metadata.
 Discover the prepare-management-review-agenda Playbook entry and report only its ID and version.
 Prepare the management review agenda for 2026-11-15 with at most 8 items.
 ```
 
 Expected: both upstreams are available, entity resolution returns
-`project-ami-es2002`, Playbook discovery returns an exact version without
-exposing either endpoint or credential, and agenda output either contains
-source-evidence references for every item or explicitly defers the candidate.
+`project-ami-es2002`, the current view returns projections, the history view
+returns timestamped source observations, Playbook discovery returns an exact
+version without exposing either endpoint or credential, and agenda output
+either contains source-evidence references for every item or explicitly defers
+the candidate.
 
 These checks are the manual acceptance gate. Passing repository tests and the
 offline evaluation does not prove that a customer's network, credentials,

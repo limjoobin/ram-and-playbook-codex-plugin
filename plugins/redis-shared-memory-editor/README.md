@@ -37,9 +37,12 @@ the populated file in the repository, plugin cache, or chat.
 `agenda_prepare` does not bundle a second copy of the management policy. It
 discovers and loads `prepare-management-review-agenda` from Playbook at runtime,
 fetches the five required policy resources, verifies every digest, reconciles
-RAM lifecycle state, and traverses source evidence before including an item.
-Missing, conflicting, terminal, superseded, or uncited candidates are returned
-as deferrals or warnings.
+RAM lifecycle state through deterministic current projections, and traverses
+their immutable supporting observations before including an item. Missing,
+conflicting, terminal, superseded, or uncited candidates are returned as
+deferrals or warnings. `ram_search_state` also exposes an explicit `history`
+view for source-event breadcrumbs and a `conflicts` view for unresolved current
+projections.
 
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.
 Maintainers should read `AGENTS.md`, `SECURITY.md`, and

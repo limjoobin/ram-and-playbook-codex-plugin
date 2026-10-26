@@ -48,10 +48,15 @@ when supported, distinct API keys.
 - Namespace checks in the plugin do not replace server-side least privilege.
   Restrict each API key to the required store and operations whenever RAM
   supports that policy.
-- Organizational-state reads are fixed to the configured owner,
-  `organizational_state` memory type, and `organizational-state-v1` schema.
+- Organizational-state reads are fixed to the configured owner. History uses
+  `organizational_state` with `organizational-state-v2`; current/conflict views
+  use `organizational_state_projection` with
+  `organizational-state-projection-v1`.
   Unnamespaced ingestion records are accepted only inside that exact lane; a
   named namespace must match configuration.
+- Projection records contain only immutable supporting memory IDs. The plugin
+  reads those observations by exact ID, rechecks their owner, type, schema, and
+  namespace, and uses their RAM source links for evidence traversal.
 - Playbook access is fixed to `discover_entries`, `load_skill`, and
   `fetch_resource`. The model cannot supply a destination, credential, header,
   or arbitrary upstream operation.

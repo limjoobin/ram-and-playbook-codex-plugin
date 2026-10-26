@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from .config import PluginError, VERSION, public_error
 from .credentials import load_credential_file
-from .management import LIFECYCLE_STATUSES, STATE_KINDS, PluginService
+from .management import LIFECYCLE_STATUSES, STATE_KINDS, STATE_VIEWS, PluginService
 from .playbook import PlaybookClient
 from .ram import RAMClient, SharedMemory
 
@@ -103,7 +103,7 @@ TOOLS = [
     {
         "name": "ram_search_state",
         "title": "Search organizational state",
-        "description": "Search source-grounded organizational-state observations with server-side structured filters, then reconcile duplicates, revisions, conflicts, terminal states, and supersession.",
+        "description": "Search deterministic current-state projections by default. Use history for immutable source observations or conflicts for unresolved projected conflicts. The service selects canonical state families; callers do not pass state IDs.",
         "inputSchema": _object_schema(
             {
                 "text": {"type": "string", "minLength": 1, "maxLength": 2000, "examples": ["market research and trend work"]},
@@ -112,6 +112,7 @@ TOOLS = [
                 "project_id": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Canonical project ID or exact accepted alias."},
                 "meeting_id": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Canonical meeting ID or exact accepted alias."},
                 "accountable_entity": {"type": "string", "minLength": 1, "maxLength": 200, "description": "Canonical employee ID or exact accepted alias."},
+                "view": {"type": "string", "enum": sorted(STATE_VIEWS), "default": "current", "description": "current returns projections, history returns immutable observations, and conflicts returns unresolved current projections."},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20},
                 "similarity_threshold": {"type": "number", "minimum": 0, "maximum": 1},
             }
@@ -258,13 +259,15 @@ def _validate_arguments(name: str, arguments: Any) -> dict[str, Any]:
     if name == "ram_search_state":
         allowed = {
             "text", "state_kind", "lifecycle_status", "project_id", "meeting_id",
-            "accountable_entity", "limit", "similarity_threshold",
+            "accountable_entity", "view", "limit", "similarity_threshold",
         }
         values = _shape(arguments, allowed)
         if values.get("state_kind") is not None and values["state_kind"] not in STATE_KINDS:
             raise PluginError("invalid_input", "state_kind is not supported.")
         if values.get("lifecycle_status") is not None and values["lifecycle_status"] not in LIFECYCLE_STATUSES:
             raise PluginError("invalid_input", "lifecycle_status is not supported.")
+        if values.get("view", "current") not in STATE_VIEWS:
+            raise PluginError("invalid_input", "view is not supported.")
         threshold = values.get("similarity_threshold")
         if threshold is not None and (
             isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0 <= threshold <= 1
@@ -277,6 +280,7 @@ def _validate_arguments(name: str, arguments: Any) -> dict[str, Any]:
             "project_id": _text(values, "project_id", 200),
             "meeting_id": _text(values, "meeting_id", 200),
             "accountable_entity": _text(values, "accountable_entity", 200),
+            "view": values.get("view", "current"),
             "limit": _integer(values, "limit", 20, 1, 100),
             "similarity_threshold": float(threshold) if threshold is not None else None,
         }

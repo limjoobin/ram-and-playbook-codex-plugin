@@ -65,6 +65,12 @@ only for a reviewed product-contract change; do not lower a threshold to hide
 a regression. Regenerate `evaluation/results.json` with `--write` and inspect
 the diff.
 
+For management-state changes, keep the contracts separate: history reads the
+immutable `organizational_state` observation lane, while current/conflict views
+read `organizational_state_projection` and hydrate evidence only through the
+projection's supporting observation IDs. Do not reintroduce model-selected
+"latest" state IDs in the tool contract.
+
 Run:
 
 ```sh

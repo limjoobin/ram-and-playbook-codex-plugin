@@ -58,7 +58,7 @@ def _record(case: dict[str, Any], role: str = "creates") -> dict[str, Any]:
         "namespace": None,
         "sources": [{"sourceId": f"source-{case_id}-{suffix}"}],
         "attributes": {
-            "schema_version": "organizational-state-v1",
+            "schema_version": "organizational-state-v2",
             "state_id": f"state-{case_id}",
             "state_kind": case["state_kind"],
             "lifecycle_status": case.get("lifecycle_status", "open"),
@@ -67,6 +67,8 @@ def _record(case: dict[str, Any], role: str = "creates") -> dict[str, Any]:
             "project_id": "project-ami-es2002",
             "accountable_entity_id": case.get("owner", "employee-laura-project-manager"),
             "observed_at": observed,
+            "event_sequence": 1,
+            "source_offset_ms": 0,
             "due_at": "2026-11-05",
             "requested_decision": case["requested_decision"],
             "impact": case["impact"],
@@ -84,9 +86,53 @@ class EvaluationRAM:
         self.records = [_record(case)]
         if case.get("conflict"):
             self.records.append(_record(case, "contradicts"))
+        current = self.records[-1]
+        attributes = current["attributes"]
+        conflicts = [
+            item["id"]
+            for item in self.records
+            if item["attributes"]["evidence_role"] == "contradicts"
+        ]
+        self.projections = [
+            {
+                "id": f"projection-{case['id']}",
+                "text": case["subject"],
+                "ownerId": "ami-project-office",
+                "memoryType": "organizational_state_projection",
+                "namespace": None,
+                "attributes": {
+                    "schema_version": "organizational-state-projection-v1",
+                    "state_id": f"state-{case['id']}",
+                    "state_kind": case["state_kind"],
+                    "lifecycle_status": case.get("lifecycle_status", "open"),
+                    "subject": case["subject"],
+                    "project_id": "project-ami-es2002",
+                    "project_step_id": "",
+                    "meeting_id": "",
+                    "accountable_entity_id": case.get("owner", "employee-laura-project-manager"),
+                    "related_entity_ids": [],
+                    "valid_at": attributes["observed_at"],
+                    "event_sequence": 1,
+                    "source_offset_ms": 0,
+                    "due_at": "2026-11-05",
+                    "resolved_at": "",
+                    "requested_decision": case["requested_decision"],
+                    "impact": case["impact"],
+                    "conflict_status": "unresolved" if conflicts else "none",
+                    "supporting_memory_ids": [item["id"] for item in self.records],
+                    "conflicting_memory_ids": conflicts,
+                    "observation_count": len(self.records),
+                    "current_memory_id": current["id"],
+                    "resolution_policy_id": "evaluation-policy-v1",
+                },
+            }
+        ]
 
     def search(self, request: dict[str, Any], timeout_ms: int | None = None) -> dict[str, Any]:
-        return {"items": list(self.records)}
+        return {"items": list(self.projections)}
+
+    def get(self, memory_id: str) -> dict[str, Any]:
+        return next(item for item in self.records if item["id"] == memory_id)
 
     def evidence(
         self,
