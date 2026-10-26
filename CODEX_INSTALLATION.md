@@ -74,7 +74,20 @@ touch "$HOME/.config/redis-shared-memory/editor.env"
 chmod 600 "$HOME/.config/redis-shared-memory/editor.env"
 ```
 
-Open `~/.config/redis-shared-memory/editor.env` in a local text editor and add:
+On macOS, open the file directly in TextEdit:
+
+```sh
+open -e "$HOME/.config/redis-shared-memory/editor.env"
+```
+
+To reveal the hidden file in Finder instead:
+
+```sh
+open -R "$HOME/.config/redis-shared-memory/editor.env"
+```
+
+Opening the file may require normal desktop approval when an agent runs the
+command. Add these settings in the local editor:
 
 ```dotenv
 RAM_ENDPOINT=https://your-memory-endpoint.redis.io
