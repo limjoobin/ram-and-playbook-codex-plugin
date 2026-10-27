@@ -15,6 +15,7 @@ Redis Agent Memory store and namespace. It exposes:
 - `playbook_load_skill`
 - `playbook_fetch_resource`
 - `agenda_prepare`
+- `memory_state_update_propose`
 - `memory_candidate_list`
 - `memory_candidate_inspect`
 - `memory_candidate_promote`
@@ -24,8 +25,10 @@ The MCP server and reviewed session-capture hooks are dependency-free Python
 3.10+ source. It has no installer, package-manager step, or runtime download.
 The active `UserPromptSubmit` and `SessionEnd` hooks write only to the
 configured personal namespace. Automatic candidate creation is paused while
-`PostToolUse` and `Stop` are inactive; the candidate tools remain available for
-previously captured candidates.
+`PostToolUse` and `Stop` are inactive. A likely lifecycle report instead causes
+`UserPromptSubmit` to guide the agent toward `memory_state_update_propose`,
+which verifies the exact current state and creates a private candidate from the
+exact captured prompt.
 
 Each user creates a private configuration file at:
 
@@ -59,6 +62,9 @@ candidate ledger is only a bounded review queue. `memory_candidate_promote`
 does not move or mutate private memory: it appends a new, confirmed shared
 session observation with deterministic provenance and lets RAM's
 `organizational_state` custom extractor create the shared observation.
+The repository's central reconciliation job then applies the single versioned
+projector after extraction; it is deliberately not run independently by every
+desktop plugin.
 
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.
 Maintainers should read `AGENTS.md`, `SECURITY.md`, and

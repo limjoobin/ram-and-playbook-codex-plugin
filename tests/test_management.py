@@ -213,6 +213,20 @@ class ManagementTests(unittest.TestCase):
             ram.requests[0]["filter"]["memoryType"]["eq"], "organizational_state"
         )
 
+    def test_exact_current_state_lookup_is_server_filtered_and_evidence_bound(self):
+        source = observation("memory", "state-a")
+        ram = FakeRAM([projection("projection", "state-a", [source])], [source])
+        service = PluginService(CONFIG, ram, FakePlaybook(), FakeEditor())
+
+        state = service.current_state_by_id("state-a")
+
+        self.assertEqual(state["state_id"], "state-a")
+        self.assertEqual(
+            ram.requests[0]["filter"]["attributes"]["state_id"]["string"],
+            "state-a",
+        )
+        self.assertEqual(state["observations"][0]["memory_id"], "memory")
+
     def test_semantic_history_preserves_ram_rank_before_limit(self):
         relevant = observation("relevant", "state-a", observed="2026-01-02T00:00:00Z")
         older = observation("older", "state-b", observed="2026-01-01T00:00:00Z")

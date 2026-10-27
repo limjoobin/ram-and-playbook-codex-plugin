@@ -1,5 +1,5 @@
 {
-  "description": "Capture private user prompts and session-end markers. No hook publishes shared memory.",
+  "description": "Capture private prompts, flag possible lifecycle updates, and record session-end markers. No hook publishes shared memory.",
   "hooks": {
     "UserPromptSubmit": [
       {

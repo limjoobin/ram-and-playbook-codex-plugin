@@ -16,6 +16,7 @@ Memory store and Redis Agent Playbook:
 - `playbook_load_skill`
 - `playbook_fetch_resource`
 - `agenda_prepare`
+- `memory_state_update_propose`
 - `memory_candidate_list`
 - `memory_candidate_inspect`
 - `memory_candidate_promote`
@@ -30,9 +31,11 @@ The local MCP server and reviewed capture hooks are dependency-free Python
 3.10+ source. Installation does not run a package manager, installer script,
 or first-run download. The active hooks capture user prompts and session-end
 markers into a per-user private namespace; they never publish shared memory.
-Automatic promotion-candidate creation is paused while the `PostToolUse` and
-`Stop` hooks are inactive. Promotion remains a separate MCP write requiring
-explicit confirmation for any existing candidate.
+When a prompt looks like a lifecycle report, `UserPromptSubmit` tells the agent
+to retrieve the exact current state and use `memory_state_update_propose`. That
+tool creates a private, source-linked candidate; it does not share anything.
+Promotion remains a separate MCP write requiring inspection and explicit
+confirmation. `PostToolUse` and `Stop` remain inactive.
 
 ## Quality gate
 
@@ -73,6 +76,8 @@ data scope, or network behavior.
 
 The private-to-shared contract, trust boundary, and manual acceptance cases
 are documented in [docs/private-session-promotion.md](docs/private-session-promotion.md).
+The central post-extraction projection job is documented in
+[docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 The plugin calls reviewed RAM operations directly over HTTPS and allows only
 three read-only Playbook MCP operations. `agenda_prepare` loads the exact

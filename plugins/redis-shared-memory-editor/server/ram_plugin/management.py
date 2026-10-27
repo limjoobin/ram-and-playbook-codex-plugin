@@ -306,6 +306,7 @@ def _projection_state(
             "project_step_id": attributes.get("project_step_id"),
             "meeting_id": attributes.get("meeting_id"),
             "accountable_entity_id": attributes.get("accountable_entity_id"),
+            "related_entity_ids": attributes.get("related_entity_ids") or [],
             "requested_decision": attributes.get("requested_decision"),
             "impact": attributes.get("impact"),
             "due_at": attributes.get("due_at"),
@@ -508,6 +509,43 @@ class PluginService:
                 "supporting_observations_unavailable": unavailable_supports,
             },
         }
+
+    def current_state_by_id(self, state_id: str) -> dict[str, Any]:
+        """Resolve one exact current projection for a confirmed lifecycle update."""
+
+        if not isinstance(state_id, str) or not state_id:
+            raise PluginError("invalid_input", "state_id is required.")
+        request = self._state_request(
+            None,
+            {"state_id": state_id},
+            2,
+            None,
+            PROJECTION_TYPE,
+            PROJECTION_SCHEMA,
+        )
+        records = [
+            record
+            for record in _items(self.ram.search(request))
+            if _projection_scope_matches(record, self.config)
+            and _attributes(record).get("state_id") == state_id
+        ]
+        if not records:
+            raise PluginError(
+                "state_not_found",
+                "The current organizational state was not found. Search current state again before proposing an update.",
+            )
+        if len(records) != 1:
+            raise PluginError(
+                "ram_contract_error",
+                "RAM returned more than one current projection for the same state identifier.",
+            )
+        state, unavailable = _projection_state(records[0], self.config, self.ram)
+        if unavailable:
+            raise PluginError(
+                "evidence_unavailable",
+                "The current state cannot be updated because its supporting evidence is unavailable.",
+            )
+        return state
 
     def ram_get_evidence(
         self,

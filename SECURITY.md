@@ -97,6 +97,18 @@ session IDs, event markers, and idempotency keys prevent a retry from creating
 a second observation. Rejection changes only the local review state and leaves
 private RAM evidence intact.
 
+`memory_state_update_propose` is a private local write. It accepts only an exact
+prompt already recorded by `UserPromptSubmit`, verifies the referenced current
+projection and expected lifecycle, and copies canonical state fields from that
+projection. It cannot publish shared memory. A prepared proposal is immutable
+at promotion time; changing it requires a new proposal and confirmation.
+
+The reconciliation command is an administrator operation outside the installed
+plugin. It reads the complete scoped observation lane, runs the single
+versioned projector, and upserts only changed derived projections after an
+explicit `--apply`. It never turns audit classifications or inferred
+"probably completed" states into terminal observations.
+
 ## Supply chain
 
 - The installed runtime is committed Python standard-library source.

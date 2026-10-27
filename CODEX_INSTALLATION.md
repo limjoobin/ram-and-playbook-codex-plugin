@@ -155,7 +155,9 @@ changing the tool model.
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
 a fact, `editor_update` replaces an existing fact by exact memory ID, and
 `memory_candidate_promote` creates a new shared source event after explicit
-confirmation. Hooks themselves never write the shared namespace.
+confirmation. `memory_state_update_propose` creates only a private candidate
+from an exact hook-captured prompt and exact current state. Hooks themselves
+never write the shared namespace.
 
 ## 4. Verify one user, then the group
 
@@ -201,18 +203,34 @@ offline evaluation does not prove that a customer's network, credentials,
 store contents, Playbook publication, or desktop policy is configured
 correctly.
 
-Verify the reduced private-capture mode separately:
+Verify the private lifecycle-update flow separately:
 
 ```text
-Send a non-sensitive prompt, then end the chat. Do not share anything with the team.
+I completed the trend-watching action. Find the exact current action, but show me the proposed shared update before publishing it.
 ```
 
-Expected: RAM receives one private user-prompt event and one private session-end
-marker in the per-user personal namespace. No tool evidence, assistant turn, or
-new promotion candidate is captured because `PostToolUse` and `Stop` are
-inactive. No shared result is returned by `ram_search_state`. Existing
-candidates from an earlier installation can still be inspected, rejected, or
-explicitly promoted through the MCP tools.
+Expected: `UserPromptSubmit` records the exact statement only in the personal
+namespace and directs the agent to retrieve the current state. The agent calls
+`memory_state_update_propose` with the returned `state_id`, its current
+lifecycle, and the complete prompt. The proposal preserves the current project,
+owner, and subject and makes no shared write. The agent must inspect the
+candidate and ask for explicit confirmation before calling
+`memory_candidate_promote`. `PostToolUse` and `Stop` remain inactive.
+
+After promotion, RAM extraction is asynchronous. The central administrator
+then runs the versioned reconciliation job from a repository checkout:
+
+```sh
+python3 scripts/reconcile_management_state.py \
+  --apply \
+  --wait-for-candidate <candidate-id-returned-by-the-plugin> \
+  --timeout-seconds 420
+```
+
+Expected: once the extracted observation is visible, the deterministic current
+projection changes to the confirmed lifecycle. An unconfirmed or merely
+"probably completed" action remains nonterminal. See
+[docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 Before asking users to install a release, the maintainer should also run in a
 clean checkout:
@@ -268,7 +286,8 @@ remove it through the laptop's approved file-management process.
 | `configuration_missing` | Create the file at the exact path above and fill the eight required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
 | Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. |
 | Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
-| Promotion is accepted but state is not searchable yet | Wait for the RAM custom-extraction window, then verify the store's `organizational_state` extractor accepts `personal-to-shared-promotion-v1`. Do not resubmit. |
+| Promotion is accepted but history is unchanged | Wait for the RAM custom-extraction window, then verify the store's `organizational_state` extractor accepts `personal-to-shared-promotion-v1`. Do not resubmit. |
+| History contains the promoted observation but current state is unchanged | Run the central reconciliation job for the returned candidate ID. Do not promote again. |
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
 | `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
 | `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |

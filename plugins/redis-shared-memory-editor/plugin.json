@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "redis-shared-memory-editor",
-  "version": "0.8.1",
-  "description": "Capture private prompts and use shared Redis Agent Memory and Playbook.",
+  "version": "0.9.0",
+  "description": "Capture private prompts, propose confirmed lifecycle updates, and use shared Redis Agent Memory and Playbook.",
   "author": {
     "name": "Redis Field Engineering",
     "url": "https://github.com/redis-field-engineering"
@@ -15,7 +15,7 @@
       "interface": {
         "displayName": "Redis Shared Memory + Playbook",
         "shortDescription": "Capture privately, promote with consent, and prepare governed agendas.",
-        "longDescription": "A local MCP integration for multiple users and their agents to capture prompts and session-end markers in private Redis Agent Memory namespaces, read reconciled management state, and load approved Redis Agent Playbook content. Existing reviewed candidates can still be explicitly promoted to one shared namespace. Each user keeps service credentials and participant attribution in a private local file.",
+        "longDescription": "A local MCP integration for multiple users and their agents to capture prompts and session-end markers in private Redis Agent Memory namespaces, propose reviewable lifecycle updates against exact current state, promote them only with explicit confirmation, read reconciled management state, and load approved Redis Agent Playbook content. Each user keeps service credentials and participant attribution in a private local file.",
         "developerName": "Redis Field Engineering",
         "category": "Developer Tools",
         "capabilities": ["Read", "Write"],
@@ -25,6 +25,7 @@
           "Search shared memory before answering this question.",
           "Find the current source-grounded management state for this project.",
           "Prepare a cited management review agenda for the next meeting.",
+          "Propose a private update for this completed action and show me the exact change before sharing it.",
           "Show my pending private memory candidates and their evidence.",
           "Publish this user-approved fact to shared memory."
         ]

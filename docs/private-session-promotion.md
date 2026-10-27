@@ -12,16 +12,20 @@ memory and any configured personal long-term-memory extraction. A local
 append-only ledger retains private capture metadata and any earlier review
 candidates.
 
-Because candidate creation previously ran from `Stop`, this reduced mode does
-not create new promotion candidates. The MCP candidate tools remain available
-for candidates captured before the two hooks were deactivated. Restoring
-automatic candidate creation requires an explicit design decision about what
-evidence the plugin should retain.
+The reduced mode does not create candidates automatically. When a user prompt
+looks like a lifecycle report, `UserPromptSubmit` supplies agent context to
+retrieve the exact current state and call `memory_state_update_propose`. The
+tool accepts the exact captured prompt, verifies the current `state_id` and
+lifecycle, and creates a private review candidate. This avoids restoring the
+broader `PostToolUse` and `Stop` capture paths.
 
 Nothing captured by a hook is shared. A candidate becomes shared only when the
 agent first lists and inspects it, shows the evidence to the user, receives an
 explicit confirmation, and calls `memory_candidate_promote` with
-`confirmed: true` and a complete observation.
+`confirmed: true`. A state-update candidate already contains the exact proposed
+observation shown during inspection. The model cannot replace that proposal in
+the promotion call. Older candidates retain the explicit-observation input for
+compatibility.
 
 Promotion appends a new session in `RAM_NAMESPACE`: an owner-lane bootstrap
 event followed by the participant's confirmed JSON envelope. The envelope uses
@@ -75,5 +79,11 @@ the event contracts and trust flow in the
 2. Verify no tool output or assistant response was captured and no new
    promotion candidate was created.
 3. Verify shared organizational state is unchanged.
-4. Include a token-shaped value and a malicious transcript-path string in a
+4. Report completion of one known current action. Verify the hook suggests
+   `memory_state_update_propose`, that the proposal retains the exact private
+   statement and existing `state_id`, and that current shared state is still
+   unchanged.
+5. Inspect and explicitly confirm the candidate, then promote it. Verify a new
+   shared source session exists and the private record remains intact.
+6. Include a token-shaped value and a malicious transcript-path string in a
    test session. Verify neither appears in the local ledger or MCP output.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thin Codex hook adapter for private RAM capture and candidate creation."""
+"""Thin Codex hook adapter for private RAM capture and lifecycle-update guidance."""
 
 from __future__ import annotations
 

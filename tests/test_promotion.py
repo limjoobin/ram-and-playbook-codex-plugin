@@ -69,6 +69,29 @@ class EmptyBase:
     pass
 
 
+class CurrentStateBase:
+    def __init__(self, status: str = "open") -> None:
+        self.status = status
+        self.requested: list[str] = []
+
+    def current_state_by_id(self, state_id: str) -> dict:
+        self.requested.append(state_id)
+        return {
+            "state_id": state_id,
+            "state_kind": "action_item",
+            "lifecycle_status": self.status,
+            "subject": "Conduct trend watching",
+            "project_id": "project-ami-es2002",
+            "project_step_id": "project-step-ami-es2002-kickoff",
+            "meeting_id": "meeting-ami-es2002a-kickoff",
+            "accountable_entity_id": "employee-andrew-marketing-expert",
+            "related_entity_ids": [],
+            "due_at": "",
+            "requested_decision": "",
+            "impact": "",
+        }
+
+
 def prompt(session: str = "chat-1", text: str = "Please remember this for the team") -> dict:
     return {
         "hook_event_name": "UserPromptSubmit",
@@ -135,6 +158,13 @@ class PromotionTests(unittest.TestCase):
         self.assertTrue(self.ram.calls[0]["metadata"]["private_only"])
         self.assertEqual(self.ledger.candidates(), {})
         self.assertNotIn(CONFIG.namespace, [call["namespace"] for call in self.ram.calls])
+
+    def test_completion_prompt_points_to_explicit_proposal_without_sharing(self):
+        result = self.capture.process(prompt(text="I finished the trend-watching action."))
+        context = result["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("memory_state_update_propose", context)
+        self.assertEqual(self.ledger.candidates(), {})
+        self.assertTrue(all(call["namespace"] == CONFIG.personal_namespace for call in self.ram.calls))
 
     def test_completed_tool_evidence_can_create_private_candidate(self):
         self.capture.process(prompt(text="Implement the local validation."))
@@ -240,6 +270,74 @@ class PromotionTests(unittest.TestCase):
         )
         self.assertEqual(repeated["outcome"], "already_submitted")
         self.assertEqual(len(self.ram.calls), call_count)
+
+    def test_explicit_state_update_proposal_uses_exact_private_prompt_and_current_state(self):
+        statement = "I finished the trend-watching action."
+        self.capture.process(prompt(text=statement))
+        base = CurrentStateBase()
+        facade = PromotionFacade(base, PromotionService(CONFIG, self.ram, self.ledger))
+
+        proposed = call_tool(
+            "memory_state_update_propose",
+            {
+                "state_id": "project-ami-es2002-action-trend-watching",
+                "expected_current_status": "open",
+                "lifecycle_status": "completed",
+                "evidence_text": statement,
+            },
+            lambda: facade,
+        )
+
+        self.assertFalse(proposed["isError"])
+        candidate = proposed["structuredContent"]["candidate"]
+        self.assertEqual(base.requested, ["project-ami-es2002-action-trend-watching"])
+        self.assertEqual(candidate["source_statement"], statement)
+        self.assertEqual(candidate["current_state"]["lifecycle_status"], "open")
+        self.assertEqual(candidate["proposed_observation"]["lifecycle_status"], "completed")
+        self.assertEqual(candidate["proposed_observation"]["evidence_role"], "resolves")
+
+        inspected = call_tool(
+            "memory_candidate_inspect",
+            {"candidate_id": candidate["candidate_id"]},
+            lambda: facade,
+        )
+        self.assertEqual(
+            inspected["structuredContent"]["candidate"]["proposed_observation"],
+            candidate["proposed_observation"],
+        )
+        promoted = call_tool(
+            "memory_candidate_promote",
+            {"candidate_id": candidate["candidate_id"], "confirmed": True},
+            lambda: facade,
+        )
+        self.assertFalse(promoted["isError"])
+        self.assertEqual(promoted["structuredContent"]["state_id"], candidate["current_state"]["state_id"])
+
+    def test_state_update_proposal_rejects_stale_state_and_uncaptured_evidence(self):
+        self.capture.process(prompt(text="I finished the trend-watching action."))
+        facade = PromotionFacade(CurrentStateBase(status="in_progress"), PromotionService(CONFIG, self.ram, self.ledger))
+        stale = call_tool(
+            "memory_state_update_propose",
+            {
+                "state_id": "project-ami-es2002-action-trend-watching",
+                "expected_current_status": "open",
+                "lifecycle_status": "completed",
+                "evidence_text": "I finished the trend-watching action.",
+            },
+            lambda: facade,
+        )
+        self.assertEqual(stale["structuredContent"]["code"], "state_changed")
+        missing = call_tool(
+            "memory_state_update_propose",
+            {
+                "state_id": "project-ami-es2002-action-trend-watching",
+                "expected_current_status": "in_progress",
+                "lifecycle_status": "completed",
+                "evidence_text": "This text was never captured.",
+            },
+            lambda: facade,
+        )
+        self.assertEqual(missing["structuredContent"]["code"], "private_evidence_not_found")
 
     def test_candidate_tools_validate_confirmation_and_rejection(self):
         candidate_id = self._candidate()

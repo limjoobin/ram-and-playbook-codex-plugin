@@ -32,7 +32,14 @@ _SHARE_INTENT = re.compile(
     re.IGNORECASE,
 )
 _COMPLETION = re.compile(
-    r"\b(?:completed|implemented|fixed|created|updated|delivered|decided|approved|resolved)\b",
+    r"\b(?:completed|finished|done|implemented|fixed|created|updated|delivered|decided|approved|resolved|closed|cancelled|canceled)\b",
+    re.IGNORECASE,
+)
+_STATE_UPDATE_INTENT = re.compile(
+    r"\b(?:i|we|he|she|they|andrew|laura|david|craig)\b[\s\S]{0,160}"
+    r"\b(?:completed|finished|done|implemented|delivered|resolved|closed|cancelled|canceled|blocked|started)\b"
+    r"|\b(?:completed|finished|done|resolved|closed|cancelled|canceled|blocked)\b[\s\S]{0,160}"
+    r"\b(?:task|action|item|work|report|analysis|design|minutes|evaluation)\b",
     re.IGNORECASE,
 )
 _SECRET_ASSIGNMENT = re.compile(
@@ -273,6 +280,32 @@ class PromotionLedger:
         state["evidence"] = state["evidence"][-8:]
         return state
 
+    def prompt_source(self, evidence_text: str) -> dict[str, Any] | None:
+        """Return the newest exact private prompt and its RAM provenance."""
+
+        expected = _bounded_text(evidence_text, MAX_PROMPT).strip()
+        for event in reversed(self.events()):
+            if event.get("kind") != "hook_prompt":
+                continue
+            payload = event["payload"]
+            captured = payload.get("prompt")
+            if not isinstance(captured, str) or captured.strip() != expected:
+                continue
+            session_id = payload.get("session_id")
+            turn_id = payload.get("turn_id")
+            if not isinstance(session_id, str) or not session_id:
+                continue
+            state = self.session_state(session_id, turn_id if isinstance(turn_id, str) else None)
+            return {
+                "hook_event_id": event.get("event_id"),
+                "session_id": session_id,
+                "turn_id": turn_id if isinstance(turn_id, str) else "",
+                "prompt": captured,
+                "captured_at": event.get("recorded_at"),
+                "source_private_event_ids": state["private_event_ids"],
+            }
+        return None
+
     def candidates(self) -> dict[str, dict[str, Any]]:
         candidates: dict[str, dict[str, Any]] = {}
         for event in self.events():
@@ -375,6 +408,7 @@ class HookCapture:
         if event_name == "UserPromptSubmit":
             prompt = _bounded_text(payload.get("prompt") or "", MAX_PROMPT)
             share_intent = bool(_SHARE_INTENT.search(prompt))
+            state_update_intent = bool(_STATE_UPDATE_INTENT.search(prompt))
             self.ledger.append(
                 "hook_prompt",
                 {
@@ -382,19 +416,21 @@ class HookCapture:
                     "turn_id": turn_id,
                     "prompt": prompt,
                     "share_intent": share_intent,
+                    "state_update_intent": state_update_intent,
                 },
                 event_id=hook_id,
             )
             self._private_event(payload, role="USER", text=prompt or "[empty prompt]", hook_id=hook_id)
-            if share_intent:
+            if share_intent or state_update_intent:
                 return {
                     "continue": True,
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": (
-                            "The user expressed possible team-memory intent. The prompt was captured privately, "
-                            "but automatic candidate creation is inactive. Do not share it; any future promotion "
-                            "requires a separately reviewed candidate and explicit confirmation."
+                            "Possible shared lifecycle update. The prompt is private. Retrieve the exact current "
+                            "state, then call memory_state_update_propose with its ID/current lifecycle and the "
+                            "exact prompt. Inspect the candidate and obtain explicit confirmation before "
+                            "memory_candidate_promote."
                         ),
                     },
                 }
@@ -511,12 +547,106 @@ class PromotionService:
             "confidence",
             "evidence",
             "source_private_event_ids",
+            "source_statement",
+            "source_hook_event_id",
+            "current_state",
+            "proposed_observation",
             "promoted_at",
             "rejected_at",
             "state_id",
             "shared_session_id",
         }
         return {key: candidate.get(key) for key in allowed if key in candidate}
+
+    def candidate_propose_state_update(
+        self,
+        *,
+        current_state: Mapping[str, Any],
+        expected_current_status: str,
+        lifecycle_status: str,
+        evidence_text: str,
+        resolved_at: str | None = None,
+    ) -> dict[str, Any]:
+        source = self.ledger.prompt_source(evidence_text)
+        if source is None:
+            raise PluginError(
+                "private_evidence_not_found",
+                "The exact statement was not found in this user's private hook capture. Use the complete prompt text.",
+            )
+        current_status = current_state.get("lifecycle_status")
+        if current_status != expected_current_status:
+            raise PluginError(
+                "state_changed",
+                "The current lifecycle no longer matches the retrieved value. Search the state again before proposing an update.",
+            )
+        if lifecycle_status not in LIFECYCLE_STATUSES:
+            raise PluginError("invalid_input", "lifecycle_status is not supported by organizational-state-v2.")
+        state_id = current_state.get("state_id")
+        state_kind = current_state.get("state_kind")
+        project_id = current_state.get("project_id")
+        if not all(isinstance(value, str) and SLUG.fullmatch(value) for value in (state_id, project_id)):
+            raise PluginError("ram_contract_error", "The current state has incompatible canonical identifiers.")
+        if state_kind not in STATE_KINDS:
+            raise PluginError("ram_contract_error", "The current state has an incompatible state kind.")
+        observed_at = source.get("captured_at") or _now()
+        terminal = lifecycle_status in {
+            "decided", "approved", "rejected", "completed", "resolved", "cancelled", "superseded"
+        }
+        proposal = {
+            "state_id": state_id,
+            "state_kind": state_kind,
+            "lifecycle_status": lifecycle_status,
+            "evidence_role": "resolves" if terminal else "updates",
+            "subject": str(current_state.get("subject") or "")[:4_000],
+            "project_id": project_id,
+            "project_step_id": str(current_state.get("project_step_id") or ""),
+            "meeting_id": str(current_state.get("meeting_id") or ""),
+            "accountable_entity_id": str(current_state.get("accountable_entity_id") or ""),
+            "related_entity_ids": list(current_state.get("related_entity_ids") or []),
+            "effective_at": observed_at,
+            "due_at": str(current_state.get("due_at") or ""),
+            "resolved_at": str(resolved_at or observed_at) if terminal else "",
+            "requested_decision": str(current_state.get("requested_decision") or "")[:4_000],
+            "impact": str(current_state.get("impact") or "")[:4_000],
+            "supersedes_state_ids": [],
+        }
+        candidate_id = f"candidate-{_digest([source['hook_event_id'], state_id, lifecycle_status])}"
+        self.ledger.append(
+            "candidate_created",
+            {
+                "candidate_id": candidate_id,
+                "session_id": source["session_id"],
+                "turn_id": source["turn_id"],
+                "subject": proposal["subject"],
+                "captured_at": observed_at,
+                "actor_id": self.config.participant,
+                "personal_namespace": self.config.personal_namespace,
+                "explicit_share_intent": False,
+                "confidence": 1.0,
+                "evidence": [],
+                "source_statement": source["prompt"],
+                "source_hook_event_id": source["hook_event_id"],
+                "source_private_event_ids": source["source_private_event_ids"],
+                "current_state": {
+                    "state_id": state_id,
+                    "lifecycle_status": current_status,
+                    "subject": current_state.get("subject"),
+                    "project_id": project_id,
+                    "accountable_entity_id": current_state.get("accountable_entity_id"),
+                },
+                "proposed_observation": proposal,
+            },
+            event_id=f"create-{candidate_id}",
+        )
+        candidate = self.ledger.candidates()[candidate_id]
+        return {
+            "ok": True,
+            "candidate": self._public(candidate),
+            "next_step": (
+                "Show the source statement and exact proposed observation to the user. "
+                "Only after explicit confirmation call memory_candidate_promote with confirmed=true."
+            ),
+        }
 
     def candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         if status not in {"pending", "promoted", "rejected", "all"}:
@@ -672,7 +802,7 @@ class PromotionService:
         *,
         candidate_id: str,
         confirmed: bool,
-        observation: Mapping[str, Any],
+        observation: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         if confirmed is not True:
             raise PluginError("confirmation_required", "Explicit confirmation is required before shared promotion.")
@@ -690,6 +820,19 @@ class PromotionService:
                 "shared_session_id": candidate.get("shared_session_id"),
             }
 
+        proposed = candidate.get("proposed_observation")
+        if isinstance(proposed, dict):
+            if observation is not None and _canonical(dict(observation)) != _canonical(proposed):
+                raise PluginError(
+                    "candidate_changed",
+                    "The supplied observation differs from the inspected proposal. Inspect it again before promotion.",
+                )
+            observation = proposed
+        if observation is None:
+            raise PluginError(
+                "observation_required",
+                "This older candidate has no prepared observation. Supply the reviewed organizational-state fields.",
+            )
         normalized = self._validated_observation(candidate, observation)
         shared_session = f"promotion-{_digest(candidate_id, 40)}"
         confirmed_at = _now()
@@ -771,6 +914,23 @@ class PromotionFacade:
     def memory_candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         return self.promotion.candidate_list(status=status, limit=limit)
 
+    def memory_state_update_propose(
+        self,
+        state_id: str,
+        expected_current_status: str,
+        lifecycle_status: str,
+        evidence_text: str,
+        resolved_at: str | None = None,
+    ) -> dict[str, Any]:
+        current_state = self.base.current_state_by_id(state_id)
+        return self.promotion.candidate_propose_state_update(
+            current_state=current_state,
+            expected_current_status=expected_current_status,
+            lifecycle_status=lifecycle_status,
+            evidence_text=evidence_text,
+            resolved_at=resolved_at,
+        )
+
     def memory_candidate_inspect(self, candidate_id: str) -> dict[str, Any]:
         return self.promotion.candidate_inspect(candidate_id)
 
@@ -778,7 +938,7 @@ class PromotionFacade:
         self,
         candidate_id: str,
         confirmed: bool,
-        observation: Mapping[str, Any],
+        observation: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self.promotion.candidate_promote(
             candidate_id=candidate_id,
