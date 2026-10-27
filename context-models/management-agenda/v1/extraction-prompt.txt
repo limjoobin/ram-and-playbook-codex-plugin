@@ -1,0 +1,51 @@
+Extract only explicit, management-relevant organizational state from this document.
+RAM is the extractor. Return one observation for each grounded action item, decision, risk,
+issue, dependency, approval, or unresolved factual conflict. Do not extract meeting objectives,
+calendar events, presentation order, casual ideas, generic discussion topics, aspirations, or
+work already described only as background. A risk is an uncertain future event; an issue is a
+current adverse condition. A decision requires a recorded choice. An approval requires a named
+authority's authorization or rejection. An action item requires a concrete expected actor and
+work. Never infer urgency, ownership, dates, impact, or a requested management decision.
+
+Use only these canonical IDs. Project: project-ami-es2002. Employees: employee-laura-project-manager = Laura, Project Manager, PM; employee-david-industrial-designer = David, Industrial Designer, ID; employee-craig-interface-designer = Craig, User Interface Designer, Interface Designer, UID, UI; employee-andrew-marketing-expert = Andrew, Andrew Stokes-Rees, Marketing Expert, ME.
+Meetings/project steps: meeting-ami-es2002a-kickoff / project-step-ami-es2002-kickoff = ES2002a, kick-off, kickoff; meeting-ami-es2002b-functional-design / project-step-ami-es2002-functional-design = ES2002b, functional design, second meeting; meeting-ami-es2002c-conceptual-design / project-step-ami-es2002-conceptual-design = ES2002c, conceptual design, third meeting; meeting-ami-es2002d-detailed-design / project-step-ami-es2002-detailed-design = ES2002d, detailed design, fourth meeting, final meeting. Artifact-to-meeting map: ami-es2002a-transcript -> meeting-ami-es2002a-kickoff; ami-es2002b-transcript -> meeting-ami-es2002b-functional-design; ami-es2002c-transcript -> meeting-ami-es2002c-conceptual-design; ami-es2002d-transcript -> meeting-ami-es2002d-detailed-design; ami-es2002-minutes-kickoff -> meeting-ami-es2002a-kickoff; ami-es2002-minutes-functional-design -> meeting-ami-es2002b-functional-design; ami-es2002-minutes-conceptual-design -> meeting-ami-es2002c-conceptual-design; ami-es2002-minutes-detailed-design -> meeting-ami-es2002d-detailed-design. When an artifact is
+not mapped, leave meeting_id and project_step_id empty unless its text explicitly identifies one.
+Role letters in transcript speaker labels are not identifiers. Use the name or role alias mapping.
+Every document chunk contains a `[RAM_SOURCE_ENVELOPE]` JSON line supplied by the connector. Copy
+its source_artifact_id, source_revision, observed_at, event_sequence, project_id, meeting_id, and
+project_step_id values exactly onto every record. Empty meeting_id and project_step_id values must
+remain empty.
+The envelope is metadata, not organizational state, and must never become a memory by itself.
+
+Use controlled values exactly. state_kind: action_item, decision, risk, issue, dependency, approval, conflict.
+lifecycle_status: proposed, open, pending_approval, in_progress, blocked, decided, approved, rejected, completed, resolved, cancelled, superseded, unknown. evidence_role:
+creates, supports, updates, contradicts, resolves, supersedes. Use `creates` for a first assertion, `supports`
+for corroboration, `updates` for a changed status, `contradicts` only for an unresolved material
+incompatibility, `resolves` for explicit completion/resolution, and `supersedes` for an explicit
+replacement. state_id is an observation label, not the final cross-document identity. Keep it
+concise and stable when obvious, but do not guess whether differently worded observations are
+replacements. A separate versioned resolver builds canonical state families after extraction.
+
+Create a stable lowercase state_id from project, kind, and a short canonical subject, for example
+`project-ami-es2002-decision-power-source`. Do not include the source artifact or revision in
+state_id. `observed_at` is the source event date in the envelope at 00:00:00Z, not ingestion time.
+Copy event_sequence from the envelope. Set source_offset_ms to the first transcript timestamp in
+evidence_locator converted to milliseconds, or 0 when the evidence has no transcript timestamp.
+`effective_at`, `due_at`, and `resolved_at` may inherit that date
+only when the source explicitly says the decision, action, or resolution occurred then. Use the
+connector envelope values for source_artifact_id and source_revision. evidence_locator
+must be a human-readable source-relative heading, slide, paragraph, or transcript time/speaker.
+
+Return only JSON with this exact envelope and all 23 attributes on every record:
+{"records":[{"text":"concise source-grounded observation","attributes":{
+"schema_version":"organizational-state-v2","state_id":"project-...","state_kind":"action_item",
+"lifecycle_status":"open","evidence_role":"creates","subject":"...",
+"project_id":"project-ami-es2002","project_step_id":"","meeting_id":"",
+"accountable_entity_id":"","related_entity_ids":[],"observed_at":"YYYY-MM-DDT00:00:00Z",
+"event_sequence":1,"source_offset_ms":0,
+"effective_at":"","due_at":"","resolved_at":"","requested_decision":"","impact":"",
+"supersedes_state_ids":[],"source_artifact_id":"source envelope value",
+"source_revision":"source envelope value",
+"evidence_locator":"heading/slide/time and speaker"}}]}.
+Use empty strings or empty lists for optional fields. Never manufacture values. If no qualifying
+state is present, return {"records":[]}.

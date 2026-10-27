@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "registryId": "management-agenda-ami-es2002-v1",
+  "projects": [
+    {
+      "projectId": "project-ami-es2002",
+      "displayName": "Real Reaction remote control project",
+      "aliases": ["ami-es2002", "ES2002", "remote control project"]
+    }
+  ],
+  "employees": [
+    {
+      "employeeId": "employee-laura-project-manager",
+      "displayName": "Laura",
+      "role": "Project Manager",
+      "aliases": ["Laura", "Project Manager", "PM"]
+    },
+    {
+      "employeeId": "employee-david-industrial-designer",
+      "displayName": "David",
+      "role": "Industrial Designer",
+      "aliases": ["David", "Industrial Designer", "ID"]
+    },
+    {
+      "employeeId": "employee-craig-interface-designer",
+      "displayName": "Craig",
+      "role": "User Interface Designer",
+      "aliases": ["Craig", "User Interface Designer", "Interface Designer", "UID", "UI"]
+    },
+    {
+      "employeeId": "employee-andrew-marketing-expert",
+      "displayName": "Andrew",
+      "role": "Marketing Expert",
+      "aliases": ["Andrew", "Andrew Stokes-Rees", "Marketing Expert", "ME"]
+    }
+  ],
+  "meetings": [
+    {
+      "meetingId": "meeting-ami-es2002a-kickoff",
+      "projectStepId": "project-step-ami-es2002-kickoff",
+      "eventSequence": 1,
+      "aliases": ["ES2002a", "kick-off", "kickoff"]
+    },
+    {
+      "meetingId": "meeting-ami-es2002b-functional-design",
+      "projectStepId": "project-step-ami-es2002-functional-design",
+      "eventSequence": 2,
+      "aliases": ["ES2002b", "functional design", "second meeting"]
+    },
+    {
+      "meetingId": "meeting-ami-es2002c-conceptual-design",
+      "projectStepId": "project-step-ami-es2002-conceptual-design",
+      "eventSequence": 3,
+      "aliases": ["ES2002c", "conceptual design", "third meeting"]
+    },
+    {
+      "meetingId": "meeting-ami-es2002d-detailed-design",
+      "projectStepId": "project-step-ami-es2002-detailed-design",
+      "eventSequence": 4,
+      "aliases": ["ES2002d", "detailed design", "fourth meeting", "final meeting"]
+    }
+  ],
+  "artifactMeetingMap": {
+    "ami-es2002a-transcript": "meeting-ami-es2002a-kickoff",
+    "ami-es2002b-transcript": "meeting-ami-es2002b-functional-design",
+    "ami-es2002c-transcript": "meeting-ami-es2002c-conceptual-design",
+    "ami-es2002d-transcript": "meeting-ami-es2002d-detailed-design",
+    "ami-es2002-minutes-kickoff": "meeting-ami-es2002a-kickoff",
+    "ami-es2002-minutes-functional-design": "meeting-ami-es2002b-functional-design",
+    "ami-es2002-minutes-conceptual-design": "meeting-ami-es2002c-conceptual-design",
+    "ami-es2002-minutes-detailed-design": "meeting-ami-es2002d-detailed-design"
+  },
+  "artifactEventSequence": {
+    "ami-es2002a-transcript": 1,
+    "ami-es2002-minutes-kickoff": 1,
+    "ami-es2002b-transcript": 2,
+    "ami-es2002-minutes-functional-design": 2,
+    "ami-es2002c-transcript": 3,
+    "ami-es2002-minutes-conceptual-design": 3,
+    "ami-es2002d-transcript": 4,
+    "ami-es2002-minutes-detailed-design": 4,
+    "ami-es2002-final-report": 5
+  }
+}

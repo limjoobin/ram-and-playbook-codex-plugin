@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "dataset": "AMI ES2002 bootstrap smoke subset",
+  "corpusVersion": "ami-es2002-bootstrap-smoke-v1",
+  "artifactCount": 2,
+  "transcriptCount": 0,
+  "excludedModalities": ["audio", "video", "image", "whiteboard", "pen"],
+  "artifacts": [
+    {
+      "path": "corpus/documents/final-report.md",
+      "documentId": "ami-es2002-final-report",
+      "revision": "ami-v1",
+      "projectId": "ami-es2002",
+      "effectiveDate": "2004-12-13",
+      "artifactKind": "project-document",
+      "sourceUrl": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002d/shared-doc/",
+      "sourceFilename": "ES2002docs.ProjectDocuments.Final.Report.doc",
+      "mediaType": "text/markdown",
+      "contentSha256": "3b6fffd6bec2cd689870f9a77080ff1ab9eb08b586d92d72802c223fdebcac8f",
+      "byteCount": 1879
+    },
+    {
+      "path": "corpus/documents/minutes-kickoff.md",
+      "documentId": "ami-es2002-minutes-kickoff",
+      "revision": "ami-v1",
+      "projectId": "ami-es2002",
+      "effectiveDate": "2004-12-13",
+      "artifactKind": "project-document",
+      "sourceUrl": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002d/shared-doc/",
+      "sourceFilename": "ES2002docs.ProjectDocuments.Minutes.of.Kickoff-meeting.doc",
+      "mediaType": "text/markdown",
+      "contentSha256": "29825a537dcdb4902f24b9d29fb9cbbfffb8440ab33fb996761ae83fd0567699",
+      "byteCount": 1376
+    }
+  ]
+}

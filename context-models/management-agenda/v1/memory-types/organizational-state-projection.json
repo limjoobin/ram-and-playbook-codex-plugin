@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "contractId": "management-agenda-organizational-state-projection-v1",
+  "customMemoryType": {
+    "name": "organizational_state_projection",
+    "description": "A deterministic current-state projection derived from immutable organizational-state observations.",
+    "fields": [
+      {"name": "schema_version", "description": "Projection contract version; always organizational-state-projection-v1.", "type": "str"},
+      {"name": "state_id", "description": "Canonical state-family identifier selected by the versioned resolution policy.", "type": "str"},
+      {"name": "state_kind", "description": "Current controlled organizational-state kind.", "type": "str"},
+      {"name": "lifecycle_status", "description": "Current lifecycle after deterministic projection.", "type": "str"},
+      {"name": "subject", "description": "Current source-grounded state statement.", "type": "str"},
+      {"name": "project_id", "description": "Canonical Project identifier.", "type": "str"},
+      {"name": "project_step_id", "description": "Canonical Project Step identifier when grounded.", "type": "str"},
+      {"name": "meeting_id", "description": "Canonical Meeting identifier for the current observation when grounded.", "type": "str"},
+      {"name": "accountable_entity_id", "description": "Canonical accountable Employee or Team identifier when grounded.", "type": "str"},
+      {"name": "related_entity_ids", "description": "Other canonical entity identifiers explicitly involved.", "type": "list[str]"},
+      {"name": "valid_at", "description": "Source-provided event date or publication time for the projected state.", "type": "str"},
+      {"name": "event_sequence", "description": "Deterministic source-event order used when valid_at is shared.", "type": "int"},
+      {"name": "source_offset_ms", "description": "Transcript-relative start offset used within one event; zero when unavailable.", "type": "int"},
+      {"name": "due_at", "description": "Grounded due time, when present.", "type": "str"},
+      {"name": "resolved_at", "description": "Grounded resolution time, when present.", "type": "str"},
+      {"name": "requested_decision", "description": "Explicit management decision requested by the current observation.", "type": "str"},
+      {"name": "impact", "description": "Explicit material consequence recorded by the current observation.", "type": "str"},
+      {"name": "conflict_status", "description": "Controlled projection conflict status: none or unresolved.", "type": "str"},
+      {"name": "supporting_memory_ids", "description": "Immutable observation memory IDs supporting this projection.", "type": "list[str]"},
+      {"name": "conflicting_memory_ids", "description": "Observation memory IDs that remain unresolved at the projection frontier.", "type": "list[str]"},
+      {"name": "observation_count", "description": "Number of current-revision observations considered for this state family.", "type": "int"},
+      {"name": "current_memory_id", "description": "Immutable observation memory ID selected as the current source state.", "type": "str"},
+      {"name": "resolution_policy_id", "description": "Versioned policy that mapped observations to this state family.", "type": "str"}
+    ],
+    "extractionStrategy": {
+      "prompt": "Current-state projections are built deterministically after document extraction.",
+      "enabled": false
+    }
+  },
+  "requiredFields": [
+    "schema_version", "state_id", "state_kind", "lifecycle_status", "subject",
+    "project_id", "valid_at", "event_sequence", "source_offset_ms", "conflict_status",
+    "supporting_memory_ids", "conflicting_memory_ids", "observation_count",
+    "current_memory_id", "resolution_policy_id"
+  ],
+  "controlledValues": {
+    "schema_version": ["organizational-state-projection-v1"],
+    "conflict_status": ["none", "unresolved"]
+  }
+}

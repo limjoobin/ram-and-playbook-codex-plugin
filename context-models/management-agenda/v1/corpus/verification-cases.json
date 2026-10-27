@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "caseId": "final-lcd-removal",
+      "query": "Which display features were removed from the final design?",
+      "expectedStateId": "project-ami-es2002-decision-lcd-interface"
+    },
+    {
+      "caseId": "kickoff-product-scope",
+      "query": "What product scope was discussed at kick-off?",
+      "expectedSourceArtifactId": "ami-es2002-minutes-kickoff"
+    }
+  ]
+}

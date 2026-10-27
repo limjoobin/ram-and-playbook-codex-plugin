@@ -55,6 +55,15 @@ Follow [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) for Git marketplace and
 local-checkout installation, configuration, verification, updates, removal,
 and enterprise prerequisites.
 
+## Administrator bootstrap experiment
+
+Repository administrators can inspect the separate versioned RAM/Playbook
+bootstrap experiment with `python3 scripts/admin_bootstrap.py plan`. It is never
+run by plugin installation or startup. The first adapter is deliberately
+read-only and blocks live mutations until the administrator service contracts
+are approved; see [docs/admin-bootstrap.md](docs/admin-bootstrap.md) for modes,
+upgrade rules, the attestation, and exact human acceptance steps.
+
 ## Maintain
 
 Read [AGENTS.md](AGENTS.md) before changing code. Use

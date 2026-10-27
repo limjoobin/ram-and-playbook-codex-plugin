@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "contextModelVersion": "management-agenda-bootstrap-v1",
+  "sourceProvenance": {
+    "repository": "iris-playbook-management-agenda",
+    "commit": "f36230cf6fc8f7bc89e52c69963a0e6d60900c4d",
+    "operations": [
+      "management_agenda/phase2.py",
+      "management_agenda/phase3_extraction.py",
+      "management_agenda/state_projection.py"
+    ]
+  },
+  "breakingSchemaFiles": [
+    "memory-types/organizational-state.json",
+    "memory-types/organizational-state-projection.json"
+  ],
+  "components": {
+    "memoryTypes": {
+      "version": "organizational-state-v2+projection-v1",
+      "stage": "declarations",
+      "files": [
+        "memory-types/organizational-state.json",
+        "memory-types/organizational-state-projection.json"
+      ]
+    },
+    "entityRegistry": {
+      "version": "management-agenda-ami-es2002-v1",
+      "stage": "declarations",
+      "files": ["entity-registry.json"]
+    },
+    "extractionPrompt": {
+      "version": "organizational-state-document-extraction-v1",
+      "stage": "declarations",
+      "files": ["extraction-prompt.txt"]
+    },
+    "playbook": {
+      "version": "prepare-management-review-agenda-v1",
+      "stage": "playbook",
+      "files": [
+        "playbook/manifest.json",
+        "playbook/SKILL.md",
+        "playbook/references/meeting-charter.md",
+        "playbook/references/agenda-qualification-rules.md",
+        "playbook/references/agenda-item-output-schema.md",
+        "playbook/references/evidence-lifecycle.md",
+        "playbook/references/abstention-and-escalation.md"
+      ]
+    },
+    "corpus": {
+      "version": "ami-es2002-bootstrap-smoke-v1",
+      "stage": "corpus",
+      "files": [
+        "corpus/manifest.json",
+        "corpus/verification-cases.json",
+        "corpus/documents/final-report.md",
+        "corpus/documents/minutes-kickoff.md"
+      ]
+    },
+    "projectionPolicy": {
+      "version": "ami-es2002-state-families-v2",
+      "stage": "projection",
+      "files": ["projection-policy.json"]
+    },
+    "projectionImplementation": {
+      "version": "organizational-state-projector-v1",
+      "stage": "projection",
+      "files": ["projector.py"]
+    }
+  },
+  "expected": {
+    "artifactCount": 2,
+    "minimumObservationCount": 1,
+    "minimumProjectionCount": 1,
+    "retrievalCasesPath": "corpus/verification-cases.json"
+  }
+}

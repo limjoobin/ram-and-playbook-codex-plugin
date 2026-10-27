@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 2,
+  "contractId": "management-agenda-organizational-state-v2",
+  "customMemoryType": {
+    "name": "organizational_state",
+    "description": "A source-grounded observation about organizational state used for management review.",
+    "fields": [
+      {
+        "name": "schema_version",
+        "description": "Contract version used to normalize this observation; always organizational-state-v2.",
+        "type": "str"
+      },
+      {
+        "name": "state_id",
+        "description": "Stable canonical state identity shared by observations about the same real-world state.",
+        "type": "str"
+      },
+      {
+        "name": "state_kind",
+        "description": "Controlled kind: action_item, decision, risk, issue, dependency, approval, or conflict.",
+        "type": "str"
+      },
+      {
+        "name": "lifecycle_status",
+        "description": "Controlled current status from the organizational-state-v2 lifecycle vocabulary.",
+        "type": "str"
+      },
+      {
+        "name": "evidence_role",
+        "description": "How this observation affects the canonical state: creates, supports, updates, contradicts, resolves, or supersedes.",
+        "type": "str"
+      },
+      {
+        "name": "subject",
+        "description": "Concise source-grounded statement of the action, decision, risk, issue, dependency, approval, or conflict.",
+        "type": "str"
+      },
+      {
+        "name": "project_id",
+        "description": "Stable identifier of the canonical Project entity; empty only when the source provides no project context.",
+        "type": "str"
+      },
+      {
+        "name": "project_step_id",
+        "description": "Stable identifier of the affected Project Step entity, when the source identifies one.",
+        "type": "str"
+      },
+      {
+        "name": "meeting_id",
+        "description": "Stable identifier of the related Meeting entity, when the observation arose from a meeting.",
+        "type": "str"
+      },
+      {
+        "name": "accountable_entity_id",
+        "description": "Stable Employee or Team entity identifier accountable for the state; never a free-form role alias.",
+        "type": "str"
+      },
+      {
+        "name": "related_entity_ids",
+        "description": "Other canonical Employee, Team, Project, Project Step, or Meeting identifiers explicitly involved.",
+        "type": "list[str]"
+      },
+      {
+        "name": "observed_at",
+        "description": "ISO 8601 source event date or publication time, distinct from RAM ingestion and creation time.",
+        "type": "str"
+      },
+      {
+        "name": "event_sequence",
+        "description": "Deterministic source-event order; AMI meetings use 1 through 4 and the final report uses 5; zero means unknown.",
+        "type": "int"
+      },
+      {
+        "name": "source_offset_ms",
+        "description": "Transcript-relative start offset in milliseconds from evidence_locator; zero when the source has no offset.",
+        "type": "int"
+      },
+      {
+        "name": "effective_at",
+        "description": "ISO 8601 time when the state became effective, if explicitly stated or deterministically inherited.",
+        "type": "str"
+      },
+      {
+        "name": "due_at",
+        "description": "ISO 8601 due time for an action or dependency, only when grounded in the source.",
+        "type": "str"
+      },
+      {
+        "name": "resolved_at",
+        "description": "ISO 8601 resolution or completion time, only when grounded in the source.",
+        "type": "str"
+      },
+      {
+        "name": "requested_decision",
+        "description": "Management decision explicitly requested by the source; empty when it would require inference.",
+        "type": "str"
+      },
+      {
+        "name": "impact",
+        "description": "Material consequence explicitly stated by the source; empty when it would require inference.",
+        "type": "str"
+      },
+      {
+        "name": "supersedes_state_ids",
+        "description": "Canonical state identifiers explicitly replaced by this observation.",
+        "type": "list[str]"
+      },
+      {
+        "name": "source_artifact_id",
+        "description": "Stable Transcript, Email, Document, or other Source Artifact identifier supporting this observation.",
+        "type": "str"
+      },
+      {
+        "name": "source_revision",
+        "description": "Immutable source artifact revision from which this observation was extracted.",
+        "type": "str"
+      },
+      {
+        "name": "evidence_locator",
+        "description": "Source-relative speaker turn, paragraph, heading, page, or line locator for human verification.",
+        "type": "str"
+      }
+    ]
+  },
+  "controlledValues": {
+    "schema_version": [
+      "organizational-state-v2"
+    ],
+    "state_kind": [
+      "action_item",
+      "decision",
+      "risk",
+      "issue",
+      "dependency",
+      "approval",
+      "conflict"
+    ],
+    "lifecycle_status": [
+      "proposed",
+      "open",
+      "pending_approval",
+      "in_progress",
+      "blocked",
+      "decided",
+      "approved",
+      "rejected",
+      "completed",
+      "resolved",
+      "cancelled",
+      "superseded",
+      "unknown"
+    ],
+    "evidence_role": [
+      "creates",
+      "supports",
+      "updates",
+      "contradicts",
+      "resolves",
+      "supersedes"
+    ]
+  },
+  "requiredAfterNormalization": [
+    "schema_version",
+    "state_id",
+    "state_kind",
+    "lifecycle_status",
+    "evidence_role",
+    "subject",
+    "project_id",
+    "observed_at",
+    "source_artifact_id",
+    "source_revision",
+    "evidence_locator"
+  ],
+  "ramSystemFieldPolicy": {
+    "owner_id": "Scopes the tenant or corpus lane; it never represents the business assignee.",
+    "namespace": "Not assigned by the current document-ingestion profile; project and meeting scope use structured attributes. A future Context Surface may bind a resource-backed namespace before retrieval.",
+    "topics": "Includes the project, state kind, and lifecycle status for coarse filtering.",
+    "sources": "Retains RAM source traversal in addition to the explicit artifact and revision attributes.",
+    "text": "Contains the concise source-grounded observation; generated agenda wording is not stored here."
+  },
+  "customTypeBudget": {
+    "used": 2,
+    "reserved": 1,
+    "maximumPerStore": 3
+  }
+}

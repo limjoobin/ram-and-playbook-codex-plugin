@@ -52,6 +52,10 @@ Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
 | `evaluation/cases.json` | Fixed offline agenda quality corpus |
 | `evaluation/run.py` | Dependency-free quality-gate runner |
 | `evaluation/results.json` | Deterministic committed gate result |
+| `admin_bootstrap/` | Explicit repository-only plan/apply/verify harness |
+| `context-models/management-agenda/` | Versioned schemas, prompts, policy, Playbook, projector, and corpus |
+| `scripts/admin_bootstrap.py` | Administrator CLI; never called by plugin install or startup |
+| `docs/admin-bootstrap.md` | Bootstrap modes, upgrade rules, and live acceptance gate |
 
 Paths beginning with `server/` in the table are relative to
 `plugins/redis-shared-memory-editor/`.

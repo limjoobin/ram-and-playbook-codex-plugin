@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "policyId": "ami-es2002-state-families-v2",
+  "resolution": "latest-source-event-wins-unless-conflict-is-at-or-after-the-current-frontier",
+  "historicalLocatorSequences": [
+    {"locatorContains": "Kick-Off Meeting", "eventSequence": 1},
+    {"locatorContains": "Functional Design Meeting", "eventSequence": 2},
+    {"locatorContains": "Conceptual Design Meeting", "eventSequence": 3},
+    {"locatorContains": "Detailed Design Meeting", "eventSequence": 4}
+  ],
+  "matchRules": [
+    {
+      "stateFamilyId": "project-ami-es2002-decision-lcd-interface",
+      "stateKinds": ["decision"],
+      "anySubjectContains": ["lcd"]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-product-scope",
+      "stateKinds": ["decision", "conflict"],
+      "anySubjectContains": [
+        "television-only control",
+        "tv-only product scope",
+        "multiple-device control",
+        "product focus on tv",
+        "functions except tv",
+        "remote control feature scope"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-power-source",
+      "stateKinds": ["decision"],
+      "anySubjectContains": [
+        "power source",
+        "battery-only power",
+        "batteries as sole power",
+        "regular battery power",
+        "hybrid kinetic and battery power",
+        "conventional non-rechargeable batteries"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-conflict-selling-price-basis",
+      "stateKinds": ["conflict"],
+      "anySubjectContains": ["selling price basis"]
+    }
+  ],
+  "families": [
+    {
+      "stateFamilyId": "project-ami-es2002-decision-product-scope",
+      "memberStateIds": [
+        "project-ami-es2002-decision-multiple-device-control",
+        "project-ami-es2002-conflict-remote-control-scope",
+        "project-ami-es2002-decision-tv-only-control",
+        "project-ami-es2002-decision-tv-scope"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-lcd-interface",
+      "memberStateIds": [
+        "project-ami-es2002-decision-basic-lcd-interface",
+        "project-ami-es2002-decision-no-talkback-lcd",
+        "project-ami-es2002-decision-excluded-talkback-lcd",
+        "project-ami-es2002-decision-remove-lcd-advanced-chip",
+        "project-ami-es2002-decision-remove-design-features"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-power-source",
+      "memberStateIds": [
+        "project-ami-es2002-decision-power-source",
+        "project-ami-es2002-decision-non-rechargeable-battery",
+        "project-ami-es2002-decision-conventional-non-rechargeable-batteries",
+        "project-ami-es2002-decision-regular-batteries",
+        "project-ami-es2002-decision-hybrid-kinetic-battery-power",
+        "project-ami-es2002-decision-battery-only-power",
+        "project-ami-es2002-decision-batteries-only-power-source"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-conflict-selling-price-basis",
+      "memberStateIds": ["project-ami-es2002-conflict-selling-price-basis"]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-target-group",
+      "memberStateIds": [
+        "project-ami-es2002-decision-target-group",
+        "project-ami-es2002-decision-target-age-range",
+        "project-ami-es2002-decision-target-age-bracket"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-speech-recognition",
+      "memberStateIds": [
+        "project-ami-es2002-decision-speech-recognition",
+        "project-ami-es2002-decision-speech-recognition-interface"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-function-categories",
+      "memberStateIds": [
+        "project-ami-es2002-decision-function-categories",
+        "project-ami-es2002-decision-remote-control-function-categories"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-product-materials",
+      "memberStateIds": [
+        "project-ami-es2002-decision-product-materials",
+        "project-ami-es2002-decision-plastic-rubber-materials",
+        "project-ami-es2002-decision-use-plastic-and-rubber-materials"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-product-slogan",
+      "memberStateIds": [
+        "project-ami-es2002-decision-corporate-slogan",
+        "project-ami-es2002-decision-corporate-slogan-casing",
+        "project-ami-es2002-decision-place-slogan-on-casing",
+        "project-ami-es2002-decision-logo-slogan-printing"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-jog-dial",
+      "memberStateIds": [
+        "project-ami-es2002-decision-jog-dial",
+        "project-ami-es2002-decision-incorporate-jog-dial"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-decision-button-backlighting",
+      "memberStateIds": [
+        "project-ami-es2002-decision-backlighting-leds",
+        "project-ami-es2002-decision-button-backlighting"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-action-components-concept",
+      "memberStateIds": [
+        "project-ami-es2002-action-components-concept",
+        "project-ami-es2002-action-item-develop-components-concept"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-action-user-interface-concept",
+      "memberStateIds": [
+        "project-ami-es2002-action-user-interface-concept",
+        "project-ami-es2002-action-item-develop-user-interface"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-action-trend-watching",
+      "memberStateIds": [
+        "project-ami-es2002-action-trend-watching",
+        "project-ami-es2002-action-item-conduct-trend-watching"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-action-final-report",
+      "memberStateIds": [
+        "project-ami-es2002-action-final-report",
+        "project-ami-es2002-action-specify-final-design-report"
+      ]
+    },
+    {
+      "stateFamilyId": "project-ami-es2002-issue-remote-control-appearance",
+      "memberStateIds": ["project-ami-es2002-issue-remote-control-appearance"]
+    }
+  ]
+}
