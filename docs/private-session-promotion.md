@@ -5,10 +5,18 @@
 The plugin has one local Python MCP. It does not introduce a second service or
 a second organizational-state reconciler.
 
-`UserPromptSubmit`, `PostToolUse`, `Stop`, and `SessionEnd` hooks append bounded
-events to `RAM_PERSONAL_NAMESPACE`. RAM owns session memory and any configured
-personal long-term-memory extraction. A local append-only ledger holds only the
-review queue and deterministic provenance needed for the MCP candidate tools.
+The active `UserPromptSubmit` and `SessionEnd` hooks append bounded events to
+`RAM_PERSONAL_NAMESPACE`. `PostToolUse` and `Stop` are intentionally
+unregistered for the current reduced-capture experiment. RAM owns session
+memory and any configured personal long-term-memory extraction. A local
+append-only ledger retains private capture metadata and any earlier review
+candidates.
+
+Because candidate creation previously ran from `Stop`, this reduced mode does
+not create new promotion candidates. The MCP candidate tools remain available
+for candidates captured before the two hooks were deactivated. Restoring
+automatic candidate creation requires an explicit design decision about what
+evidence the plugin should retain.
 
 Nothing captured by a hook is shared. A candidate becomes shared only when the
 agent first lists and inspects it, shows the evidence to the user, receives an
@@ -60,23 +68,12 @@ OpenAI documents plugin hook discovery in the
 the event contracts and trust flow in the
 [hooks documentation](https://learn.chatgpt.com/docs/hooks).
 
-## Manual acceptance
+## Manual acceptance for reduced capture
 
-1. Complete a small task without asking to share it. Verify private RAM events
-   use only the personal namespace and shared state remains unchanged.
-2. Ask to remember a non-sensitive completed result for the team. List and
-   inspect the pending candidate; verify captured evidence and attribution.
-3. Refuse or reject it. Verify no shared RAM event or organizational state is
-   created.
-4. Repeat with a second candidate and explicitly confirm its project, state
-   kind, lifecycle, subject, and optional owner/dates. Promote it once.
-5. Repeat the identical promotion call. Verify it returns
-   `already_submitted` and adds no source event.
-6. After RAM extraction, query `ram_search_state` with `view="history"`; verify
-   one observation with exact fields, participant attribution, and traversable
-   source evidence. Run the central projector, then verify the `current` view.
-7. Repeat from a second user with a different participant and personal
-   namespace. Verify private candidates stay isolated while both confirmed
-   observations enter the same shared namespace.
-8. Include a token-shaped value and a malicious transcript-path string in a
+1. Send a non-sensitive prompt and end the session. Verify RAM receives one
+   user event and one end marker only in the personal namespace.
+2. Verify no tool output or assistant response was captured and no new
+   promotion candidate was created.
+3. Verify shared organizational state is unchanged.
+4. Include a token-shaped value and a malicious transcript-path string in a
    test session. Verify neither appears in the local ledger or MCP output.

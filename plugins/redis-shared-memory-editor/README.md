@@ -22,8 +22,10 @@ Redis Agent Memory store and namespace. It exposes:
 
 The MCP server and reviewed session-capture hooks are dependency-free Python
 3.10+ source. It has no installer, package-manager step, or runtime download.
-Hooks write only to the configured personal namespace. A separate MCP tool
-promotes an inspected candidate after explicit user confirmation.
+The active `UserPromptSubmit` and `SessionEnd` hooks write only to the
+configured personal namespace. Automatic candidate creation is paused while
+`PostToolUse` and `Stop` are inactive; the candidate tools remain available for
+previously captured candidates.
 
 Each user creates a private configuration file at:
 

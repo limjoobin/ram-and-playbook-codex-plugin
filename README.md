@@ -28,10 +28,11 @@ is not proof of identity.
 
 The local MCP server and reviewed capture hooks are dependency-free Python
 3.10+ source. Installation does not run a package manager, installer script,
-or first-run download. Hooks capture prompts, selected tool evidence, turn
-completion, and session end into a per-user private namespace; they never
-publish shared memory. Promotion is a separate MCP write requiring explicit
-confirmation.
+or first-run download. The active hooks capture user prompts and session-end
+markers into a per-user private namespace; they never publish shared memory.
+Automatic promotion-candidate creation is paused while the `PostToolUse` and
+`Stop` hooks are inactive. Promotion remains a separate MCP write requiring
+explicit confirmation for any existing candidate.
 
 ## Quality gate
 

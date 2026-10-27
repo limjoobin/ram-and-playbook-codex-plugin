@@ -392,8 +392,9 @@ class HookCapture:
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": (
-                            "The user expressed possible team-memory intent. Capture only a private candidate now. "
-                            "Before sharing, list and inspect the candidate, show its evidence, and obtain explicit confirmation."
+                            "The user expressed possible team-memory intent. The prompt was captured privately, "
+                            "but automatic candidate creation is inactive. Do not share it; any future promotion "
+                            "requires a separately reviewed candidate and explicit confirmation."
                         ),
                     },
                 }
@@ -470,9 +471,9 @@ class HookCapture:
                 )
             return {"continue": True}
 
-        # SessionEnd is an advisory, bounded fallback. The transcript path is
-        # unstable and untrusted, so retain only a digest; prior hook events are
-        # already sufficient to reconstruct any pending private candidate.
+        # SessionEnd is an advisory, bounded marker. The transcript path is
+        # unstable and untrusted, so retain only a digest. Reduced capture does
+        # not create a promotion candidate from this event.
         transcript_path = payload.get("transcript_path")
         self.ledger.append(
             "hook_session_end",
@@ -486,7 +487,7 @@ class HookCapture:
         self._private_event(
             payload,
             role="SYSTEM",
-            text="Session ended; prior captured events remain private pending explicit promotion.",
+            text="Session ended; captured prompts remain private and no automatic promotion candidate was created.",
             hook_id=hook_id,
         )
         return {}

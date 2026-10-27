@@ -35,13 +35,14 @@ All users in a collaboration group intentionally configure the same endpoint,
 store, and namespace. They should configure distinct participant values and,
 when supported, distinct API keys.
 
-Every user must also configure a distinct `RAM_PERSONAL_NAMESPACE`. Session
-hooks append prompts, bounded tool evidence, assistant completion, and a
-session-end marker there. Hooks never target `RAM_NAMESPACE`. Hook payloads are
-untrusted: secret-shaped fields are redacted, transcript contents are not
-parsed, event sizes are bounded, and failures do not block the user's session.
-The local append-only candidate ledger lives under the plugin data directory
-with mode `0600`; its parent is mode `0700`.
+Every user must also configure a distinct `RAM_PERSONAL_NAMESPACE`. The active
+session hooks append user prompts and a session-end marker there. They do not
+capture tool evidence or assistant completion while `PostToolUse` and `Stop`
+are inactive. Hooks never target `RAM_NAMESPACE`. Hook payloads are untrusted:
+secret-shaped fields are redacted, transcript contents are not parsed, event
+sizes are bounded, and failures do not block the user's session. The local
+append-only ledger lives under the plugin data directory with mode `0600`; its
+parent is mode `0700`.
 
 ## Data and authorization boundaries
 

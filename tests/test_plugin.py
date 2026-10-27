@@ -95,6 +95,8 @@ class PluginTests(unittest.TestCase):
             ["Read", "Write"],
         )
         self.assertNotIn("hooks", manifest["extensions"]["com.openai"])
+        hooks = json.loads((PLUGIN_ROOT / "hooks/hooks.json").read_text())
+        self.assertEqual(set(hooks["hooks"]), {"UserPromptSubmit", "SessionEnd"})
         server = mcp["mcpServers"]["redis-shared-memory-editor"]
         self.assertEqual(server["command"], "python3")
         self.assertEqual(server["args"], ["-I", "${PLUGIN_ROOT}/server/main.py"])

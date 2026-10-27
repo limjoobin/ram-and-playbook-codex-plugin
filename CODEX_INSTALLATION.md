@@ -47,12 +47,13 @@ public plugin directory. See OpenAI's
 [desktop deployment guide](https://developers.openai.com/plugins/deploy/desktop-only)
 for the supported installation model.
 
-The plugin contains `UserPromptSubmit`, `PostToolUse`, `Stop`, and
-`SessionEnd` command hooks. Codex requires review/trust before non-managed
-plugin hooks run. Inspect the installed `hooks/hooks.json` and
-`hooks/capture.py`, then approve only if their private-capture behavior matches
-your policy. See OpenAI's [hooks documentation](https://learn.chatgpt.com/docs/hooks)
-and [plugin build guide](https://developers.openai.com/plugins/build/plugins).
+The plugin currently activates only `UserPromptSubmit` and `SessionEnd`
+command hooks. `PostToolUse` and `Stop` are intentionally unregistered. Codex
+requires review/trust before non-managed plugin hooks run. Inspect the installed
+`hooks/hooks.json` and `hooks/capture.py`, then approve only if their
+private-capture behavior matches your policy. See OpenAI's
+[hooks documentation](https://learn.chatgpt.com/docs/hooks) and
+[plugin build guide](https://developers.openai.com/plugins/build/plugins).
 
 For a multi-user deployment, both configured endpoints must be reachable from
 every approved laptop. A loopback `http://127.0.0.1` or `http://localhost`
@@ -200,28 +201,18 @@ offline evaluation does not prove that a customer's network, credentials,
 store contents, Playbook publication, or desktop policy is configured
 correctly.
 
-Verify private capture and confirmed promotion separately:
+Verify the reduced private-capture mode separately:
 
 ```text
-Complete a small local task, but do not share it with the team.
-List my pending private memory candidates.
-Inspect the relevant candidate and show me its evidence. Do not promote it.
+Send a non-sensitive prompt, then end the chat. Do not share anything with the team.
 ```
 
-Expected: any captured candidate names the per-user personal namespace and no
-new shared result is returned by `ram_search_state`. Then explicitly confirm
-one non-sensitive candidate and supply canonical project and lifecycle fields:
-
-```text
-Yes, promote that inspected candidate as an open action_item for project-demo.
-```
-
-Expected: the agent calls `memory_candidate_promote` once, the result says
-`promotion_submitted`, a repeated call says `already_submitted`, and after the
-RAM extraction window `ram_search_state` with `view="history"` finds one
-source-linked observation. The central projector must run before the current
-view changes. The original private events still exist. Reject a second
-candidate and confirm that it never appears in shared organizational state.
+Expected: RAM receives one private user-prompt event and one private session-end
+marker in the per-user personal namespace. No tool evidence, assistant turn, or
+new promotion candidate is captured because `PostToolUse` and `Stop` are
+inactive. No shared result is returned by `ram_search_state`. Existing
+candidates from an earlier installation can still be inspected, rejected, or
+explicitly promoted through the MCP tools.
 
 Before asking users to install a release, the maintainer should also run in a
 clean checkout:
