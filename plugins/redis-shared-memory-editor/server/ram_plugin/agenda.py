@@ -21,6 +21,33 @@ REQUIRED_RESOURCES = (
     "references/evidence-lifecycle.md",
     "references/abstention-and-escalation.md",
 )
+CONFIRMED_DECISION_STATUSES = frozenset({"decided", "approved"})
+COMPLETED_WORK_STATUSES = frozenset({"completed", "resolved"})
+OPEN_WORK_STATUSES = frozenset(
+    {"proposed", "open", "pending_approval", "in_progress", "blocked"}
+)
+RETRIEVAL_STATE_KINDS = (
+    "action_item",
+    "decision",
+    "approval",
+    "risk",
+    "issue",
+    "dependency",
+    "conflict",
+)
+ACTION_STATUS_ORDER = {
+    "blocked": 0,
+    "pending_approval": 1,
+    "in_progress": 2,
+    "open": 3,
+    "proposed": 4,
+    "completed": 5,
+    "resolved": 6,
+    "cancelled": 7,
+    "superseded": 8,
+    "rejected": 9,
+    "unknown": 10,
+}
 
 
 def _field_value(value: dict[str, Any], *names: str) -> Any:
@@ -179,6 +206,132 @@ def _references(service: Any, state: dict[str, Any]) -> list[dict[str, Any]]:
     return references
 
 
+def _linked_references(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return compact source links without opening every evidence passage."""
+
+    references: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    observations = state.get("observations")
+    if not isinstance(observations, list):
+        return references
+    for observation in reversed(observations):
+        if not isinstance(observation, dict):
+            continue
+        memory_id = observation.get("memory_id")
+        if not isinstance(memory_id, str) or not memory_id:
+            continue
+        for source in observation.get("sources") or []:
+            source_id = _source_id(source)
+            if source_id is None or (memory_id, source_id) in seen:
+                continue
+            seen.add((memory_id, source_id))
+            references.append(
+                {
+                    "memory_id": memory_id,
+                    "source_id": source_id,
+                    "source_artifact_id": observation.get("source_artifact_id"),
+                    "source_revision": observation.get("source_revision"),
+                    "evidence_locator": observation.get("evidence_locator"),
+                }
+            )
+            if len(references) == 3:
+                return references
+    return references
+
+
+def _context_item(
+    state: dict[str, Any], references: list[dict[str, Any]]
+) -> dict[str, Any]:
+    return {
+        "state_id": state.get("state_id"),
+        "state_kind": state.get("state_kind"),
+        "lifecycle_status": state.get("lifecycle_status"),
+        "subject": state.get("subject"),
+        "owner": state.get("accountable_entity_id") or "",
+        "due_at": state.get("due_at") or "",
+        "valid_at": state.get("valid_at") or "",
+        "evidence_references": references,
+    }
+
+
+def _action_item_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        str(item.get("owner") or "~"),
+        ACTION_STATUS_ORDER.get(str(item.get("lifecycle_status") or "unknown"), 99),
+        str(item.get("due_at") or "9999-12-31"),
+        str(item.get("subject") or ""),
+        str(item.get("state_id") or ""),
+    )
+
+
+def _action_item_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
+    by_status: dict[str, int] = {}
+    by_owner: dict[str, dict[str, Any]] = {}
+    for item in items:
+        status = str(item.get("lifecycle_status") or "unknown")
+        owner = str(item.get("owner") or "unassigned")
+        by_status[status] = by_status.get(status, 0) + 1
+        owner_summary = by_owner.setdefault(owner, {"total": 0, "by_status": {}})
+        owner_summary["total"] += 1
+        owner_statuses = owner_summary["by_status"]
+        owner_statuses[status] = owner_statuses.get(status, 0) + 1
+    return {
+        "total": len(items),
+        "by_status": dict(sorted(by_status.items())),
+        "by_owner": {owner: by_owner[owner] for owner in sorted(by_owner)},
+    }
+
+
+def _retrieve_current_states(
+    service: Any, focus: str | None
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    """Enumerate the complete PoC state register with structured kind filters."""
+
+    states: list[dict[str, Any]] = []
+    diagnostics: dict[str, Any] = {
+        "strategy": "structured-current-state-by-kind",
+        "focus_used_for_ranking_only": bool(focus),
+        "by_state_kind": {},
+    }
+    warnings: list[str] = []
+    seen: set[str] = set()
+    for state_kind in RETRIEVAL_STATE_KINDS:
+        result = service.ram_search_state(
+            text=focus,
+            state_kind=state_kind,
+            project_id=PROJECT_ID,
+            limit=100,
+        )
+        returned = result.get("states")
+        if not isinstance(returned, list):
+            raise PluginError("ram_contract_error", "RAM returned an invalid state collection.")
+        accepted = 0
+        for state in returned:
+            if not isinstance(state, dict) or state.get("state_kind") != state_kind:
+                raise PluginError("ram_contract_error", "RAM returned a state outside its filter.")
+            state_id = state.get("state_id")
+            if not isinstance(state_id, str) or not state_id:
+                raise PluginError("ram_contract_error", "RAM returned a state without an ID.")
+            if state_id in seen:
+                warnings.append(f"Duplicate current state was ignored: {state_id}.")
+                continue
+            seen.add(state_id)
+            states.append(state)
+            accepted += 1
+        kind_diagnostics = result.get("diagnostics")
+        diagnostics["by_state_kind"][state_kind] = {
+            "returned_states": accepted,
+            "has_more": bool(result.get("has_more")),
+            **(kind_diagnostics if isinstance(kind_diagnostics, dict) else {}),
+        }
+        if result.get("has_more") or len(returned) >= 100:
+            warnings.append(
+                f"Current {state_kind} retrieval reached its 100-record safety bound."
+            )
+    diagnostics["total_current_states"] = len(states)
+    return states, diagnostics, warnings
+
+
 def prepare_agenda(
     service: Any,
     meeting_date: str,
@@ -191,26 +344,33 @@ def prepare_agenda(
     except ValueError:
         raise PluginError("invalid_input", "meeting_date must use YYYY-MM-DD.") from None
     policy = _load_policy(service.playbook)
-    state_result = service.ram_search_state(
-        text=focus,
-        project_id=PROJECT_ID,
-        limit=100,
+    states, retrieval_diagnostics, retrieval_warnings = _retrieve_current_states(
+        service, focus
     )
     cutoff = meeting_day - timedelta(days=lookback_days)
     qualified: list[tuple[str, str, str, dict[str, Any]]] = []
+    action_items: list[dict[str, Any]] = []
+    confirmed_decisions: list[dict[str, Any]] = []
+    completed_work: list[dict[str, Any]] = []
+    open_work_items: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
     conflicts: list[dict[str, Any]] = []
-    warnings: list[str] = []
+    warnings: list[str] = list(retrieval_warnings)
+    reference_cache: dict[str, list[dict[str, Any]]] = {}
 
-    for state in state_result.get("states", []):
-        if not isinstance(state, dict):
-            continue
+    def references_for(state: dict[str, Any]) -> list[dict[str, Any]]:
+        state_id = str(state.get("state_id") or "")
+        if state_id not in reference_cache:
+            reference_cache[state_id] = _references(service, state)
+        return reference_cache[state_id]
+
+    for state in states:
         state_id = state.get("state_id")
         reasons: list[str] = []
         status = state.get("lifecycle_status")
-        if status in TERMINAL_STATUSES:
-            reasons.append("terminal_or_superseded")
-        if state.get("has_conflict"):
+        state_kind = state.get("state_kind")
+        has_conflict = bool(state.get("has_conflict"))
+        if has_conflict:
             reasons.append("unresolved_conflict")
             conflicts.append(
                 {
@@ -219,6 +379,42 @@ def prepare_agenda(
                     "observations": state.get("conflicting_observations", []),
                 }
             )
+
+        observations = state.get("observations") or []
+        latest = observations[-1] if observations and isinstance(observations[-1], dict) else {}
+        observed = _date(latest.get("observed_at"))
+        context_references = _linked_references(state)
+        context = _context_item(state, context_references)
+        if not context_references:
+            reasons.append("source_evidence_unavailable")
+        if state_kind == "action_item":
+            action_items.append(context)
+        if not has_conflict:
+            if (
+                state_kind in {"decision", "approval"}
+                and status in CONFIRMED_DECISION_STATUSES
+            ):
+                confirmed_decisions.append(context)
+            if (
+                status in COMPLETED_WORK_STATUSES
+                and observed is not None
+                and observed >= cutoff
+            ):
+                completed_work.append(context)
+            elif state_kind == "action_item" and status in OPEN_WORK_STATUSES:
+                open_work_items.append(context)
+
+        if status in TERMINAL_STATUSES:
+            if reasons and not context_references:
+                deferred.append(
+                    {
+                        "state_id": state_id,
+                        "subject": state.get("subject"),
+                        "reasons": sorted(set(reasons)),
+                    }
+                )
+            continue
+
         for field, reason in (
             ("accountable_entity_id", "owner_missing"),
             ("requested_decision", "management_question_missing"),
@@ -227,9 +423,6 @@ def prepare_agenda(
             if not state.get(field):
                 reasons.append(reason)
 
-        observations = state.get("observations") or []
-        latest = observations[-1] if observations and isinstance(observations[-1], dict) else {}
-        observed = _date(latest.get("observed_at"))
         if observed is None:
             reasons.append("observation_date_missing")
         elif observed > meeting_day:
@@ -237,11 +430,6 @@ def prepare_agenda(
         elif observed < cutoff and status in {"unknown", "proposed"}:
             reasons.append("outside_lookback_without_current_status")
 
-        references: list[dict[str, Any]] = []
-        if not reasons:
-            references = _references(service, state)
-            if not references:
-                reasons.append("source_evidence_unavailable")
         if reasons:
             deferred.append(
                 {
@@ -252,42 +440,66 @@ def prepare_agenda(
             )
             continue
 
+        qualified.append(
+            (
+                str(state.get("due_at") or "9999-12-31"),
+                str(state.get("subject") or state_id)[:160],
+                str(state_id),
+                state,
+            )
+        )
+
+    qualified.sort(key=lambda value: value[:2])
+    items: list[dict[str, Any]] = []
+    for _, title, state_id, state in qualified:
+        if len(items) >= max_items:
+            deferred.append(
+                {
+                    "state_id": state_id,
+                    "subject": title,
+                    "reasons": ["agenda_capacity"],
+                }
+            )
+            continue
+        references = references_for(state)
+        if not references:
+            deferred.append(
+                {
+                    "state_id": state_id,
+                    "subject": title,
+                    "reasons": ["source_evidence_unavailable"],
+                }
+            )
+            continue
         impact = str(state["impact"])
         requested = str(state["requested_decision"])
         due_at = state.get("due_at")
         why_now = f"{impact} Review requested for {meeting_date}."
         if due_at:
             why_now = f"{impact} The recorded decision horizon is {due_at}."
-        item = {
-            "title": str(state.get("subject") or state_id)[:160],
-            "management_question": requested,
-            "why_now": why_now,
-            "current_state": str(state.get("subject") or ""),
-            "owner": state["accountable_entity_id"],
-            "requested_decision": requested,
-            "timebox_minutes": 10,
-            "confidence": "high" if len(references) > 1 else "medium",
-            "evidence_references": references,
-        }
-        qualified.append(
-            (
-                str(due_at or "9999-12-31"),
-                item["title"],
-                str(state_id),
-                item,
-            )
-        )
-
-    qualified.sort(key=lambda value: value[:2])
-    for _, title, state_id, _ in qualified[max_items:]:
-        deferred.append(
+        items.append(
             {
-                "state_id": state_id,
-                "subject": title,
-                "reasons": ["agenda_capacity"],
+                "title": title,
+                "management_question": requested,
+                "why_now": why_now,
+                "current_state": str(state.get("subject") or ""),
+                "owner": state["accountable_entity_id"],
+                "requested_decision": requested,
+                "timebox_minutes": 10,
+                "confidence": "high" if len(references) > 1 else "medium",
+                "evidence_references": references,
             }
         )
-    items = [item for _, _, _, item in qualified[:max_items]]
+    action_items.sort(key=_action_item_key)
+    open_work_items.sort(key=_action_item_key)
+    completed_work.sort(
+        key=lambda item: (str(item.get("valid_at") or ""), str(item.get("state_id") or "")),
+        reverse=True,
+    )
+    confirmed_decisions.sort(
+        key=lambda item: (str(item.get("valid_at") or ""), str(item.get("state_id") or "")),
+        reverse=True,
+    )
     if not items:
         warnings.append(
             "No decision-ready item had current, non-conflicting state plus traversable source evidence."
@@ -296,11 +508,22 @@ def prepare_agenda(
         "ok": True,
         "meeting_date": meeting_date,
         "lookback_days": lookback_days,
+        "action_item_summary": _action_item_summary(action_items),
+        "action_items": action_items,
+        "confirmed_decisions": confirmed_decisions,
+        "completed_work": completed_work,
+        "open_work_items": open_work_items,
         "agenda_items": items,
         "deferred_candidates": deferred,
         "conflicts": conflicts,
         "warnings": warnings,
-        "retrieval_diagnostics": state_result.get("diagnostics", {}),
+        "retrieval_diagnostics": {
+            **retrieval_diagnostics,
+            "returned_action_items": len(action_items),
+            "returned_confirmed_decisions": len(confirmed_decisions),
+            "returned_completed_work": len(completed_work),
+            "returned_open_work_items": len(open_work_items),
+        },
         "playbook": policy,
     }
 

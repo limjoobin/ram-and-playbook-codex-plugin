@@ -160,9 +160,18 @@ class PromotionTests(unittest.TestCase):
         self.assertNotIn(CONFIG.namespace, [call["namespace"] for call in self.ram.calls])
 
     def test_completion_prompt_points_to_explicit_proposal_without_sharing(self):
-        result = self.capture.process(prompt(text="I finished the trend-watching action."))
+        result = self.capture.process(
+            prompt(
+                text=(
+                    "At 2026-10-27T09:15:00Z, I completed the trend-watching artifact. "
+                    "Publish this update to shared memory."
+                )
+            )
+        )
         context = result["hookSpecificOutput"]["additionalContext"]
         self.assertIn("memory_state_update_propose", context)
+        self.assertIn("Do not merely acknowledge", context)
+        self.assertIn("explicit resolution time", context)
         self.assertEqual(self.ledger.candidates(), {})
         self.assertTrue(all(call["namespace"] == CONFIG.personal_namespace for call in self.ram.calls))
 

@@ -82,8 +82,10 @@ The central post-extraction projection job is documented in
 The plugin calls reviewed RAM operations directly over HTTPS and allows only
 three read-only Playbook MCP operations. `agenda_prepare` loads the exact
 published workflow and its required resources at runtime, verifies their
-digests, and emits only agenda items backed by traversable source evidence. It
-is not a generic HTTP or MCP proxy.
+digests, and enumerates shared current state with separate structured searches
+for every state kind. It returns every current action item, confirmed
+decisions, completed work, open work, and evidence-verified decision-ready
+agenda items. It is not a generic HTTP or MCP proxy.
 
 Management state uses two RAM lanes. `organizational_state` is the immutable,
 source-linked observation ledger. `organizational_state_projection` is a

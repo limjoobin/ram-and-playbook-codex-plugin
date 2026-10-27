@@ -34,7 +34,7 @@
       "files": ["extraction-prompt.txt"]
     },
     "playbook": {
-      "version": "prepare-management-review-agenda-v1",
+      "version": "prepare-management-review-agenda-v2",
       "stage": "playbook",
       "files": [
         "playbook/manifest.json",

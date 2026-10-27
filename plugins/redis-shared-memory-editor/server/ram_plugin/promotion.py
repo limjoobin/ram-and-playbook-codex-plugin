@@ -427,10 +427,11 @@ class HookCapture:
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": (
-                            "Possible shared lifecycle update. The prompt is private. Retrieve the exact current "
-                            "state, then call memory_state_update_propose with its ID/current lifecycle and the "
-                            "exact prompt. Inspect the candidate and obtain explicit confirmation before "
-                            "memory_candidate_promote."
+                            "Possible shared lifecycle update. The prompt is private. Do not merely acknowledge "
+                            "a completion-and-publish request. Retrieve the exact current state, then call "
+                            "memory_state_update_propose with its ID/current lifecycle, the exact prompt, and "
+                            "any explicit resolution time. Inspect the candidate and obtain explicit "
+                            "confirmation before memory_candidate_promote."
                         ),
                     },
                 }

@@ -33,10 +33,12 @@ def record(
     memory_id: str,
     state_id: str,
     *,
+    state_kind: str = "risk",
     status: str = "open",
     role: str = "creates",
     requested: str = "Approve the mitigation plan",
     impact: str = "The committed delivery date is at risk",
+    owner: str = "employee-laura-project-manager",
     sources=True,
     artifact=None,
 ):
@@ -49,12 +51,12 @@ def record(
         "attributes": {
             "schema_version": "organizational-state-v2",
             "state_id": state_id,
-            "state_kind": "risk",
+            "state_kind": state_kind,
             "lifecycle_status": status,
             "evidence_role": role,
             "subject": f"Decision needed for {state_id}",
             "project_id": "project-ami-es2002",
-            "accountable_entity_id": "employee-laura-project-manager",
+            "accountable_entity_id": owner,
             "observed_at": "2026-10-20T09:00:00Z",
             "event_sequence": 1,
             "source_offset_ms": 0,
@@ -115,9 +117,18 @@ class AgendaRAM:
         self.records = [projection_record(items) for items in grouped.values()]
         self.has_evidence = evidence
         self.evidence_calls = []
+        self.search_requests = []
 
     def search(self, request, timeout_ms=None):
-        return {"items": self.records}
+        self.search_requests.append(request)
+        attributes = request.get("filter", {}).get("attributes", {})
+        state_kind = attributes.get("state_kind", {}).get("string")
+        records = [
+            item
+            for item in self.records
+            if state_kind is None or item["attributes"]["state_kind"] == state_kind
+        ]
+        return {"items": records[: request.get("limit", 100)]}
 
     def get(self, memory_id):
         return self.supporting[memory_id]
@@ -214,6 +225,21 @@ class AgendaTests(unittest.TestCase):
         self.assertEqual(item["owner"], "employee-laura-project-manager")
         self.assertEqual(item["evidence_references"][0]["memory_id"], "memory-a")
         self.assertEqual(ram.evidence_calls, [("memory-a", "source-memory-a")])
+        self.assertEqual(
+            [
+                request["filter"]["attributes"]["state_kind"]["string"]
+                for request in ram.search_requests
+            ],
+            [
+                "action_item",
+                "decision",
+                "approval",
+                "risk",
+                "issue",
+                "dependency",
+                "conflict",
+            ],
+        )
         self.assertEqual(result["playbook"]["version"], 7)
         fetched = [
             arguments["uri"].split("/7/", 1)[1]
@@ -229,6 +255,108 @@ class AgendaTests(unittest.TestCase):
         self.assertIn("source_evidence_unavailable", result["deferred_candidates"][0]["reasons"])
         self.assertTrue(result["warnings"])
 
+    def test_returns_shared_state_context_without_inventing_decision_fields(self):
+        records = [
+            record(
+                "decision",
+                "state-decision",
+                state_kind="decision",
+                status="decided",
+                requested="",
+                impact="",
+                owner="",
+            ),
+            record(
+                "completed",
+                "state-completed",
+                state_kind="action_item",
+                status="completed",
+                requested="",
+                impact="",
+            ),
+            record(
+                "open-action",
+                "state-open-action",
+                state_kind="action_item",
+                requested="",
+                impact="",
+            ),
+        ]
+        service, _, _ = self.service(records)
+
+        result = service.agenda_prepare("2026-11-01")
+
+        self.assertEqual(result["agenda_items"], [])
+        self.assertEqual(
+            [item["state_id"] for item in result["confirmed_decisions"]],
+            ["state-decision"],
+        )
+        self.assertEqual(
+            [item["state_id"] for item in result["completed_work"]],
+            ["state-completed"],
+        )
+        self.assertEqual(
+            [item["state_id"] for item in result["open_work_items"]],
+            ["state-open-action"],
+        )
+        for collection in (
+            result["confirmed_decisions"],
+            result["completed_work"],
+            result["open_work_items"],
+        ):
+            self.assertTrue(collection[0]["evidence_references"])
+        self.assertEqual(
+            [item["state_id"] for item in result["action_items"]],
+            ["state-open-action", "state-completed"],
+        )
+        self.assertEqual(result["action_item_summary"]["total"], 2)
+        self.assertEqual(result["confirmed_decisions"][0]["owner"], "")
+        open_reasons = {
+            item["state_id"]: item["reasons"] for item in result["deferred_candidates"]
+        }
+        self.assertIn("management_question_missing", open_reasons["state-open-action"])
+        self.assertIn("material_impact_missing", open_reasons["state-open-action"])
+
+    def test_context_registers_are_not_capped_by_agenda_capacity(self):
+        records = [
+            record(
+                f"action-{index}",
+                f"state-action-{index}",
+                state_kind="action_item",
+                requested="",
+                impact="",
+                owner=(
+                    "employee-andrew-marketing-expert"
+                    if index % 2
+                    else "employee-laura-project-manager"
+                ),
+            )
+            for index in range(5)
+        ]
+        records.extend(
+            record(
+                f"decision-{index}",
+                f"state-decision-{index}",
+                state_kind="decision",
+                status="decided",
+                requested="",
+                impact="",
+            )
+            for index in range(4)
+        )
+        service, ram, _ = self.service(records)
+
+        result = service.agenda_prepare("2026-11-01", max_items=1, focus="launch")
+
+        self.assertEqual(len(result["action_items"]), 5)
+        self.assertEqual(len(result["open_work_items"]), 5)
+        self.assertEqual(len(result["confirmed_decisions"]), 4)
+        self.assertEqual(result["action_item_summary"]["by_status"], {"open": 5})
+        self.assertEqual(result["retrieval_diagnostics"]["total_current_states"], 9)
+        self.assertTrue(result["retrieval_diagnostics"]["focus_used_for_ranking_only"])
+        self.assertTrue(all(request.get("text") == "launch" for request in ram.search_requests))
+        self.assertEqual(ram.evidence_calls, [])
+
     def test_defers_missing_decision_and_terminal_state(self):
         missing = record("missing", "state-missing", requested="")
         resolved = record("resolved", "state-resolved", status="resolved")
@@ -236,7 +364,10 @@ class AgendaTests(unittest.TestCase):
         result = service.agenda_prepare("2026-11-01")
         reasons = {item["state_id"]: item["reasons"] for item in result["deferred_candidates"]}
         self.assertIn("management_question_missing", reasons["state-missing"])
-        self.assertIn("terminal_or_superseded", reasons["state-resolved"])
+        self.assertEqual(
+            [item["state_id"] for item in result["completed_work"]],
+            ["state-resolved"],
+        )
         self.assertEqual(ram.evidence_calls, [])
 
     def test_preserves_conflict_and_abstains(self):

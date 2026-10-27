@@ -130,7 +130,14 @@ class EvaluationRAM:
         ]
 
     def search(self, request: dict[str, Any], timeout_ms: int | None = None) -> dict[str, Any]:
-        return {"items": list(self.projections)}
+        attributes = request.get("filter", {}).get("attributes", {})
+        state_kind = attributes.get("state_kind", {}).get("string")
+        projections = [
+            item
+            for item in self.projections
+            if state_kind is None or item["attributes"]["state_kind"] == state_kind
+        ]
+        return {"items": projections[: request.get("limit", 100)]}
 
     def get(self, memory_id: str) -> dict[str, Any]:
         return next(item for item in self.records if item["id"] == memory_id)

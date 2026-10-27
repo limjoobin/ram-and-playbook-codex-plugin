@@ -194,9 +194,12 @@ Prepare the management review agenda for 2026-11-15 with at most 8 items.
 Expected: both upstreams are available, entity resolution returns
 `project-ami-es2002`, the current view returns projections, the history view
 returns timestamped source observations, Playbook discovery returns an exact
-version without exposing either endpoint or credential, and agenda output
-either contains source-evidence references for every item or explicitly defers
-the candidate.
+version without exposing either endpoint or credential, and agenda output uses
+separate structured searches for every state kind. It returns the full
+owner-grouped action-item register plus confirmed decisions, completed work,
+open work, and strictly qualified decision-ready items. The agenda-item maximum
+does not truncate the context registers. Unsupported candidates are explicitly
+deferred.
 
 These checks are the manual acceptance gate. Passing repository tests and the
 offline evaluation does not prove that a customer's network, credentials,
@@ -206,14 +209,15 @@ correctly.
 Verify the private lifecycle-update flow separately:
 
 ```text
-I completed the trend-watching action. Find the exact current action, but show me the proposed shared update before publishing it.
+At 2026-10-27T09:15:00Z, I completed the trend-watching artifact. Publish this update to shared memory, but show me the exact proposed update before sharing it.
 ```
 
 Expected: `UserPromptSubmit` records the exact statement only in the personal
 namespace and directs the agent to retrieve the current state. The agent calls
 `memory_state_update_propose` with the returned `state_id`, its current
-lifecycle, and the complete prompt. The proposal preserves the current project,
-owner, and subject and makes no shared write. The agent must inspect the
+lifecycle, the complete prompt, and the explicit completion time as
+`resolved_at`. The proposal preserves the current project, owner, subject, and
+capture time and makes no shared write. The agent must inspect the
 candidate and ask for explicit confirmation before calling
 `memory_candidate_promote`. `PostToolUse` and `Stop` remain inactive.
 

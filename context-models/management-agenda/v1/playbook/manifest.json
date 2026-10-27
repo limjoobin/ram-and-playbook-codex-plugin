@@ -2,24 +2,26 @@
   "schemaVersion": 1,
   "entryKey": "prepare-management-review-agenda",
   "entryType": "skill",
-  "version": 1,
+  "version": 2,
   "name": "Prepare management review agenda",
-  "description": "Prepare a decision-focused management review agenda from current cited evidence.",
+  "description": "Prepare an evidence-backed management review with confirmed decisions, progress, open work, and decision-ready items.",
   "intents": [
     "prepare management review agenda",
     "management decision agenda",
-    "executive risk review"
+    "executive risk review",
+    "management project update",
+    "review confirmed decisions and open work"
   ],
   "attributes": {
     "forum": "management-review",
     "corpus": "management-agenda-bootstrap-v1"
   },
   "resources": [
-    {"path": "SKILL.md", "sha256": "72ba95c4657e2f75d2557936df0050b3dda31a9e8fb9b5de29ede0ed4ccf31fe"},
-    {"path": "references/meeting-charter.md", "sha256": "65fea54d64ba640aed32fb67e42fccc5d583bf2e1a34cc5cf1e0f2855a93e7d3"},
-    {"path": "references/agenda-qualification-rules.md", "sha256": "ddf906b7f5be69afbd207bb92b61fd7dad055a560e7d245c9f08baa648f332ce"},
-    {"path": "references/agenda-item-output-schema.md", "sha256": "6bd14a44d2ce444672b2cb96b07e73971b84816a0967f08a4d81e2c5ddbe8cdf"},
-    {"path": "references/evidence-lifecycle.md", "sha256": "b9855e78504f29d0eb913f633f8a0e5d71d71cf0b451ecd03b459d844bb0ae4e"},
-    {"path": "references/abstention-and-escalation.md", "sha256": "e3529b1fb7bd378cb70e79de480fac2dc155851bf45c929c3003ca9bcab85ef1"}
+    {"path": "SKILL.md", "sha256": "dea391192a06fe5c736efa9f968475bc6fabb3c05c4dfe9e012a10e01be6f809"},
+    {"path": "references/meeting-charter.md", "sha256": "f06512ac5561e6f685fcf3c014191078ad19cf39f84c27922b52c28f444b1c07"},
+    {"path": "references/agenda-qualification-rules.md", "sha256": "890ff66463283db3d6ea63e6e51baa71728df0a6f5eefe76ea2cd43a552168b3"},
+    {"path": "references/agenda-item-output-schema.md", "sha256": "4a4d2fbb825e1534e2e50dc648a7ca2d96370ed94abd1f2826feb0475ad77ce8"},
+    {"path": "references/evidence-lifecycle.md", "sha256": "e85cbf9ee43dbc72e980d732960f405c40e4c1b91f74b40d60d20f57e60664b4"},
+    {"path": "references/abstention-and-escalation.md", "sha256": "cb56237d2068552abec61c8cad791b890c6c282fc2fb2bff80e38ca817458d1c"}
   ]
 }

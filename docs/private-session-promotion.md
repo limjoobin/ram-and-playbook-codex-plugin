@@ -79,10 +79,12 @@ the event contracts and trust flow in the
 2. Verify no tool output or assistant response was captured and no new
    promotion candidate was created.
 3. Verify shared organizational state is unchanged.
-4. Report completion of one known current action. Verify the hook suggests
-   `memory_state_update_propose`, that the proposal retains the exact private
-   statement and existing `state_id`, and that current shared state is still
-   unchanged.
+4. Report completion of one known current action with an explicit completion
+   time and request publication. Verify the hook tells the agent not merely to
+   acknowledge the report and instead suggests `memory_state_update_propose`.
+   Verify the proposal retains the exact private statement, existing
+   `state_id`, capture time, and explicit `resolved_at`, while current shared
+   state remains unchanged.
 5. Inspect and explicitly confirm the candidate, then promote it. Verify a new
    shared source session exists and the private record remains intact.
 6. Include a token-shaped value and a malicious transcript-path string in a

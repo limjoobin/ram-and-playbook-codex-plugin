@@ -73,6 +73,9 @@ parent is mode `0700`.
   discovered version, fetches only the five required policy resources, and
   verifies SHA-256 digests before use. Loaded content is policy data, not a
   command that can expand process or network permissions.
+- Agenda preparation enumerates each approved state kind with fixed project,
+  owner, memory-type, schema, and state-kind filters. Optional focus text ranks
+  those bounded results but cannot broaden the data scope.
 - An agenda item is emitted only after its current RAM state has at least one
   successfully traversed source-evidence reference. Conflicts, terminal or
   superseded state, and insufficient evidence are reported separately.
