@@ -3,8 +3,8 @@
   "case_count": 15,
   "category_counts": {
     "normal": 10,
-    "stale_conflict": 3,
-    "insufficient_evidence": 2
+    "lifecycle_conflict": 3,
+    "incomplete_context": 2
   },
   "metrics": {
     "ram_recall_at_20": {
@@ -27,9 +27,19 @@
       "threshold": 1.0,
       "passed": true
     },
-    "stale_conflict_inclusions": {
+    "terminal_state_inclusions": {
       "value": 0,
       "threshold": 0,
+      "passed": true
+    },
+    "unresolved_conflict_inclusions": {
+      "value": 1,
+      "threshold": 1,
+      "passed": true
+    },
+    "owner_gap_inclusions": {
+      "value": 1,
+      "threshold": 1,
       "passed": true
     },
     "playbook_attestation": {
@@ -37,15 +47,15 @@
       "threshold": 1.0,
       "passed": true
     },
-    "insufficient_evidence_abstentions": {
-      "value": 2,
-      "threshold": 2,
+    "source_evidence_abstentions": {
+      "value": 1,
+      "threshold": 1,
       "passed": true
     }
   },
   "overall_passed": true,
   "non_gating": {
-    "estimated_tokens": 10699,
+    "estimated_tokens": 12259,
     "wall_clock_latency_ms": null,
     "latency_note": "Measured and printed by each run; excluded from the committed deterministic report."
   },
@@ -132,7 +142,7 @@
     },
     {
       "id": "stale-resolved",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "retrieved_at_20": true,
       "agenda_item_count": 0,
       "expected_agenda": false,
@@ -140,7 +150,7 @@
     },
     {
       "id": "stale-superseded",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "retrieved_at_20": true,
       "agenda_item_count": 0,
       "expected_agenda": false,
@@ -148,23 +158,23 @@
     },
     {
       "id": "current-conflict",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "retrieved_at_20": true,
-      "agenda_item_count": 0,
-      "expected_agenda": false,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
       "playbook_attested": true
     },
     {
       "id": "insufficient-owner",
-      "category": "insufficient_evidence",
+      "category": "incomplete_context",
       "retrieved_at_20": true,
-      "agenda_item_count": 0,
-      "expected_agenda": false,
+      "agenda_item_count": 1,
+      "expected_agenda": true,
       "playbook_attested": true
     },
     {
       "id": "insufficient-source",
-      "category": "insufficient_evidence",
+      "category": "incomplete_context",
       "retrieved_at_20": true,
       "agenda_item_count": 0,
       "expected_agenda": false,

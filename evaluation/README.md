@@ -6,15 +6,16 @@ Run the fixed 15-case gate before sharing a release:
 python3 evaluation/run.py
 ```
 
-The corpus contains ten decision-ready cases, three stale or conflicted cases,
-and two cases that require abstention. The gate checks:
+The corpus contains ten ordinary current-topic cases, three lifecycle/conflict
+cases, and two incomplete-context cases. The gate checks:
 
 - RAM recall at 20 is at least 85%;
 - agenda precision and recall are each above 80%;
 - every emitted item's material fields have traversable evidence;
-- no resolved, superseded, or conflicted-only state is included;
+- no resolved or superseded state is included;
+- a source-backed unresolved conflict and a missing-owner topic remain visible;
 - every case uses the expected Playbook entry version and digest; and
-- both insufficient-evidence cases abstain.
+- the missing-source case abstains.
 
 Wall-clock latency and a deterministic token estimate are reported but do not
 gate the build. To refresh the committed deterministic report after an

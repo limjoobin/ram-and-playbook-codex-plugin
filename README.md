@@ -40,8 +40,9 @@ confirmation. `PostToolUse` and `Stop` remain inactive.
 ## Quality gate
 
 The repository includes a credential-free 15-case evaluation covering normal
-agenda generation, stale/conflicted exclusion, insufficient-evidence
-abstention, evidence coverage, and exact Playbook attestation:
+agenda generation, terminal-state exclusion, unresolved-conflict and owner-gap
+visibility, missing-source abstention, evidence coverage, and exact Playbook
+attestation:
 
 ```sh
 python3 evaluation/run.py
@@ -83,9 +84,11 @@ The plugin calls reviewed RAM operations directly over HTTPS and allows only
 three read-only Playbook MCP operations. `agenda_prepare` loads the exact
 published workflow and its required resources at runtime, verifies their
 digests, and enumerates shared current state with separate structured searches
-for every state kind. It returns every current action item, confirmed
-decisions, completed work, open work, and evidence-verified decision-ready
-agenda items. It is not a generic HTTP or MCP proxy.
+for every state kind. It returns every current action item, confirmed decision,
+completion, and open-work record plus a human-editable topic draft. A bounded
+read-only second pass compares first-pass conflicts with later cited state and
+reports reconciled, unresolved, and ambiguous results without mutating RAM. It
+is not a generic HTTP or MCP proxy.
 
 Management state uses two RAM lanes. `organizational_state` is the immutable,
 source-linked observation ledger. `organizational_state_projection` is a

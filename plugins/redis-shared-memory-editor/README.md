@@ -48,13 +48,15 @@ the populated file in the repository, plugin cache, or chat.
 
 `agenda_prepare` does not bundle a second copy of the management policy. It
 discovers and loads `prepare-management-review-agenda` from Playbook at runtime,
-fetches the five required policy resources, verifies every digest, reconciles
-RAM lifecycle state through deterministic current projections, and traverses
-their immutable supporting observations before including an item. Missing,
-conflicting, terminal, superseded, or uncited candidates are returned as
-deferrals or warnings. `ram_search_state` also exposes an explicit `history`
-view for source-event breadcrumbs and a `conflicts` view for unresolved current
-projections.
+fetches the five required policy resources, verifies every digest, retrieves
+deterministic current projections, and traverses their immutable supporting
+observations before including a topic. It then runs a bounded read-only second
+pass over first-pass conflicts and distinguishes later-evidence reconciliation
+from genuinely unresolved or ambiguous conflicts. Missing owners, impact
+statements, and requested-decision fields remain visible rather than suppressing
+the draft. `ram_search_state` also exposes an explicit `history` view for
+source-event breadcrumbs and a `conflicts` view for registered unresolved
+current projections.
 
 Session events first enter RAM under `RAM_PERSONAL_NAMESPACE`, where RAM owns
 native session memory and any configured personal extraction. The local

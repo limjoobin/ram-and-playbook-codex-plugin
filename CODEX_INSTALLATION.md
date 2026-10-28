@@ -197,9 +197,10 @@ returns timestamped source observations, Playbook discovery returns an exact
 version without exposing either endpoint or credential, and agenda output uses
 separate structured searches for every state kind. It returns the full
 owner-grouped action-item register plus confirmed decisions, completed work,
-open work, and strictly qualified decision-ready items. The agenda-item maximum
-does not truncate the context registers. Unsupported candidates are explicitly
-deferred.
+open work, a human-editable management-topic draft, and the result of a bounded
+read-only conflict-reconciliation pass. The agenda-item maximum does not
+truncate the context registers. Missing owners or decision fields do not
+suppress a topic; uncited or over-capacity candidates are explicitly deferred.
 
 On a v3 test store, confirmed generic relationships are returned as
 `confirmed_relations` on current-state results. Proposed and rejected

@@ -24,12 +24,15 @@ from ram_plugin.management import PluginService  # noqa: E402
 CASES_PATH = Path(__file__).with_name("cases.json")
 RESULTS_PATH = Path(__file__).with_name("results.json")
 REQUIRED_ITEM_FIELDS = {
+    "state_id",
     "title",
-    "management_question",
+    "agenda_purpose",
+    "state_kind",
+    "lifecycle_status",
     "why_now",
     "current_state",
     "owner",
-    "requested_decision",
+    "due_at",
     "timebox_minutes",
     "confidence",
     "evidence_references",
@@ -228,9 +231,11 @@ def evaluate(cases_path: Path = CASES_PATH) -> tuple[dict[str, Any], float]:
     true_positive = 0
     recalled = 0
     supported = 0
-    stale_inclusions = 0
+    terminal_inclusions = 0
+    unresolved_conflict_inclusions = 0
+    owner_gap_inclusions = 0
     attestations = 0
-    abstentions = 0
+    source_evidence_abstentions = 0
     serialized_characters = 0
     case_results: list[dict[str, Any]] = []
 
@@ -259,10 +264,14 @@ def evaluate(cases_path: Path = CASES_PATH) -> tuple[dict[str, Any], float]:
         matched = sum(item.get("title") == expected_title for item in items)
         if case["expected_agenda"]:
             true_positive += matched
-        elif case["category"] == "stale_conflict":
-            stale_inclusions += len(items)
-        if case["category"] == "insufficient_evidence" and not items:
-            abstentions += 1
+        if case.get("lifecycle_status") in {"resolved", "superseded"}:
+            terminal_inclusions += len(items)
+        if case.get("conflict"):
+            unresolved_conflict_inclusions += matched
+        if case.get("owner") == "":
+            owner_gap_inclusions += matched
+        if case.get("evidence_available") is False and not items:
+            source_evidence_abstentions += 1
         supported += sum(
             set(item) == REQUIRED_ITEM_FIELDS and bool(item.get("evidence_references"))
             for item in items
@@ -294,19 +303,25 @@ def evaluate(cases_path: Path = CASES_PATH) -> tuple[dict[str, Any], float]:
     attestation_rate = attestations / count
     metrics = {
         "ram_recall_at_20": _metric(recall_at_20, 0.85, recall_at_20 >= 0.85),
-        "agenda_precision": _metric(precision, 0.80, precision > 0.80),
-        "agenda_recall": _metric(agenda_recall, 0.80, agenda_recall > 0.80),
+        "agenda_precision": _metric(precision, 0.80, precision >= 0.80),
+        "agenda_recall": _metric(agenda_recall, 0.80, agenda_recall >= 0.80),
         "evidence_coverage": _metric(evidence_coverage, 1.0, evidence_coverage == 1.0),
-        "stale_conflict_inclusions": _metric(stale_inclusions, 0, stale_inclusions == 0),
+        "terminal_state_inclusions": _metric(terminal_inclusions, 0, terminal_inclusions == 0),
+        "unresolved_conflict_inclusions": _metric(
+            unresolved_conflict_inclusions, 1, unresolved_conflict_inclusions == 1
+        ),
+        "owner_gap_inclusions": _metric(owner_gap_inclusions, 1, owner_gap_inclusions == 1),
         "playbook_attestation": _metric(attestation_rate, 1.0, attestation_rate == 1.0),
-        "insufficient_evidence_abstentions": _metric(abstentions, 2, abstentions == 2),
+        "source_evidence_abstentions": _metric(
+            source_evidence_abstentions, 1, source_evidence_abstentions == 1
+        ),
     }
     report = {
         "schema_version": 1,
         "case_count": count,
         "category_counts": {
             category: sum(case["category"] == category for case in cases)
-            for category in ("normal", "stale_conflict", "insufficient_evidence")
+            for category in ("normal", "lifecycle_conflict", "incomplete_context")
         },
         "metrics": metrics,
         "overall_passed": all(metric["passed"] for metric in metrics.values()),

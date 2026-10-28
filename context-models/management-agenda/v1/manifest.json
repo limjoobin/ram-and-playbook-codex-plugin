@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contextModelVersion": "management-agenda-bootstrap-v3",
+  "contextModelVersion": "management-agenda-bootstrap-v4",
   "sourceProvenance": {
     "repository": "iris-playbook-management-agenda",
     "commit": "f36230cf6fc8f7bc89e52c69963a0e6d60900c4d",
@@ -34,7 +34,7 @@
       "files": ["extraction-prompt.txt"]
     },
     "playbook": {
-      "version": "prepare-management-review-agenda-v2",
+      "version": "prepare-management-review-agenda-v3",
       "stage": "playbook",
       "files": [
         "playbook/manifest.json",

@@ -7,15 +7,16 @@ withdrawn, or resolved record as the sole basis for inclusion.
 
 A current `decided` decision or `approved` approval may establish the meeting
 baseline even when its originating evidence predates the lookback. Recent
-completed or resolved work belongs in progress context, not in the
-decision-ready agenda unless new current evidence establishes another
-management question.
+completed or resolved work belongs in progress context. It does not need
+another management question to be reported.
 
 Treat a closed or mitigated risk as deferred unless current evidence shows a
 new material impact. Similar names, repeated summaries, and urgent language do
 not establish a new issue.
 
-When current sources conflict on a material fact, preserve the conflict. Name
-the unresolved question, cite both sides, reduce confidence, and ask management
-to resolve it only when the conflict itself needs a decision. Never silently
-choose the more alarming source.
+When the first pass finds a conflict, use the bounded second pass before
+presenting it as unresolved. Later evidence must be in the same project, later
+in source time or sequence, confirmed, topically specific, and traversable. If
+those checks pass, report that the agenda view is reconciled while preserving
+the registered RAM status. Otherwise preserve the conflict, cite the available
+sides, and reduce confidence. Never silently choose the more alarming source.

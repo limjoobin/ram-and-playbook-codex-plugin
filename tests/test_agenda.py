@@ -41,6 +41,10 @@ def record(
     owner: str = "employee-laura-project-manager",
     sources=True,
     artifact=None,
+    subject=None,
+    observed_at="2026-10-20T09:00:00Z",
+    event_sequence=1,
+    source_offset_ms=0,
 ):
     return {
         "id": memory_id,
@@ -54,12 +58,12 @@ def record(
             "state_kind": state_kind,
             "lifecycle_status": status,
             "evidence_role": role,
-            "subject": f"Decision needed for {state_id}",
+            "subject": subject or f"Decision needed for {state_id}",
             "project_id": "project-ami-es2002",
             "accountable_entity_id": owner,
-            "observed_at": "2026-10-20T09:00:00Z",
-            "event_sequence": 1,
-            "source_offset_ms": 0,
+            "observed_at": observed_at,
+            "event_sequence": event_sequence,
+            "source_offset_ms": source_offset_ms,
             "due_at": "2026-11-05",
             "requested_decision": requested,
             "impact": impact,
@@ -74,7 +78,12 @@ def record(
 def projection_record(records):
     current = records[-1]
     attributes = current["attributes"]
-    conflicts = [item["id"] for item in records if item["attributes"]["evidence_role"] == "contradicts"]
+    conflicts = [
+        item["id"]
+        for item in records
+        if item["attributes"]["evidence_role"] == "contradicts"
+        or item["attributes"]["state_kind"] == "conflict"
+    ]
     return {
         "id": f"projection-{attributes['state_id']}",
         "text": attributes["subject"],
@@ -92,8 +101,8 @@ def projection_record(records):
             "accountable_entity_id": attributes["accountable_entity_id"],
             "related_entity_ids": [],
             "valid_at": attributes["observed_at"],
-            "event_sequence": 1,
-            "source_offset_ms": 0,
+            "event_sequence": attributes["event_sequence"],
+            "source_offset_ms": attributes["source_offset_ms"],
             "due_at": attributes["due_at"],
             "resolved_at": "",
             "requested_decision": attributes["requested_decision"],
@@ -218,8 +227,9 @@ class AgendaTests(unittest.TestCase):
         self.assertEqual(
             set(item),
             {
-                "title", "management_question", "why_now", "current_state", "owner",
-                "requested_decision", "timebox_minutes", "confidence", "evidence_references",
+                "state_id", "title", "agenda_purpose", "state_kind",
+                "lifecycle_status", "why_now", "current_state", "owner", "due_at",
+                "timebox_minutes", "confidence", "evidence_references",
             },
         )
         self.assertEqual(item["owner"], "employee-laura-project-manager")
@@ -286,7 +296,12 @@ class AgendaTests(unittest.TestCase):
 
         result = service.agenda_prepare("2026-11-01")
 
-        self.assertEqual(result["agenda_items"], [])
+        self.assertEqual(
+            [item["state_id"] for item in result["agenda_items"]],
+            ["state-open-action"],
+        )
+        self.assertNotIn("management_question", result["agenda_items"][0])
+        self.assertNotIn("requested_decision", result["agenda_items"][0])
         self.assertEqual(
             [item["state_id"] for item in result["confirmed_decisions"]],
             ["state-decision"],
@@ -311,11 +326,7 @@ class AgendaTests(unittest.TestCase):
         )
         self.assertEqual(result["action_item_summary"]["total"], 2)
         self.assertEqual(result["confirmed_decisions"][0]["owner"], "")
-        open_reasons = {
-            item["state_id"]: item["reasons"] for item in result["deferred_candidates"]
-        }
-        self.assertIn("management_question_missing", open_reasons["state-open-action"])
-        self.assertIn("material_impact_missing", open_reasons["state-open-action"])
+        self.assertFalse(result["deferred_candidates"])
 
     def test_context_registers_are_not_capped_by_agenda_capacity(self):
         records = [
@@ -355,22 +366,24 @@ class AgendaTests(unittest.TestCase):
         self.assertEqual(result["retrieval_diagnostics"]["total_current_states"], 9)
         self.assertTrue(result["retrieval_diagnostics"]["focus_used_for_ranking_only"])
         self.assertTrue(all(request.get("text") == "launch" for request in ram.search_requests))
-        self.assertEqual(ram.evidence_calls, [])
+        self.assertEqual(ram.evidence_calls, [("action-0", "source-action-0")])
 
-    def test_defers_missing_decision_and_terminal_state(self):
+    def test_keeps_topic_without_decision_fields_and_excludes_terminal_state(self):
         missing = record("missing", "state-missing", requested="")
         resolved = record("resolved", "state-resolved", status="resolved")
         service, ram, _ = self.service([missing, resolved])
         result = service.agenda_prepare("2026-11-01")
-        reasons = {item["state_id"]: item["reasons"] for item in result["deferred_candidates"]}
-        self.assertIn("management_question_missing", reasons["state-missing"])
+        self.assertEqual(
+            [item["state_id"] for item in result["agenda_items"]],
+            ["state-missing"],
+        )
         self.assertEqual(
             [item["state_id"] for item in result["completed_work"]],
             ["state-resolved"],
         )
-        self.assertEqual(ram.evidence_calls, [])
+        self.assertEqual(ram.evidence_calls, [("missing", "source-missing")])
 
-    def test_preserves_conflict_and_abstains(self):
+    def test_preserves_unresolved_conflict_as_a_management_topic(self):
         initial = record("initial", "state-a", artifact="minutes")
         conflicting = record(
             "conflicting",
@@ -380,9 +393,68 @@ class AgendaTests(unittest.TestCase):
         )
         service, _, _ = self.service([initial, conflicting])
         result = service.agenda_prepare("2026-11-01")
-        self.assertEqual(result["agenda_items"], [])
+        self.assertEqual(result["agenda_items"][0]["agenda_purpose"], "resolve_conflict")
         self.assertEqual(result["conflicts"][0]["state_id"], "state-a")
-        self.assertIn("unresolved_conflict", result["deferred_candidates"][0]["reasons"])
+        self.assertEqual(result["conflicts"][0]["agenda_status"], "unresolved")
+        self.assertEqual(result["reconciled_conflicts"], [])
+
+    def test_second_pass_resolves_only_conflicts_with_later_matching_evidence(self):
+        colour = record(
+            "colour-conflict",
+            "state-colour-conflict",
+            state_kind="conflict",
+            subject="Corporate colour specification",
+            event_sequence=2,
+        )
+        yellow = record(
+            "yellow-decision",
+            "state-yellow-decision",
+            state_kind="decision",
+            status="decided",
+            subject="Yellow corporate colour",
+            event_sequence=3,
+        )
+        price = record(
+            "price-conflict",
+            "state-price-conflict",
+            state_kind="conflict",
+            subject="Selling price basis",
+            event_sequence=1,
+        )
+        budget = record(
+            "budget-decision",
+            "state-budget-decision",
+            state_kind="decision",
+            status="decided",
+            subject="Costs within budget",
+            event_sequence=4,
+        )
+        service, ram, _ = self.service([colour, yellow, price, budget])
+
+        result = service.agenda_prepare("2026-11-01")
+
+        self.assertEqual(
+            [item["state_id"] for item in result["reconciled_conflicts"]],
+            ["state-colour-conflict"],
+        )
+        self.assertEqual(
+            result["reconciled_conflicts"][0]["resolution_state"]["state_id"],
+            "state-yellow-decision",
+        )
+        self.assertEqual(
+            [item["state_id"] for item in result["conflicts"]],
+            ["state-price-conflict"],
+        )
+        self.assertEqual(
+            [item["state_id"] for item in result["agenda_items"]],
+            ["state-price-conflict"],
+        )
+        semantic_queries = [
+            request["text"]
+            for request in ram.search_requests
+            if request.get("text") is not None
+        ]
+        self.assertEqual(semantic_queries, ["colour corporate", "price selling"])
 
     def test_rejects_changed_runtime_resource(self):
         service, _, _ = self.service([record("memory-a", "state-a")], corrupt=True)

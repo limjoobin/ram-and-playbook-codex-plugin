@@ -86,9 +86,16 @@ parent is mode `0700`.
 - Agenda preparation enumerates each approved state kind with fixed project,
   owner, memory-type, schema, and state-kind filters. Optional focus text ranks
   those bounded results but cannot broaden the data scope.
+- Its read-only second pass runs only for conflicts returned by that first pass.
+  It reuses the fixed project and decision kind, caps each semantic search at
+  ten, requires exact conflict-topic coverage plus later source ordering (or an
+  explicit confirmed relation), and traverses both evidence chains before
+  reporting `resolved_by_later_evidence`. It never writes a RAM observation or
+  projection.
 - An agenda item is emitted only after its current RAM state has at least one
-  successfully traversed source-evidence reference. Conflicts, terminal or
-  superseded state, and insufficient evidence are reported separately.
+  successfully traversed source-evidence reference. Terminal and superseded
+  state are excluded. Missing owner, impact, or requested-decision fields stay
+  visible; insufficient source evidence is reported separately.
 
 ## Write safety
 

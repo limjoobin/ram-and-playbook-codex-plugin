@@ -1,6 +1,6 @@
 ---
 name: prepare-management-review-agenda
-description: Prepare a decision-focused management review agenda from current, cited evidence.
+description: Prepare an evidence-backed management review agenda from current shared organizational state.
 license: Synthetic PoC
 compatibility: Requires the linked management-agenda resources and cited RAM evidence.
 metadata:
@@ -37,14 +37,20 @@ Retrieve the RAM vocabulary explicitly:
 
 Return every current action item in a compact owner-grouped register, then
 separate its open and recently completed subsets. Return every current
-confirmed decision and approval; the agenda-item maximum applies only to
-decision-ready items, never to these context registers.
+confirmed decision and approval; the agenda-item maximum applies only to the
+ordered management topics, never to these context registers.
 
-Apply the lifecycle rules first, then the qualification rules. Source-link the
-context registers, but open and verify the evidence passages only for material
-assertions selected into the agenda. Confirmed decisions, completed work, and
-open work provide meeting context; they do not automatically become
-management-decision items. Do not turn a routine update into a management item.
-Emit only the output fields in the schema, cite every material assertion, and
-use the abstention rules whenever the available evidence cannot support a
-decision-ready item.
+Use two passes. First classify the complete current-state register and identify
+candidate topics plus registered conflicts. Second, re-query RAM only for the
+bounded set of conflict topics and compare them with later, source-linked,
+confirmed state. Mark a conflict as resolved for this agenda only when later
+evidence covers the same topic; otherwise keep it unresolved or ambiguous.
+This second pass is read-only and must never rewrite RAM.
+
+Apply the lifecycle rules first, then the topic-selection rules. Source-link the
+context registers, and open and verify the evidence passages for every topic or
+conflict resolution used in the agenda. A topic does not need a pre-authored
+management question, impact statement, or owner. Preserve missing fields
+explicitly so the human chair can trim, assign, or reframe the draft. Emit only
+the output fields in the schema, cite every material assertion, and use the
+abstention rules when current source evidence is unavailable.

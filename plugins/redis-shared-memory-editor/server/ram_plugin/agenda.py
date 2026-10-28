@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 import hashlib
 import json
+import re
 from typing import Any
 
 from .config import PluginError
@@ -48,6 +49,37 @@ ACTION_STATUS_ORDER = {
     "rejected": 9,
     "unknown": 10,
 }
+SECOND_PASS_LIMIT = 10
+TOPIC_QUALIFIERS = frozenset(
+    {
+        "basis",
+        "conflict",
+        "issue",
+        "question",
+        "scheme",
+        "specification",
+        "state",
+        "status",
+        "treatment",
+    }
+)
+TOPIC_KIND_ORDER = {
+    "conflict": 0,
+    "risk": 1,
+    "issue": 2,
+    "dependency": 3,
+    "approval": 4,
+    "decision": 5,
+    "action_item": 6,
+}
+TOPIC_STATUS_ORDER = {
+    "blocked": 0,
+    "pending_approval": 1,
+    "in_progress": 2,
+    "open": 3,
+    "proposed": 4,
+    "unknown": 5,
+}
 
 
 def _field_value(value: dict[str, Any], *names: str) -> Any:
@@ -69,7 +101,7 @@ def _load_policy(playbook: Any) -> dict[str, Any]:
     discovery = playbook.call(
         "discover_entries",
         {
-            "query": "prepare a decision-focused management review agenda from current cited evidence",
+            "query": "prepare an evidence-backed management review agenda from current shared state",
             "pinned_entries": [{"entry_key": SKILL_KEY}],
             "limit": 5,
         },
@@ -282,6 +314,266 @@ def _action_item_summary(items: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _tokens(value: Any) -> set[str]:
+    if not isinstance(value, str):
+        return set()
+    return {
+        token
+        for token in re.findall(r"[a-z0-9]+", value.casefold())
+        if len(token) > 1
+    }
+
+
+def _topic_tokens(state: dict[str, Any]) -> set[str]:
+    tokens = _tokens(state.get("subject")) - TOPIC_QUALIFIERS
+    return tokens or _tokens(state.get("subject"))
+
+
+def _state_tokens(state: dict[str, Any]) -> set[str]:
+    tokens = _tokens(state.get("subject")) | _tokens(state.get("state_id"))
+    for observation in state.get("observations") or []:
+        if isinstance(observation, dict):
+            tokens |= _tokens(observation.get("text"))
+    return tokens
+
+
+def _state_order(state: dict[str, Any]) -> tuple[str, int, int]:
+    sequence = state.get("event_sequence")
+    offset = state.get("source_offset_ms")
+    result = (
+        str(state.get("valid_at") or ""),
+        sequence if isinstance(sequence, int) else 0,
+        offset if isinstance(offset, int) else 0,
+    )
+    for observation in state.get("observations") or []:
+        if not isinstance(observation, dict):
+            continue
+        observed = (
+            str(observation.get("observed_at") or state.get("valid_at") or ""),
+            observation.get("event_sequence")
+            if isinstance(observation.get("event_sequence"), int)
+            else 0,
+            observation.get("source_offset_ms")
+            if isinstance(observation.get("source_offset_ms"), int)
+            else 0,
+        )
+        result = max(result, observed)
+    return result
+
+
+def _explicit_resolution(candidate: dict[str, Any], conflict_id: str) -> bool:
+    return any(
+        isinstance(relation, dict)
+        and relation.get("target_state_id") == conflict_id
+        and relation.get("predicate") in {"resolves", "supersedes"}
+        for relation in candidate.get("confirmed_relations") or []
+    )
+
+
+def _conflict_candidate(
+    conflict: dict[str, Any], candidate: dict[str, Any]
+) -> tuple[bool, str]:
+    conflict_id = str(conflict.get("state_id") or "")
+    if not conflict_id or candidate.get("state_id") == conflict_id:
+        return False, ""
+    if candidate.get("has_conflict"):
+        return False, ""
+    if candidate.get("lifecycle_status") not in {
+        "decided",
+        "approved",
+        "completed",
+        "resolved",
+    }:
+        return False, ""
+    if _state_order(candidate) <= _state_order(conflict):
+        return False, ""
+    if _explicit_resolution(candidate, conflict_id):
+        return True, "confirmed_relation"
+    topic = _topic_tokens(conflict)
+    if len(topic) < 2 or not topic <= _state_tokens(candidate):
+        return False, ""
+    return True, "later_confirmed_state"
+
+
+def _reconcile_conflicts(
+    service: Any,
+    states: list[dict[str, Any]],
+    conflict_states: list[dict[str, Any]],
+    references_for: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
+    """Run a bounded, read-only second pass over first-pass conflicts."""
+
+    candidates = {
+        str(state.get("state_id") or ""): state
+        for state in states
+        if state.get("confirmed_relations")
+    }
+    queries: set[str] = set()
+    for conflict in conflict_states:
+        topic = _topic_tokens(conflict)
+        if len(topic) >= 2:
+            queries.add(" ".join(sorted(topic)))
+
+    query_diagnostics: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for query in sorted(queries):
+        try:
+            result = service.ram_search_state(
+                text=query,
+                state_kind="decision",
+                lifecycle_status="decided",
+                project_id=PROJECT_ID,
+                limit=SECOND_PASS_LIMIT,
+                similarity_threshold=0.25,
+            )
+        except PluginError as error:
+            warnings.append(
+                f"Conflict second-pass search failed for {query!r}: {error.code}."
+            )
+            query_diagnostics.append(
+                {"query": query, "returned_states": 0, "error": error.code}
+            )
+            continue
+        returned = result.get("states")
+        if not isinstance(returned, list):
+            raise PluginError(
+                "ram_contract_error",
+                "RAM returned an invalid conflict-reconciliation collection.",
+            )
+        for state in returned:
+            if isinstance(state, dict) and isinstance(state.get("state_id"), str):
+                candidates[state["state_id"]] = state
+        query_diagnostics.append(
+            {
+                "query": query,
+                "returned_states": len(returned),
+                "has_more": bool(result.get("has_more")),
+            }
+        )
+
+    reconciled: list[dict[str, Any]] = []
+    for conflict in conflict_states:
+        matches: list[tuple[int, tuple[str, int, int], str, str, dict[str, Any]]] = []
+        for candidate in candidates.values():
+            matches_conflict, basis = _conflict_candidate(conflict, candidate)
+            if matches_conflict:
+                matches.append(
+                    (
+                        1 if basis == "confirmed_relation" else 0,
+                        _state_order(candidate),
+                        str(candidate.get("state_id") or ""),
+                        basis,
+                        candidate,
+                    )
+                )
+        matches.sort(reverse=True, key=lambda value: value[:3])
+        conflict_references = references_for(conflict)
+        item: dict[str, Any] = {
+            "state_id": conflict.get("state_id"),
+            "subject": conflict.get("subject"),
+            "registered_status": "unresolved",
+            "conflict_evidence_references": conflict_references,
+        }
+        if not matches:
+            item["agenda_status"] = "unresolved"
+            reconciled.append(item)
+            continue
+        _, _, _, basis, resolution = matches[0]
+        resolution_references = references_for(resolution)
+        if not conflict_references or not resolution_references:
+            item.update(
+                {
+                    "agenda_status": "ambiguous",
+                    "reason": "resolution_evidence_unavailable",
+                    "candidate_state_id": resolution.get("state_id"),
+                }
+            )
+            reconciled.append(item)
+            continue
+        item.update(
+            {
+                "agenda_status": "resolved_by_later_evidence",
+                "resolution_basis": basis,
+                "resolution_state": _context_item(resolution, resolution_references),
+            }
+        )
+        reconciled.append(item)
+
+    counts = {
+        status: sum(1 for item in reconciled if item["agenda_status"] == status)
+        for status in ("resolved_by_later_evidence", "unresolved", "ambiguous")
+    }
+    diagnostics = {
+        "strategy": "bounded-conflict-second-pass",
+        "read_only": True,
+        "checked_conflicts": len(conflict_states),
+        "decision_search_limit": SECOND_PASS_LIMIT,
+        "queries": query_diagnostics,
+        "counts": counts,
+    }
+    if counts["resolved_by_later_evidence"]:
+        warnings.append(
+            "Agenda reconciliation found later evidence for registered RAM conflicts; "
+            "the read-only agenda did not mutate their stored projections."
+        )
+    return reconciled, diagnostics, warnings
+
+
+def _agenda_purpose(state: dict[str, Any]) -> str:
+    if state.get("has_conflict") or state.get("state_kind") == "conflict":
+        return "resolve_conflict"
+    status = state.get("lifecycle_status")
+    if status == "blocked":
+        return "unblock_work"
+    if status == "pending_approval" or state.get("state_kind") == "approval":
+        return "review_approval"
+    if state.get("state_kind") == "action_item":
+        return "progress_update"
+    return f"review_{state.get('state_kind') or 'state'}"
+
+
+def _topic_key(state: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        0 if state.get("has_conflict") else 1,
+        TOPIC_KIND_ORDER.get(str(state.get("state_kind") or ""), 99),
+        TOPIC_STATUS_ORDER.get(str(state.get("lifecycle_status") or ""), 99),
+        str(state.get("due_at") or "9999-12-31"),
+        str(state.get("subject") or ""),
+        str(state.get("state_id") or ""),
+    )
+
+
+def _agenda_topic(
+    state: dict[str, Any], references: list[dict[str, Any]], meeting_date: str
+) -> dict[str, Any]:
+    status = str(state.get("lifecycle_status") or "unknown")
+    kind = str(state.get("state_kind") or "state")
+    due_at = str(state.get("due_at") or "")
+    if state.get("has_conflict") or kind == "conflict":
+        why_now = "Current evidence still conflicts and needs review."
+        confidence = "low"
+    elif due_at:
+        why_now = f"The recorded due date is {due_at}."
+        confidence = "high" if len(references) > 1 else "medium"
+    else:
+        why_now = f"This {kind.replace('_', ' ')} remains {status} at {meeting_date}."
+        confidence = "high" if len(references) > 1 else "medium"
+    return {
+        "state_id": state.get("state_id"),
+        "title": str(state.get("subject") or state.get("state_id") or "Untitled topic")[:160],
+        "agenda_purpose": _agenda_purpose(state),
+        "state_kind": kind,
+        "lifecycle_status": status,
+        "why_now": why_now,
+        "current_state": str(state.get("subject") or ""),
+        "owner": state.get("accountable_entity_id") or "",
+        "due_at": due_at,
+        "timebox_minutes": 5,
+        "confidence": confidence,
+        "evidence_references": references,
+    }
+
+
 def _retrieve_current_states(
     service: Any, focus: str | None
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[str]]:
@@ -348,13 +640,12 @@ def prepare_agenda(
         service, focus
     )
     cutoff = meeting_day - timedelta(days=lookback_days)
-    qualified: list[tuple[str, str, str, dict[str, Any]]] = []
     action_items: list[dict[str, Any]] = []
     confirmed_decisions: list[dict[str, Any]] = []
     completed_work: list[dict[str, Any]] = []
     open_work_items: list[dict[str, Any]] = []
     deferred: list[dict[str, Any]] = []
-    conflicts: list[dict[str, Any]] = []
+    conflict_states: list[dict[str, Any]] = []
     warnings: list[str] = list(retrieval_warnings)
     reference_cache: dict[str, list[dict[str, Any]]] = {}
 
@@ -365,28 +656,17 @@ def prepare_agenda(
         return reference_cache[state_id]
 
     for state in states:
-        state_id = state.get("state_id")
-        reasons: list[str] = []
         status = state.get("lifecycle_status")
         state_kind = state.get("state_kind")
         has_conflict = bool(state.get("has_conflict"))
         if has_conflict:
-            reasons.append("unresolved_conflict")
-            conflicts.append(
-                {
-                    "state_id": state_id,
-                    "subject": state.get("subject"),
-                    "observations": state.get("conflicting_observations", []),
-                }
-            )
+            conflict_states.append(state)
 
         observations = state.get("observations") or []
         latest = observations[-1] if observations and isinstance(observations[-1], dict) else {}
         observed = _date(latest.get("observed_at"))
         context_references = _linked_references(state)
         context = _context_item(state, context_references)
-        if not context_references:
-            reasons.append("source_evidence_unavailable")
         if state_kind == "action_item":
             action_items.append(context)
         if not has_conflict:
@@ -404,54 +684,41 @@ def prepare_agenda(
             elif state_kind == "action_item" and status in OPEN_WORK_STATUSES:
                 open_work_items.append(context)
 
+    registered_conflicts, reconciliation, reconciliation_warnings = _reconcile_conflicts(
+        service, states, conflict_states, references_for
+    )
+    warnings.extend(reconciliation_warnings)
+    conflict_status = {
+        str(item.get("state_id") or ""): item["agenda_status"]
+        for item in registered_conflicts
+    }
+    candidates: list[dict[str, Any]] = []
+    for state in states:
+        state_id = str(state.get("state_id") or "")
+        status = state.get("lifecycle_status")
         if status in TERMINAL_STATUSES:
-            if reasons and not context_references:
-                deferred.append(
-                    {
-                        "state_id": state_id,
-                        "subject": state.get("subject"),
-                        "reasons": sorted(set(reasons)),
-                    }
-                )
             continue
-
-        for field, reason in (
-            ("accountable_entity_id", "owner_missing"),
-            ("requested_decision", "management_question_missing"),
-            ("impact", "material_impact_missing"),
-        ):
-            if not state.get(field):
-                reasons.append(reason)
-
-        if observed is None:
-            reasons.append("observation_date_missing")
-        elif observed > meeting_day:
-            reasons.append("evidence_after_meeting_date")
-        elif observed < cutoff and status in {"unknown", "proposed"}:
-            reasons.append("outside_lookback_without_current_status")
-
-        if reasons:
+        if conflict_status.get(state_id) == "resolved_by_later_evidence":
+            continue
+        observations = state.get("observations") or []
+        latest = observations[-1] if observations and isinstance(observations[-1], dict) else {}
+        observed = _date(latest.get("observed_at"))
+        if observed is not None and observed > meeting_day:
             deferred.append(
                 {
                     "state_id": state_id,
                     "subject": state.get("subject"),
-                    "reasons": sorted(set(reasons)),
+                    "reasons": ["evidence_after_meeting_date"],
                 }
             )
             continue
+        candidates.append(state)
 
-        qualified.append(
-            (
-                str(state.get("due_at") or "9999-12-31"),
-                str(state.get("subject") or state_id)[:160],
-                str(state_id),
-                state,
-            )
-        )
-
-    qualified.sort(key=lambda value: value[:2])
+    candidates.sort(key=_topic_key)
     items: list[dict[str, Any]] = []
-    for _, title, state_id, state in qualified:
+    for state in candidates:
+        state_id = str(state.get("state_id") or "")
+        title = str(state.get("subject") or state_id)[:160]
         if len(items) >= max_items:
             deferred.append(
                 {
@@ -471,25 +738,7 @@ def prepare_agenda(
                 }
             )
             continue
-        impact = str(state["impact"])
-        requested = str(state["requested_decision"])
-        due_at = state.get("due_at")
-        why_now = f"{impact} Review requested for {meeting_date}."
-        if due_at:
-            why_now = f"{impact} The recorded decision horizon is {due_at}."
-        items.append(
-            {
-                "title": title,
-                "management_question": requested,
-                "why_now": why_now,
-                "current_state": str(state.get("subject") or ""),
-                "owner": state["accountable_entity_id"],
-                "requested_decision": requested,
-                "timebox_minutes": 10,
-                "confidence": "high" if len(references) > 1 else "medium",
-                "evidence_references": references,
-            }
-        )
+        items.append(_agenda_topic(state, references, meeting_date))
     action_items.sort(key=_action_item_key)
     open_work_items.sort(key=_action_item_key)
     completed_work.sort(
@@ -502,8 +751,18 @@ def prepare_agenda(
     )
     if not items:
         warnings.append(
-            "No decision-ready item had current, non-conflicting state plus traversable source evidence."
+            "No current management topic had traversable source evidence."
         )
+    unresolved_conflicts = [
+        item
+        for item in registered_conflicts
+        if item["agenda_status"] in {"unresolved", "ambiguous"}
+    ]
+    reconciled_conflicts = [
+        item
+        for item in registered_conflicts
+        if item["agenda_status"] == "resolved_by_later_evidence"
+    ]
     return {
         "ok": True,
         "meeting_date": meeting_date,
@@ -515,7 +774,10 @@ def prepare_agenda(
         "open_work_items": open_work_items,
         "agenda_items": items,
         "deferred_candidates": deferred,
-        "conflicts": conflicts,
+        "conflicts": unresolved_conflicts,
+        "registered_conflicts": registered_conflicts,
+        "reconciled_conflicts": reconciled_conflicts,
+        "reconciliation": reconciliation,
         "warnings": warnings,
         "retrieval_diagnostics": {
             **retrieval_diagnostics,
@@ -523,6 +785,9 @@ def prepare_agenda(
             "returned_confirmed_decisions": len(confirmed_decisions),
             "returned_completed_work": len(completed_work),
             "returned_open_work_items": len(open_work_items),
+            "returned_agenda_items": len(items),
+            "registered_conflicts": len(registered_conflicts),
+            "unresolved_conflicts": len(unresolved_conflicts),
         },
         "playbook": policy,
     }

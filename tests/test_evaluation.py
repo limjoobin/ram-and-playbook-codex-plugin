@@ -24,7 +24,7 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(report["case_count"], 15)
         self.assertEqual(
             report["category_counts"],
-            {"normal": 10, "stale_conflict": 3, "insufficient_evidence": 2},
+            {"normal": 10, "lifecycle_conflict": 3, "incomplete_context": 2},
         )
         self.assertTrue(all(metric["passed"] for metric in report["metrics"].values()))
 

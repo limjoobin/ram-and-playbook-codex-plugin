@@ -99,7 +99,7 @@
     },
     {
       "id": "stale-resolved",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "state_kind": "risk",
       "subject": "A previously delayed transcript has been delivered",
       "requested_decision": "Acknowledge the completed delivery",
@@ -109,7 +109,7 @@
     },
     {
       "id": "stale-superseded",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "state_kind": "decision",
       "subject": "An older design choice was replaced",
       "requested_decision": "Reconsider the older design choice",
@@ -119,27 +119,27 @@
     },
     {
       "id": "current-conflict",
-      "category": "stale_conflict",
+      "category": "lifecycle_conflict",
       "state_kind": "risk",
       "subject": "Two current sources disagree about prototype readiness",
       "requested_decision": "Confirm which readiness statement is authoritative",
       "impact": "The prototype gate cannot be assessed reliably",
       "conflict": true,
-      "expected_agenda": false
+      "expected_agenda": true
     },
     {
       "id": "insufficient-owner",
-      "category": "insufficient_evidence",
+      "category": "incomplete_context",
       "state_kind": "issue",
       "subject": "A concern has no defensible accountable owner",
       "requested_decision": "Assign an owner",
       "impact": "The concern may remain unaddressed",
       "owner": "",
-      "expected_agenda": false
+      "expected_agenda": true
     },
     {
       "id": "insufficient-source",
-      "category": "insufficient_evidence",
+      "category": "incomplete_context",
       "state_kind": "risk",
       "subject": "A material claim has no traversable source evidence",
       "requested_decision": "Approve a mitigation",
