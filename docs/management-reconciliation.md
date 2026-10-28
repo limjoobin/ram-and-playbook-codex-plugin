@@ -57,11 +57,19 @@ again.
 
 ## Production trigger
 
-For the current PoC, this is an explicit administrator command. A production
-deployment should invoke the same job from the RAM MemoryETL output-completion
-webhook or its queue consumer. It must run centrally, not independently in
-every user's desktop plugin. That avoids concurrent per-client projection
-writers and keeps one reconciliation implementation.
+RAM's current ingestion webhook is a blocking decision hook before generated
+memories are applied, not a completion notification. The PoC therefore runs
+the same idempotent administrator command from one central scheduler every five
+minutes:
+
+```sh
+python3 scripts/reconcile_management_state.py --apply --quiet-no-changes
+```
+
+On macOS, install this command as one user LaunchAgent with `RunAtLoad` enabled
+and `StartInterval` set to `300`. Do not install it through every user's desktop
+plugin. A future supported MemoryETL completion event can replace the scheduler
+without changing the reconciliation implementation.
 
 The plugin therefore performs the human interaction and confirmed shared
 promotion, while this job owns deterministic relationship resolution and

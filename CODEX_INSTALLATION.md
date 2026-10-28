@@ -239,6 +239,12 @@ python3 scripts/reconcile_management_state.py \
   --timeout-seconds 420
 ```
 
+The PoC host also runs the same command centrally every five minutes with
+`--apply --quiet-no-changes`. This catches document and session extraction that
+does not originate from an interactive promotion. RAM's ingestion webhook is a
+blocking decision hook, not a completion notification, so it is not used as a
+post-extraction trigger.
+
 Expected: once the extracted observation is visible, the deterministic current
 projection changes to the confirmed lifecycle. An unconfirmed or merely
 "probably completed" action remains nonterminal. See

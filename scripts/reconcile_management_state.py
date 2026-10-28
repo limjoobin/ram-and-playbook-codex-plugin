@@ -28,6 +28,11 @@ def _parser() -> argparse.ArgumentParser:
         help="upsert changed derived projections; omission is a read-only plan",
     )
     parser.add_argument(
+        "--quiet-no-changes",
+        action="store_true",
+        help="print nothing when an applied run finds no projection changes",
+    )
+    parser.add_argument(
         "--wait-for-candidate",
         help="wait until the promoted candidate's extracted observation is visible",
     )
@@ -66,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
             "status": "failed",
             "message": "Reconciliation failed. Check the private configuration and RAM availability.",
         }
-    print(json.dumps(result, indent=2, sort_keys=True))
+    if not args.quiet_no_changes or result.get("status") != "no_changes":
+        print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("ok") else 1
 
 
