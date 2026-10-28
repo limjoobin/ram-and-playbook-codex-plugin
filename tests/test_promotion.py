@@ -264,9 +264,11 @@ class PromotionTests(unittest.TestCase):
                 "subject", "project_id", "project_step_id", "meeting_id", "accountable_entity_id",
                 "related_entity_ids", "observed_at", "event_sequence", "source_offset_ms",
                 "effective_at", "due_at", "resolved_at", "requested_decision", "impact",
-                "supersedes_state_ids", "source_artifact_id", "source_revision", "evidence_locator",
+                "supersedes_state_ids", "relations", "source_artifact_id", "source_revision",
+                "evidence_locator",
             },
         )
+        self.assertEqual(envelope["observation"]["relations"], {"edges": []})
         self.assertEqual(
             envelope["source_private_event_ids"],
             self.ledger.candidates()[candidate_id]["source_private_event_ids"],
@@ -304,6 +306,7 @@ class PromotionTests(unittest.TestCase):
         self.assertEqual(candidate["current_state"]["lifecycle_status"], "open")
         self.assertEqual(candidate["proposed_observation"]["lifecycle_status"], "completed")
         self.assertEqual(candidate["proposed_observation"]["evidence_role"], "resolves")
+        self.assertEqual(candidate["proposed_observation"]["relations"], {"edges": []})
 
         inspected = call_tool(
             "memory_candidate_inspect",

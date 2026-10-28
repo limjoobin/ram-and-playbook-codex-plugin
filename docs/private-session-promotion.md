@@ -30,11 +30,12 @@ compatibility.
 Promotion appends a new session in `RAM_NAMESPACE`: an owner-lane bootstrap
 event followed by the participant's confirmed JSON envelope. The envelope uses
 `personal-to-shared-promotion-v1` and emits the immutable
-`organizational-state-v2` fields. RAM's existing custom extractor then creates
+`organizational-state-v3` fields, including an empty generic relationship set.
+RAM's existing custom extractor then creates
 the source-linked shared `organizational_state` memory asynchronously. The
 private source is referenced, not moved, updated, or deleted.
 
-These v2 lifecycle observations remain accepted during the v3 relation-model
+Legacy v2 lifecycle observations remain readable during the v3 relation-model
 migration and contain no relationship assertion. Generic relationships are
 separate immutable v3 observations reviewed by the relationship
 reconciliation path; a lifecycle hook must not invent them.
