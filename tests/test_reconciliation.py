@@ -51,6 +51,7 @@ def observation(
     subject: str = "Conduct trend watching",
     project_id: str = "project-ami-es2002",
     relations: dict | None = None,
+    supersedes: list[str] | None = None,
     event_sequence: int = 0,
     source_offset_ms: int = 0,
 ) -> dict:
@@ -74,7 +75,7 @@ def observation(
         "resolved_at": observed_at if status in {"completed", "resolved"} else "",
         "requested_decision": "",
         "impact": "",
-        "supersedes_state_ids": [],
+        "supersedes_state_ids": supersedes or [],
         "source_artifact_id": source_artifact_id,
         "source_revision": "1",
         "evidence_locator": f"candidate:{source_artifact_id}",
@@ -274,7 +275,7 @@ class ReconciliationTests(unittest.TestCase):
             schema_version="organizational-state-v3",
             state_id="project-ami-es2002-decision-target-group",
             state_kind="decision",
-            subject="Target audience is ages 15 to 35",
+            subject="A market segment was selected",
             event_sequence=2,
             source_offset_ms=2,
             relations={
@@ -293,6 +294,103 @@ class ReconciliationTests(unittest.TestCase):
         projections = self._projections([action, decision])
 
         self.assertEqual(projections[action_id]["lifecycle_status"], "open")
+
+    def test_exact_later_artifact_fulfils_action_without_human_confirmation(self):
+        action_id = "project-ami-es2002-action-write-final-report"
+        action = observation(
+            "observation-write-report",
+            "open",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            state_id=action_id,
+            subject="Write final report",
+            event_sequence=4,
+        )
+        report_decision = observation(
+            "observation-final-design",
+            "decided",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            schema_version="organizational-state-v3",
+            state_id="project-ami-es2002-decision-final-input-controls",
+            state_kind="decision",
+            subject="Final design uses push buttons",
+            source_artifact_id="ami-es2002-final-report",
+            event_sequence=5,
+        )
+
+        projected = self._projections([action, report_decision])[action_id]
+
+        self.assertEqual(projected["lifecycle_status"], "completed")
+        self.assertIn("observation-final-design", projected["supporting_memory_ids"])
+
+    def test_automatic_fulfilment_rejects_partial_or_earlier_matches(self):
+        action_id = "project-ami-es2002-action-submit-evaluation-criteria"
+        action = observation(
+            "observation-submit-criteria",
+            "open",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            state_id=action_id,
+            subject="Submit evaluation criteria",
+            event_sequence=4,
+        )
+        partial = observation(
+            "observation-project-evaluated",
+            "decided",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            schema_version="organizational-state-v3",
+            state_id="project-ami-es2002-decision-project-evaluated",
+            state_kind="decision",
+            subject="Project was evaluated",
+            event_sequence=5,
+        )
+        earlier_exact = observation(
+            "observation-old-criteria",
+            "decided",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            schema_version="organizational-state-v3",
+            state_id="project-ami-es2002-decision-evaluation-criteria",
+            state_kind="decision",
+            subject="Evaluation criteria were submitted",
+            event_sequence=3,
+        )
+
+        projected = self._projections([action, partial, earlier_exact])[action_id]
+
+        self.assertEqual(projected["lifecycle_status"], "open")
+
+    def test_legacy_explicit_supersedes_target_is_applied_automatically(self):
+        old_id = "project-ami-es2002-decision-old-scope"
+        old = observation(
+            "observation-old-scope",
+            "decided",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            state_id=old_id,
+            state_kind="decision",
+            subject="Old product scope",
+            event_sequence=1,
+        )
+        replacement = observation(
+            "observation-new-scope",
+            "decided",
+            "supersedes",
+            "2004-12-13T00:00:00Z",
+            schema_version="organizational-state-v3",
+            state_id="project-ami-es2002-decision-new-scope",
+            state_kind="decision",
+            subject="New product scope",
+            supersedes=[old_id],
+            event_sequence=2,
+        )
+
+        projected = self._projections([old, replacement])[old_id]
+
+        self.assertEqual(projected["lifecycle_status"], "superseded")
+        self.assertIn("observation-new-scope", projected["supporting_memory_ids"])
 
     def test_confirmed_relation_to_unknown_state_fails_closed(self):
         source = observation(

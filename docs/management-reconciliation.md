@@ -21,6 +21,15 @@ to a superseded target. The other predicates add relation evidence without
 changing lifecycle status. A relationship older than the target's current
 frontier cannot close or supersede a later state.
 
+The same projector performs one deliberately narrow automatic resolution: it
+may derive `fulfills` from a later terminal observation to an unresolved action
+only when it contains every normalized concept token from the action's
+canonical state ID and the action has at least two such tokens. This is exact deterministic
+coverage, not fuzzy similarity or a model judgement. It needs no per-edge
+human confirmation, is rebuilt on every run, and is not written back into
+immutable observations. Legacy explicit `supersedes_state_ids` values are
+honored in the same pass. Ambiguous and partial matches remain open.
+
 The repository exposes one administrator job:
 
 ```sh
@@ -55,7 +64,8 @@ every user's desktop plugin. That avoids concurrent per-client projection
 writers and keeps one reconciliation implementation.
 
 The plugin therefore performs the human interaction and confirmed shared
-promotion, while this job owns deterministic projection. The two active hooks
+promotion, while this job owns deterministic relationship resolution and
+projection. The two active hooks
 remain `UserPromptSubmit` and `SessionEnd`; no additional Codex lifecycle hook
 is required.
 
@@ -69,6 +79,8 @@ is required.
   relationship assertions require the v3 custom-memory field contract.
 - Pagination is exhausted before projection.
 - Stable projection IDs make repeated runs idempotent.
+- Automatic fulfilment requires a later terminal source, the same project,
+  and exact concept coverage; it cannot act on topical similarity.
 - Only changed projections are written and every write is read back.
 - Missing promoted extraction returns `awaiting_extraction` without changing
   current state.

@@ -24,12 +24,12 @@ for corroboration, `updates` for a changed status, `contradicts` only for an unr
 incompatibility, `resolves` for explicit completion/resolution, and `supersedes` for an explicit
 replacement. state_id is an observation label, not the final cross-document identity. Keep it
 concise and stable when obvious, but do not guess whether differently worded observations are
-replacements. A separate versioned resolver builds canonical state families after extraction.
+replacements. The versioned projector builds canonical state families after extraction.
 
 `relations` is an object with one `edges` array. Document extraction must return
 `{"edges":[]}` because source documents do not contain canonical target state IDs. A separate
-reconciliation step may later append reviewed relationship assertions. Do not infer cross-state
-links during initial extraction.
+projection step may later derive exact, rebuildable relationships or apply explicit relationship
+assertions. Do not infer cross-state links during initial extraction.
 
 Create a stable lowercase state_id from project, kind, and a short canonical subject, for example
 `project-ami-es2002-decision-power-source`. Do not include the source artifact or revision in

@@ -36,9 +36,10 @@ the source-linked shared `organizational_state` memory asynchronously. The
 private source is referenced, not moved, updated, or deleted.
 
 Legacy v2 lifecycle observations remain readable during the v3 relation-model
-migration and contain no relationship assertion. Generic relationships are
-separate immutable v3 observations reviewed by the relationship
-reconciliation path; a lifecycle hook must not invent them.
+migration and contain no relationship assertion. Explicit generic
+relationships remain immutable v3 observation data; lifecycle hooks must not
+invent them. The central projector may independently derive a narrow exact
+`fulfills` edge from later terminal evidence without mutating either source.
 
 ## RAM prerequisites
 

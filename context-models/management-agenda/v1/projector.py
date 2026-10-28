@@ -40,6 +40,23 @@ ROLE_PRECEDENCE = {
     "supersedes": 4,
     "contradicts": 5,
 }
+AUTOMATIC_RELATION_SOURCE_STATUSES = frozenset(
+    {"approved", "completed", "decided", "resolved"}
+)
+AUTOMATIC_RELATION_TARGET_STATUSES = frozenset(
+    {"blocked", "in_progress", "open", "pending_approval", "proposed", "unknown"}
+)
+ACTION_VERBS = frozenset(
+    {
+        "ask", "check", "choose", "conduct", "create", "decide", "define",
+        "design", "determine", "develop", "document", "evaluate", "prepare",
+        "produce", "publish", "put", "redraw", "select", "specify", "submit",
+        "upload", "write",
+    }
+)
+CONCEPT_STOP_WORDS = frozenset(
+    {"a", "an", "and", "by", "for", "from", "in", "of", "on", "the", "to", "with"}
+)
 
 
 def _revision_key(value: Any) -> tuple[tuple[int, Any], ...]:
@@ -87,6 +104,37 @@ def _resolved_event_key(
 ) -> tuple[Any, ...]:
     key = event_key(record)
     return (key[0], _effective_sequence(record, policy), *key[2:])
+
+
+def _concept_tokens(value: Any) -> frozenset[str]:
+    return frozenset(
+        token
+        for token in re.findall(r"[a-z0-9]+", str(value or "").casefold())
+        if token not in CONCEPT_STOP_WORDS
+    )
+
+
+def _action_concepts(record: dict[str, Any]) -> frozenset[str]:
+    attributes = record.get("attributes") or {}
+    match = re.search(
+        r"-action-(?:item-)?(.+)$", str(attributes.get("state_id", ""))
+    )
+    if match is None:
+        return frozenset()
+    tokens = list(re.findall(r"[a-z0-9]+", match.group(1).casefold()))
+    if tokens and tokens[0] in ACTION_VERBS:
+        tokens.pop(0)
+    return frozenset(token for token in tokens if token not in CONCEPT_STOP_WORDS)
+
+
+def _source_concepts(record: dict[str, Any]) -> frozenset[str]:
+    attributes = record.get("attributes") or {}
+    return frozenset().union(
+        _concept_tokens(record.get("text")),
+        _concept_tokens(attributes.get("subject")),
+        _concept_tokens(attributes.get("state_id")),
+        _concept_tokens(attributes.get("source_artifact_id")),
+    )
 
 
 def _family_index(policy: dict[str, Any]) -> dict[str, str]:
@@ -264,6 +312,119 @@ def _relation_edges(
     return tuple(normalized)
 
 
+def _automatic_fulfills_edges(
+    selected: list[dict[str, Any]],
+    projected_by_family: dict[str, dict[str, Any]],
+    current_keys: dict[str, tuple[Any, ...]],
+    aliases: dict[str, str],
+    policy: dict[str, Any],
+) -> list[tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]]:
+    """Derive only exact, later-evidence action fulfilment."""
+
+    records_by_id = {
+        str(record["id"]): record
+        for record in selected
+        if isinstance(record.get("id"), str) and record["id"]
+    }
+    inferred: list[
+        tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]
+    ] = []
+    for target_family_id, target_projection in projected_by_family.items():
+        target_attributes = target_projection["attributes"]
+        if (
+            target_attributes["state_kind"] != "action_item"
+            or target_attributes["lifecycle_status"]
+            not in AUTOMATIC_RELATION_TARGET_STATUSES
+        ):
+            continue
+        target_record = records_by_id.get(target_attributes["current_memory_id"])
+        if target_record is None:
+            continue
+        concepts = _action_concepts(target_record)
+        if len(concepts) < 2:
+            continue
+
+        candidates: list[
+            tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]
+        ] = []
+        for source in selected:
+            source_attributes = source.get("attributes") or {}
+            source_family_id = _family_id(source, aliases, policy)
+            source_key = _resolved_event_key(source, policy)
+            if (
+                source_family_id is None
+                or source_family_id == target_family_id
+                or source_attributes.get("project_id")
+                != target_attributes["project_id"]
+                or source_attributes.get("lifecycle_status")
+                not in AUTOMATIC_RELATION_SOURCE_STATUSES
+                or source_key <= current_keys[target_family_id]
+                or not concepts.issubset(_source_concepts(source))
+            ):
+                continue
+            source_id = source.get("id")
+            if not isinstance(source_id, str) or not source_id:
+                continue
+            candidates.append(
+                (
+                    source_key,
+                    source_family_id,
+                    {
+                        "predicate": "fulfills",
+                        "target_state_id": target_family_id,
+                        "confidence": 1.0,
+                        "assertion_status": "confirmed",
+                        "evidence_memory_ids": [source_id],
+                    },
+                    source,
+                )
+            )
+        if candidates:
+            inferred.append(max(candidates, key=lambda item: (item[0], item[1])))
+    return inferred
+
+
+def _legacy_supersedes_edges(
+    selected: list[dict[str, Any]],
+    aliases: dict[str, str],
+    policy: dict[str, Any],
+) -> list[tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]]:
+    """Honor the old explicit target field without another migration path."""
+
+    inferred: list[
+        tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]
+    ] = []
+    for source in selected:
+        attributes = source.get("attributes") or {}
+        targets = attributes.get("supersedes_state_ids", [])
+        if targets in (None, ""):
+            continue
+        if not isinstance(targets, list) or any(
+            not isinstance(target, str) or not target for target in targets
+        ):
+            raise ValueError("organizational-state supersedes_state_ids is invalid")
+        source_family_id = _family_id(source, aliases, policy)
+        source_id = source.get("id")
+        if source_family_id is None or not isinstance(source_id, str) or not source_id:
+            continue
+        for target in targets:
+            inferred.append(
+                (
+                    _resolved_event_key(source, policy),
+                    source_family_id,
+                    {
+                        "predicate": "supersedes",
+                        "target_state_id": target,
+                        "confidence": 1.0,
+                        "assertion_status": "confirmed",
+                        "evidence_memory_ids": [source_id],
+                    },
+                    source,
+                )
+            )
+    return inferred
+
+
 @dataclass(frozen=True)
 class ProjectionMemory:
     memory_id: str
@@ -373,9 +534,23 @@ def build_projections(
             confirmed_edges.append(
                 (_resolved_event_key(record, policy), source_family_id, edge, record)
             )
+    confirmed_edges.extend(_legacy_supersedes_edges(selected, aliases, policy))
+    confirmed_edges.extend(
+        _automatic_fulfills_edges(
+            selected, projected_by_family, current_keys, aliases, policy
+        )
+    )
 
+    unique_edges = {
+        (
+            source_family_id,
+            edge["predicate"],
+            aliases.get(edge["target_state_id"], edge["target_state_id"]),
+        ): (relation_key, source_family_id, edge, record)
+        for relation_key, source_family_id, edge, record in confirmed_edges
+    }
     for relation_key, source_family_id, edge, record in sorted(
-        confirmed_edges,
+        unique_edges.values(),
         key=lambda item: (item[0], item[1], item[2]["predicate"], item[2]["target_state_id"]),
     ):
         target_family_id = aliases.get(edge["target_state_id"], edge["target_state_id"])

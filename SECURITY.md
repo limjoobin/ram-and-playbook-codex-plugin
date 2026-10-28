@@ -71,6 +71,11 @@ parent is mode `0700`.
   assertion status, project scope, and evidence-identifier shape. Only confirmed
   relationships can affect a projection; proposed or rejected relationships
   cannot change lifecycle state.
+- The projector may also derive `fulfills` without a stored assertion when a
+  later terminal observation in the same project contains every normalized
+  concept token from an unresolved action's canonical ID. It requires at least
+  two exact concepts, uses no fuzzy or model-based inference, and remains
+  rebuildable projection logic rather than a mutation of source memory.
 - Playbook access is fixed to `discover_entries`, `load_skill`, and
   `fetch_resource`. The model cannot supply a destination, credential, header,
   or arbitrary upstream operation.
@@ -113,9 +118,10 @@ at promotion time; changing it requires a new proposal and confirmation.
 
 The reconciliation command is an administrator operation outside the installed
 plugin. It reads the complete scoped observation lane, runs the single
-versioned projector, and upserts only changed derived projections after an
-explicit `--apply`. It never turns audit classifications or inferred
-"probably completed" states into terminal observations.
+versioned relationship-resolution/projector pass, and upserts only changed
+derived projections after an explicit `--apply`. It never turns audit
+classifications, partial matches, or inferred "probably completed" states into
+terminal observations.
 
 ## Supply chain
 
