@@ -161,6 +161,21 @@ never write the shared namespace.
 
 ## 4. Verify one user, then the group
 
+Before testing private capture, review the installed hooks from Codex CLI:
+
+```sh
+cd /path/to/ram-and-playbook-codex-plugin
+codex
+```
+
+Enter `/hooks`, find `redis-shared-memory-editor@redis-field-engineering`,
+review `UserPromptSubmit` and `SessionEnd`, and trust them only after checking
+their commands and source. Then restart ChatGPT desktop and start a new chat.
+Hook trust is stored for the user and the exact hook definition; it is not tied
+to this working directory. Running from the plugin checkout simply makes local
+marketplace troubleshooting clearer. A changed hook definition requires a new
+review.
+
 Ask the first user to run:
 
 ```text

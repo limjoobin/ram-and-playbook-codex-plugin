@@ -94,7 +94,12 @@ class PluginTests(unittest.TestCase):
             manifest["extensions"]["com.openai"]["interface"]["capabilities"],
             ["Read", "Write"],
         )
-        self.assertNotIn("hooks", manifest["extensions"]["com.openai"])
+        openai_extension = manifest["extensions"]["com.openai"]
+        self.assertEqual(openai_extension["hooks"], "./hooks/hooks.json")
+        self.assertTrue((PLUGIN_ROOT / openai_extension["hooks"]).is_file())
+        self.assertLessEqual(
+            len(openai_extension["interface"]["defaultPrompt"]), 3
+        )
         hooks = json.loads((PLUGIN_ROOT / "hooks/hooks.json").read_text())
         self.assertEqual(set(hooks["hooks"]), {"UserPromptSubmit", "SessionEnd"})
         server = mcp["mcpServers"]["redis-shared-memory-editor"]
