@@ -7,7 +7,8 @@ from typing import Any
 
 
 OBSERVATION_TYPE = "organizational_state"
-OBSERVATION_SCHEMA = "organizational-state-v2"
+OBSERVATION_SCHEMA = "organizational-state-v3"
+OBSERVATION_SCHEMAS = (OBSERVATION_SCHEMA, "organizational-state-v2")
 PROJECTION_TYPE = "organizational_state_projection"
 PROJECTION_SCHEMA = "organizational-state-projection-v1"
 PAGE_SIZE = 100
@@ -32,7 +33,7 @@ def _items(result: dict[str, Any]) -> list[dict[str, Any]]:
 def _attribute(value: Any) -> Any:
     if isinstance(value, dict) and len(value) == 1:
         key, nested = next(iter(value.items()))
-        if key in {"string", "number", "boolean", "strings", "numbers", "booleans"}:
+        if key in {"string", "number", "boolean", "strings", "numbers", "booleans", "object"}:
             return nested
     return value
 
@@ -111,7 +112,11 @@ class ReconciliationJob:
     ) -> tuple[list[dict[str, Any]], bool]:
         deadline = time.monotonic() + timeout_seconds
         while True:
-            observations = self._search_all(OBSERVATION_TYPE, OBSERVATION_SCHEMA)
+            observations = [
+                record
+                for schema in OBSERVATION_SCHEMAS
+                for record in self._search_all(OBSERVATION_TYPE, schema)
+            ]
             visible = wait_for_candidate is None or self._candidate_visible(
                 observations, wait_for_candidate
             )

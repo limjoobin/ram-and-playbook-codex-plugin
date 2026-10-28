@@ -45,7 +45,7 @@
   },
   "overall_passed": true,
   "non_gating": {
-    "estimated_tokens": 10659,
+    "estimated_tokens": 10699,
     "wall_clock_latency_ms": null,
     "latency_note": "Measured and printed by each run; excluded from the committed deterministic report."
   },

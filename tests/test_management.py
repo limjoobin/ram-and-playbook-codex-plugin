@@ -43,6 +43,8 @@ def observation(
     supersedes=None,
     requested_decision: str = "Approve the next step",
     impact: str = "The milestone will slip",
+    schema_version: str = "organizational-state-v2",
+    relations=None,
 ):
     return {
         "id": memory_id,
@@ -53,7 +55,7 @@ def observation(
         "updatedAt": observed,
         "sources": [{"sourceId": f"source-{memory_id}"}],
         "attributes": {
-            "schema_version": "organizational-state-v2",
+            "schema_version": schema_version,
             "state_id": state_id,
             "state_kind": "risk",
             "lifecycle_status": status,
@@ -67,6 +69,7 @@ def observation(
             "requested_decision": requested_decision,
             "impact": impact,
             "supersedes_state_ids": supersedes or [],
+            **({"relations": relations} if relations is not None else {}),
             "source_artifact_id": artifact,
             "source_revision": revision,
             "evidence_locator": "paragraph-1",
@@ -226,6 +229,35 @@ class ManagementTests(unittest.TestCase):
             "state-a",
         )
         self.assertEqual(state["observations"][0]["memory_id"], "memory")
+
+    def test_current_state_exposes_confirmed_generic_relations(self):
+        relations = {
+            "edges": [
+                {
+                    "predicate": "resolves",
+                    "target_state_id": "state-a",
+                    "confidence": 0.97,
+                    "assertion_status": "confirmed",
+                    "evidence_memory_ids": ["memory"],
+                }
+            ]
+        }
+        source = observation(
+            "memory",
+            "decision-a",
+            schema_version="organizational-state-v3",
+            relations=relations,
+        )
+        ram = FakeRAM([projection("projection", "state-a", [source])], [source])
+        service = PluginService(CONFIG, ram, FakePlaybook(), FakeEditor())
+
+        state = service.ram_search_state(project_id="remote control project")["states"][0]
+
+        self.assertEqual(state["observations"][0]["relations"], relations)
+        self.assertEqual(
+            state["confirmed_relations"][0],
+            {"source_state_id": "decision-a", **relations["edges"][0]},
+        )
 
     def test_semantic_history_preserves_ram_rank_before_limit(self):
         relevant = observation("relevant", "state-a", observed="2026-01-02T00:00:00Z")

@@ -1,7 +1,44 @@
 {
   "schemaVersion": 1,
-  "policyId": "ami-es2002-state-families-v2",
+  "policyId": "ami-es2002-state-families-v3",
   "resolution": "latest-source-event-wins-unless-conflict-is-at-or-after-the-current-frontier",
+  "relationPolicy": {
+    "allowedPredicates": [
+      "fulfills",
+      "resolves",
+      "supersedes",
+      "blocks",
+      "depends_on",
+      "conflicts_with",
+      "supports"
+    ],
+    "confirmationStatus": "confirmed",
+    "lifecycleEffects": [
+      {
+        "predicate": "fulfills",
+        "targetKinds": ["action_item"],
+        "targetStatus": "completed"
+      },
+      {
+        "predicate": "resolves",
+        "targetKinds": ["risk", "issue", "conflict"],
+        "targetStatus": "resolved"
+      },
+      {
+        "predicate": "supersedes",
+        "targetKinds": [
+          "action_item",
+          "decision",
+          "risk",
+          "issue",
+          "dependency",
+          "approval",
+          "conflict"
+        ],
+        "targetStatus": "superseded"
+      }
+    ]
+  },
   "historicalLocatorSequences": [
     {"locatorContains": "Kick-Off Meeting", "eventSequence": 1},
     {"locatorContains": "Functional Design Meeting", "eventSequence": 2},

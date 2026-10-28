@@ -58,7 +58,7 @@ parent is mode `0700`.
   Restrict each API key to the required store and operations whenever RAM
   supports that policy.
 - Organizational-state reads are fixed to the configured owner. History uses
-  `organizational_state` with `organizational-state-v2`; current/conflict views
+  `organizational_state` with `organizational-state-v3` and accepts legacy v2 observations during migration; current/conflict views
   use `organizational_state_projection` with
   `organizational-state-projection-v1`.
   Unnamespaced ingestion records are accepted only inside that exact lane; a
@@ -66,6 +66,11 @@ parent is mode `0700`.
 - Projection records contain only immutable supporting memory IDs. The plugin
   reads those observations by exact ID, rechecks their owner, type, schema, and
   namespace, and uses their RAM source links for evidence traversal.
+- Generic relationship assertions remain inside immutable organizational-state
+  observations. The projector validates their predicate, target, confidence,
+  assertion status, project scope, and evidence-identifier shape. Only confirmed
+  relationships can affect a projection; proposed or rejected relationships
+  cannot change lifecycle state.
 - Playbook access is fixed to `discover_entries`, `load_skill`, and
   `fetch_resource`. The model cannot supply a destination, credential, header,
   or arbitrary upstream operation.

@@ -90,6 +90,13 @@ projection, or Playbook publication.
 - Do not mutate a validated corpus in place. Create a new declared corpus
   version and preserve its prior attestation.
 
+The organizational-state v3 relationship field is a breaking custom-memory
+schema change. RAM does not change an existing custom type's fields in place.
+Use a fresh test store or a separately approved migration; reinstalling the
+desktop plugin alone does not upgrade the RAM store. The design retains the
+same two custom memory types, so a fresh v3 store still leaves the third custom
+type slot unused.
+
 ## Human acceptance
 
 Before any future live adapter is used:

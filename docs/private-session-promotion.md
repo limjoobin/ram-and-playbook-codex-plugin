@@ -34,6 +34,11 @@ event followed by the participant's confirmed JSON envelope. The envelope uses
 the source-linked shared `organizational_state` memory asynchronously. The
 private source is referenced, not moved, updated, or deleted.
 
+These v2 lifecycle observations remain accepted during the v3 relation-model
+migration and contain no relationship assertion. Generic relationships are
+separate immutable v3 observations reviewed by the relationship
+reconciliation path; a lifecycle hook must not invent them.
+
 ## RAM prerequisites
 
 - The RAM session worker and its model provider must be running.

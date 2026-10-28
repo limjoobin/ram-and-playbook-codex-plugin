@@ -201,6 +201,14 @@ open work, and strictly qualified decision-ready items. The agenda-item maximum
 does not truncate the context registers. Unsupported candidates are explicitly
 deferred.
 
+On a v3 test store, confirmed generic relationships are returned as
+`confirmed_relations` on current-state results. Proposed and rejected
+relationships remain visible only in history and never change projected
+lifecycle status. Existing v2 stores remain readable, but reinstalling the
+plugin does not add the v3 `relations` field to an existing RAM custom-memory
+type; use the reviewed fresh-store bootstrap path described in
+[docs/admin-bootstrap.md](docs/admin-bootstrap.md).
+
 These checks are the manual acceptance gate. Passing repository tests and the
 offline evaluation does not prove that a customer's network, credentials,
 store contents, Playbook publication, or desktop policy is configured

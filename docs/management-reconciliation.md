@@ -4,9 +4,22 @@
 
 Organizational observations are immutable. Current state is a rebuildable
 `organizational_state_projection` produced by the versioned projector and
-`ami-es2002-state-families-v2` policy. Reconciliation never treats the
+`ami-es2002-state-families-v3` policy. Reconciliation never treats the
 read-only action audit as an ingestion source and never closes a
 "probably completed" action without a new explicit observation.
+
+The v3 observation contract carries optional generic relationships under
+`relations.edges`. Every edge points from its observation's `state_id` to one
+canonical `target_state_id`. The supported predicates are `fulfills`,
+`resolves`, `supersedes`, `blocks`, `depends_on`, `conflicts_with`, and
+`supports`. Only `assertion_status: confirmed` is actionable. Proposed and
+rejected edges remain visible audit data.
+
+The policy maps confirmed `fulfills` to a completed action, confirmed
+`resolves` to a resolved risk, issue, or conflict, and confirmed `supersedes`
+to a superseded target. The other predicates add relation evidence without
+changing lifecycle status. A relationship older than the target's current
+frontier cannot close or supersede a later state.
 
 The repository exposes one administrator job:
 
@@ -52,6 +65,8 @@ is required.
   private editor configuration.
 - Both named records in the configured namespace and legacy unnamespaced
   management records must match the exact owner, memory type, and schema.
+- v3 and legacy v2 observations are read together during migration; new
+  relationship assertions require the v3 custom-memory field contract.
 - Pagination is exhausted before projection.
 - Stable projection IDs make repeated runs idempotent.
 - Only changed projections are written and every write is read back.

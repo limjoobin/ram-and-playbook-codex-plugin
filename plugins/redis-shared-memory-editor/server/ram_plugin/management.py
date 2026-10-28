@@ -12,7 +12,8 @@ from .ram import RAMClient, _field, _items
 
 
 OBSERVATION_TYPE = "organizational_state"
-OBSERVATION_SCHEMA = "organizational-state-v2"
+OBSERVATION_SCHEMA = "organizational-state-v3"
+OBSERVATION_SCHEMAS = frozenset({OBSERVATION_SCHEMA, "organizational-state-v2"})
 PROJECTION_TYPE = "organizational_state_projection"
 PROJECTION_SCHEMA = "organizational-state-projection-v1"
 STATE_VIEWS = frozenset({"current", "history", "conflicts"})
@@ -185,7 +186,7 @@ def canonical_entity(value: str | None, kind: str) -> str | None:
 def _attribute(value: Any) -> Any:
     if isinstance(value, dict) and len(value) == 1:
         key, nested = next(iter(value.items()))
-        if key in {"string", "number", "boolean", "strings", "numbers", "booleans"}:
+        if key in {"string", "number", "boolean", "strings", "numbers", "booleans", "object"}:
             return nested
     return value
 
@@ -230,7 +231,7 @@ def _scope_matches(record: dict[str, Any], config: Config) -> bool:
     return (
         _field(record, "ownerId", "owner_id") == config.agenda_owner_id
         and _field(record, "memoryType", "memory_type") == OBSERVATION_TYPE
-        and attributes.get("schema_version") == OBSERVATION_SCHEMA
+        and attributes.get("schema_version") in OBSERVATION_SCHEMAS
         and namespace_matches
     )
 
@@ -251,9 +252,16 @@ def _projection_scope_matches(record: dict[str, Any], config: Config) -> bool:
 
 def _observation(record: dict[str, Any]) -> dict[str, Any]:
     attributes = _attributes(record)
+    relations = attributes.get("relations")
+    if not isinstance(relations, dict) or not isinstance(relations.get("edges"), list):
+        relations = {"edges": []}
     return {
         "memory_id": record.get("id"),
         "text": record.get("text"),
+        "schema_version": attributes.get("schema_version"),
+        "state_id": attributes.get("state_id"),
+        "state_kind": attributes.get("state_kind"),
+        "project_id": attributes.get("project_id"),
         "evidence_role": attributes.get("evidence_role"),
         "lifecycle_status": attributes.get("lifecycle_status"),
         "observed_at": attributes.get("observed_at"),
@@ -263,6 +271,7 @@ def _observation(record: dict[str, Any]) -> dict[str, Any]:
         "source_artifact_id": attributes.get("source_artifact_id"),
         "source_revision": attributes.get("source_revision"),
         "evidence_locator": attributes.get("evidence_locator"),
+        "relations": relations,
         "sources": record.get("sources") if isinstance(record.get("sources"), list) else [],
     }
 
@@ -294,6 +303,12 @@ def _projection_state(
         observations.append(_observation(supporting))
     by_id = {item.get("memory_id"): item for item in observations}
     conflicts = [by_id[memory_id] for memory_id in conflict_ids if memory_id in by_id]
+    confirmed_relations = [
+        {"source_state_id": item.get("state_id"), **edge}
+        for item in observations
+        for edge in item["relations"]["edges"]
+        if isinstance(edge, dict) and edge.get("assertion_status") == "confirmed"
+    ]
     status = str(attributes.get("lifecycle_status") or "unknown")
     return (
         {
@@ -318,6 +333,7 @@ def _projection_state(
             "conflicting_observations": conflicts,
             "observation_count": attributes.get("observation_count"),
             "observations": observations,
+            "confirmed_relations": confirmed_relations,
             "projection_memory_id": record.get("id"),
             "resolution_policy_id": attributes.get("resolution_policy_id"),
         },
@@ -448,15 +464,17 @@ class PluginService:
             history_attributes = dict(attributes)
             if lifecycle_status is not None:
                 history_attributes["lifecycle_status"] = lifecycle_status
-            request = self._state_request(
-                text,
-                history_attributes,
-                100,
-                similarity_threshold,
-                OBSERVATION_TYPE,
-                OBSERVATION_SCHEMA,
-            )
-            records = _items(self.ram.search(request))
+            records: list[dict[str, Any]] = []
+            for schema_version in sorted(OBSERVATION_SCHEMAS, reverse=True):
+                request = self._state_request(
+                    text,
+                    history_attributes,
+                    100,
+                    similarity_threshold,
+                    OBSERVATION_TYPE,
+                    schema_version,
+                )
+                records.extend(_items(self.ram.search(request)))
             scoped = [record for record in records if _scope_matches(record, self.config)]
             ordered = scoped if text is not None else sorted(scoped, key=_sort_key)
             observations = [_observation(record) for record in ordered]
@@ -464,6 +482,7 @@ class PluginService:
                 "ok": True,
                 "view": view,
                 "schema_version": OBSERVATION_SCHEMA,
+                "supported_schema_versions": sorted(OBSERVATION_SCHEMAS),
                 "owner_id": self.config.agenda_owner_id,
                 "applied_filters": history_attributes,
                 "observations": observations[:limit],

@@ -95,3 +95,10 @@ default; `view: history` returns the underlying breadcrumbs and `view:
 conflicts` returns only unresolved current conflicts. Business ordering uses
 the source date, meeting sequence, and transcript-relative offset; RAM creation
 time remains system/ingestion time.
+
+The v3 observation contract adds one generic `relations.edges` object without
+adding another custom memory type. Edges may use `fulfills`, `resolves`,
+`supersedes`, `blocks`, `depends_on`, `conflicts_with`, or `supports`. Only
+confirmed edges are applied by the projector. Proposed and rejected edges are
+retained as observations but never change lifecycle state. The runtime remains
+read-compatible with v2 observations during migration.

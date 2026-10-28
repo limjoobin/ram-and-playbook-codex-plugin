@@ -26,6 +26,11 @@ replacement. state_id is an observation label, not the final cross-document iden
 concise and stable when obvious, but do not guess whether differently worded observations are
 replacements. A separate versioned resolver builds canonical state families after extraction.
 
+`relations` is an object with one `edges` array. Document extraction must return
+`{"edges":[]}` because source documents do not contain canonical target state IDs. A separate
+reconciliation step may later append reviewed relationship assertions. Do not infer cross-state
+links during initial extraction.
+
 Create a stable lowercase state_id from project, kind, and a short canonical subject, for example
 `project-ami-es2002-decision-power-source`. Do not include the source artifact or revision in
 state_id. `observed_at` is the source event date in the envelope at 00:00:00Z, not ingestion time.
@@ -36,15 +41,15 @@ only when the source explicitly says the decision, action, or resolution occurre
 connector envelope values for source_artifact_id and source_revision. evidence_locator
 must be a human-readable source-relative heading, slide, paragraph, or transcript time/speaker.
 
-Return only JSON with this exact envelope and all 23 attributes on every record:
+Return only JSON with this exact envelope and all 24 attributes on every record:
 {"records":[{"text":"concise source-grounded observation","attributes":{
-"schema_version":"organizational-state-v2","state_id":"project-...","state_kind":"action_item",
+"schema_version":"organizational-state-v3","state_id":"project-...","state_kind":"action_item",
 "lifecycle_status":"open","evidence_role":"creates","subject":"...",
 "project_id":"project-ami-es2002","project_step_id":"","meeting_id":"",
 "accountable_entity_id":"","related_entity_ids":[],"observed_at":"YYYY-MM-DDT00:00:00Z",
 "event_sequence":1,"source_offset_ms":0,
 "effective_at":"","due_at":"","resolved_at":"","requested_decision":"","impact":"",
-"supersedes_state_ids":[],"source_artifact_id":"source envelope value",
+"supersedes_state_ids":[],"relations":{"edges":[]},"source_artifact_id":"source envelope value",
 "source_revision":"source envelope value",
 "evidence_locator":"heading/slide/time and speaker"}}]}.
 Use empty strings or empty lists for optional fields. Never manufacture values. If no qualifying

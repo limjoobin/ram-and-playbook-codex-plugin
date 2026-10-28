@@ -11,6 +11,27 @@ from typing import Any
 PROJECTION_MEMORY_TYPE = "organizational_state_projection"
 PROJECTION_SCHEMA_VERSION = "organizational-state-projection-v1"
 STATE_BEARING_ROLES = frozenset({"creates", "updates", "resolves", "supersedes"})
+RELATION_ASSERTION_STATUSES = frozenset({"proposed", "confirmed", "rejected"})
+STATE_KINDS = frozenset(
+    {"action_item", "decision", "risk", "issue", "dependency", "approval", "conflict"}
+)
+LIFECYCLE_STATUSES = frozenset(
+    {
+        "proposed",
+        "open",
+        "pending_approval",
+        "in_progress",
+        "blocked",
+        "decided",
+        "approved",
+        "rejected",
+        "completed",
+        "resolved",
+        "cancelled",
+        "superseded",
+        "unknown",
+    }
+)
 ROLE_PRECEDENCE = {
     "supports": 0,
     "creates": 1,
@@ -148,12 +169,99 @@ def _deduplicate(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "source_artifact_id": attributes.get("source_artifact_id"),
             "source_revision": attributes.get("source_revision"),
             "evidence_locator": attributes.get("evidence_locator"),
+            "relations": attributes.get("relations"),
         }
         key = json.dumps(material, sort_keys=True, separators=(",", ":"), default=str)
         previous = unique.get(key)
         if previous is None or event_key(record) > event_key(previous):
             unique[key] = record
     return list(unique.values())
+
+
+def _relation_contract(
+    policy: dict[str, Any],
+) -> tuple[frozenset[str], str, dict[tuple[str, str], str]]:
+    relation_policy = policy.get("relationPolicy")
+    if not isinstance(relation_policy, dict):
+        raise ValueError("projection policy is missing relationPolicy")
+    predicates = relation_policy.get("allowedPredicates")
+    confirmation = relation_policy.get("confirmationStatus")
+    effects = relation_policy.get("lifecycleEffects")
+    if (
+        not isinstance(predicates, list)
+        or not predicates
+        or any(not isinstance(item, str) or not item for item in predicates)
+        or len(set(predicates)) != len(predicates)
+        or not isinstance(confirmation, str)
+        or confirmation not in RELATION_ASSERTION_STATUSES
+        or not isinstance(effects, list)
+    ):
+        raise ValueError("projection relation policy is invalid")
+    lifecycle_effects: dict[tuple[str, str], str] = {}
+    for effect in effects:
+        if not isinstance(effect, dict):
+            raise ValueError("projection relation lifecycle effect is invalid")
+        predicate = effect.get("predicate")
+        target_kinds = effect.get("targetKinds")
+        target_status = effect.get("targetStatus")
+        if (
+            predicate not in predicates
+            or not isinstance(target_kinds, list)
+            or not target_kinds
+            or any(item not in STATE_KINDS for item in target_kinds)
+            or target_status not in LIFECYCLE_STATUSES
+        ):
+            raise ValueError("projection relation lifecycle effect is invalid")
+        for target_kind in target_kinds:
+            key = (predicate, target_kind)
+            if key in lifecycle_effects:
+                raise ValueError("projection relation lifecycle effect is duplicated")
+            lifecycle_effects[key] = target_status
+    return frozenset(predicates), confirmation, lifecycle_effects
+
+
+def _relation_edges(
+    record: dict[str, Any], allowed_predicates: frozenset[str]
+) -> tuple[dict[str, Any], ...]:
+    attributes = record.get("attributes") or {}
+    relations = attributes.get("relations")
+    if relations is None or relations == "":
+        return ()
+    if isinstance(relations, dict) and set(relations) == {"object"}:
+        relations = relations["object"]
+    if not isinstance(relations, dict) or not isinstance(relations.get("edges"), list):
+        raise ValueError("organizational-state relations must contain an edges array")
+    normalized: list[dict[str, Any]] = []
+    for edge in relations["edges"]:
+        if not isinstance(edge, dict):
+            raise ValueError("organizational-state relation edge is invalid")
+        predicate = edge.get("predicate")
+        target_state_id = edge.get("target_state_id")
+        confidence = edge.get("confidence")
+        assertion_status = edge.get("assertion_status")
+        evidence_memory_ids = edge.get("evidence_memory_ids")
+        if (
+            predicate not in allowed_predicates
+            or not isinstance(target_state_id, str)
+            or not target_state_id
+            or isinstance(confidence, bool)
+            or not isinstance(confidence, (int, float))
+            or not 0 <= confidence <= 1
+            or assertion_status not in RELATION_ASSERTION_STATUSES
+            or not isinstance(evidence_memory_ids, list)
+            or any(not isinstance(item, str) or not item for item in evidence_memory_ids)
+        ):
+            raise ValueError("organizational-state relation edge is invalid")
+        normalized.append(
+            {
+                "predicate": predicate,
+                "target_state_id": target_state_id,
+                "confidence": float(confidence),
+                "assertion_status": assertion_status,
+                "evidence_memory_ids": list(evidence_memory_ids),
+            }
+        )
+    return tuple(normalized)
 
 
 @dataclass(frozen=True)
@@ -187,14 +295,17 @@ def build_projections(
     if not isinstance(policy_id, str) or not policy_id:
         raise ValueError("state-family policy identifier is missing")
     aliases = _family_index(policy)
+    allowed_predicates, confirmed_status, lifecycle_effects = _relation_contract(policy)
+    selected = _current_revisions(_deduplicate(observations))
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for record in _current_revisions(_deduplicate(observations)):
+    for record in selected:
         family_id = _family_id(record, aliases, policy)
         if family_id is None:
             continue
         grouped.setdefault(family_id, []).append(record)
 
-    projections: list[ProjectionMemory] = []
+    projected_by_family: dict[str, dict[str, Any]] = {}
+    current_keys: dict[str, tuple[Any, ...]] = {}
     for family_id in sorted(grouped):
         ordered = sorted(grouped[family_id], key=lambda record: _resolved_event_key(record, policy))
         state_bearing = [
@@ -243,5 +354,75 @@ def build_projections(
             "current_memory_id": str(current["id"]),
             "resolution_policy_id": policy_id,
         }
-        projections.append(ProjectionMemory(memory_id, projected["subject"], projected))
-    return tuple(projections)
+        projected_by_family[family_id] = {"memory_id": memory_id, "attributes": projected}
+        current_keys[family_id] = current_key
+
+    observation_ids = {
+        str(record["id"])
+        for record in selected
+        if isinstance(record.get("id"), str) and record["id"]
+    }
+    confirmed_edges: list[tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]] = []
+    for record in selected:
+        source_family_id = _family_id(record, aliases, policy)
+        if source_family_id is None:
+            continue
+        for edge in _relation_edges(record, allowed_predicates):
+            if edge["assertion_status"] != confirmed_status:
+                continue
+            confirmed_edges.append(
+                (_resolved_event_key(record, policy), source_family_id, edge, record)
+            )
+
+    for relation_key, source_family_id, edge, record in sorted(
+        confirmed_edges,
+        key=lambda item: (item[0], item[1], item[2]["predicate"], item[2]["target_state_id"]),
+    ):
+        target_family_id = aliases.get(edge["target_state_id"], edge["target_state_id"])
+        source_projection = projected_by_family.get(source_family_id)
+        target_projection = projected_by_family.get(target_family_id)
+        if source_projection is None or target_projection is None:
+            raise ValueError("confirmed organizational-state relation references an unknown state")
+        if source_family_id == target_family_id:
+            raise ValueError("confirmed organizational-state relation cannot target its source")
+        source_attributes = source_projection["attributes"]
+        target_attributes = target_projection["attributes"]
+        if source_attributes["project_id"] != target_attributes["project_id"]:
+            raise ValueError("confirmed organizational-state relation crosses projects")
+
+        relation_memory_id = record.get("id")
+        if isinstance(relation_memory_id, str) and relation_memory_id:
+            supports = target_attributes["supporting_memory_ids"]
+            if relation_memory_id not in supports:
+                supports.append(relation_memory_id)
+        for evidence_id in edge["evidence_memory_ids"]:
+            if (
+                evidence_id in observation_ids
+                and evidence_id not in target_attributes["supporting_memory_ids"]
+            ):
+                target_attributes["supporting_memory_ids"].append(evidence_id)
+
+        target_kind = str(target_attributes["state_kind"])
+        target_status = lifecycle_effects.get((edge["predicate"], target_kind))
+        if target_status is None or relation_key < current_keys[target_family_id]:
+            continue
+        target_attributes["lifecycle_status"] = target_status
+        relation_attributes = record.get("attributes") or {}
+        target_attributes["resolved_at"] = (
+            relation_attributes.get("resolved_at")
+            or relation_attributes.get("effective_at")
+            or relation_attributes.get("observed_at")
+            or target_attributes.get("resolved_at", "")
+        )
+        if edge["predicate"] == "resolves" and target_kind == "conflict":
+            target_attributes["conflict_status"] = "none"
+            target_attributes["conflicting_memory_ids"] = []
+
+    return tuple(
+        ProjectionMemory(
+            projected_by_family[family_id]["memory_id"],
+            projected_by_family[family_id]["attributes"]["subject"],
+            projected_by_family[family_id]["attributes"],
+        )
+        for family_id in sorted(projected_by_family)
+    )

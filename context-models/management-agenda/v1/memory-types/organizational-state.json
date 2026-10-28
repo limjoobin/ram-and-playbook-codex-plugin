@@ -1,13 +1,13 @@
 {
-  "schemaVersion": 2,
-  "contractId": "management-agenda-organizational-state-v2",
+  "schemaVersion": 3,
+  "contractId": "management-agenda-organizational-state-v3",
   "customMemoryType": {
     "name": "organizational_state",
     "description": "A source-grounded observation about organizational state used for management review.",
     "fields": [
       {
         "name": "schema_version",
-        "description": "Contract version used to normalize this observation; always organizational-state-v2.",
+        "description": "Contract version used to normalize this observation; always organizational-state-v3.",
         "type": "str"
       },
       {
@@ -22,7 +22,7 @@
       },
       {
         "name": "lifecycle_status",
-        "description": "Controlled current status from the organizational-state-v2 lifecycle vocabulary.",
+        "description": "Controlled current status from the organizational-state-v3 lifecycle vocabulary.",
         "type": "str"
       },
       {
@@ -102,8 +102,13 @@
       },
       {
         "name": "supersedes_state_ids",
-        "description": "Canonical state identifiers explicitly replaced by this observation.",
+        "description": "Legacy canonical state identifiers explicitly replaced by this observation; new relationships use relations.edges.",
         "type": "list[str]"
+      },
+      {
+        "name": "relations",
+        "description": "Object containing an edges array of proposed, confirmed, or rejected relationships from this state to other canonical state identifiers.",
+        "type": "object"
       },
       {
         "name": "source_artifact_id",
@@ -124,7 +129,7 @@
   },
   "controlledValues": {
     "schema_version": [
-      "organizational-state-v2"
+      "organizational-state-v3"
     ],
     "state_kind": [
       "action_item",
@@ -157,6 +162,20 @@
       "contradicts",
       "resolves",
       "supersedes"
+    ],
+    "relation_predicate": [
+      "fulfills",
+      "resolves",
+      "supersedes",
+      "blocks",
+      "depends_on",
+      "conflicts_with",
+      "supports"
+    ],
+    "relation_assertion_status": [
+      "proposed",
+      "confirmed",
+      "rejected"
     ]
   },
   "requiredAfterNormalization": [
@@ -168,6 +187,7 @@
     "subject",
     "project_id",
     "observed_at",
+    "relations",
     "source_artifact_id",
     "source_revision",
     "evidence_locator"
