@@ -81,6 +81,7 @@ class PluginTests(unittest.TestCase):
     def test_marketplace_and_manifest_launch_python_plugin(self):
         marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text())
         manifest = json.loads((PLUGIN_ROOT / "plugin.json").read_text())
+        overlay = json.loads((PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text())
         mcp = json.loads((PLUGIN_ROOT / "mcp.json").read_text())
 
         self.assertEqual(marketplace["name"], "redis-field-engineering")
@@ -90,16 +91,17 @@ class PluginTests(unittest.TestCase):
             "./plugins/redis-shared-memory-editor",
         )
         self.assertEqual(manifest["version"], VERSION)
+        self.assertEqual(overlay["version"], VERSION)
+        self.assertNotIn("$schema", manifest)
+        self.assertNotIn("extensions", manifest)
+        self.assertEqual(overlay["mcpServers"], "./mcp.json")
+        self.assertNotIn("hooks", overlay)
         self.assertEqual(
-            manifest["extensions"]["com.openai"]["interface"]["capabilities"],
+            overlay["interface"]["capabilities"],
             ["Read", "Write"],
         )
-        openai_extension = manifest["extensions"]["com.openai"]
-        self.assertEqual(openai_extension["hooks"], "./hooks/hooks.json")
-        self.assertTrue((PLUGIN_ROOT / openai_extension["hooks"]).is_file())
-        self.assertLessEqual(
-            len(openai_extension["interface"]["defaultPrompt"]), 3
-        )
+        self.assertTrue((PLUGIN_ROOT / "hooks/hooks.json").is_file())
+        self.assertLessEqual(len(overlay["interface"]["defaultPrompt"]), 3)
         hooks = json.loads((PLUGIN_ROOT / "hooks/hooks.json").read_text())
         self.assertEqual(set(hooks["hooks"]), {"UserPromptSubmit", "SessionEnd"})
         server = mcp["mcpServers"]["redis-shared-memory-editor"]
