@@ -82,6 +82,9 @@ The private-to-shared contract, trust boundary, and manual acceptance cases
 are documented in [docs/private-session-promotion.md](docs/private-session-promotion.md).
 The central observation-projection job is documented in
 [docs/management-reconciliation.md](docs/management-reconciliation.md).
+The presenter workflow and the accuracy caveats learned from the end-to-end
+Real Reaction test are in
+[docs/management-agenda-demo-runbook.md](docs/management-agenda-demo-runbook.md).
 
 The plugin calls reviewed RAM operations directly over HTTPS and allows only
 three read-only Playbook MCP operations. `agenda_prepare` loads the exact
