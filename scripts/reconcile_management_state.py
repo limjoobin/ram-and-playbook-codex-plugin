@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild management-state projections after RAM MemoryETL extraction."""
+"""Rebuild management-state projections after new observations arrive."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--wait-for-candidate",
-        help="wait until the promoted candidate's extracted observation is visible",
+        help="wait until the promoted candidate's observation is visible",
     )
     parser.add_argument("--timeout-seconds", type=int, default=0)
     parser.add_argument("--poll-seconds", type=float, default=5.0)

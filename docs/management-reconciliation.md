@@ -39,8 +39,8 @@ python3 scripts/reconcile_management_state.py
 Without `--apply`, the command reads all scoped observations and projections
 and reports how many projections would change. It does not write.
 
-After an explicitly confirmed candidate is promoted and RAM MemoryETL has
-extracted its shared observation, run:
+After an explicitly confirmed candidate is promoted and its direct shared
+observation has been verified, run:
 
 ```sh
 python3 scripts/reconcile_management_state.py \
@@ -50,10 +50,10 @@ python3 scripts/reconcile_management_state.py \
 ```
 
 The candidate ID is returned by `memory_state_update_propose` and
-`memory_candidate_promote`. The job polls only for that extracted source, then
-runs the canonical projector and upserts changed projections by deterministic
-ID. `awaiting_extraction` means no write occurred; do not promote the candidate
-again.
+`memory_candidate_promote`. The job checks for that source, then runs the
+canonical projector and upserts changed projections by deterministic ID.
+`awaiting_observation` means the source is not visible; inspect the confirmed
+promotion instead of blindly publishing it again.
 
 ## Production trigger
 
@@ -70,6 +70,8 @@ On macOS, install this command as one user LaunchAgent with `RunAtLoad` enabled
 and `StartInterval` set to `300`. Do not install it through every user's desktop
 plugin. A future supported MemoryETL completion event can replace the scheduler
 without changing the reconciliation implementation.
+Human-confirmed promotions do not wait for MemoryETL; they are picked up by the
+same next scheduled run.
 
 The plugin therefore performs the human interaction and confirmed shared
 promotion, while this job owns deterministic relationship resolution and
@@ -90,7 +92,7 @@ is required.
 - Automatic fulfilment requires a later terminal source, the same project,
   and exact concept coverage; it cannot act on topical similarity.
 - Only changed projections are written and every write is read back.
-- Missing promoted extraction returns `awaiting_extraction` without changing
-  current state.
+- A missing promoted observation returns `awaiting_observation` without
+  changing current state.
 - This first job does not retire obsolete projections during a policy upgrade;
   upgrades continue to use the reviewed bootstrap migration path.

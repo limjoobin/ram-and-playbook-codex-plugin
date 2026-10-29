@@ -35,7 +35,10 @@ When a prompt looks like a lifecycle report, `UserPromptSubmit` tells the agent
 to retrieve the exact current state and use `memory_state_update_propose`. That
 tool creates a private, source-linked candidate; it does not share anything.
 Promotion remains a separate MCP write requiring inspection and explicit
-confirmation. `PostToolUse` and `Stop` remain inactive.
+confirmation. Once confirmed, it creates the reviewed immutable
+`organizational_state` record directly in RAM; MemoryETL is not involved in
+this human-confirmed path. The central idempotent projector then refreshes the
+current-state view. `PostToolUse` and `Stop` remain inactive.
 
 ## Quality gate
 
@@ -77,7 +80,7 @@ data scope, or network behavior.
 
 The private-to-shared contract, trust boundary, and manual acceptance cases
 are documented in [docs/private-session-promotion.md](docs/private-session-promotion.md).
-The central post-extraction projection job is documented in
+The central observation-projection job is documented in
 [docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 The plugin calls reviewed RAM operations directly over HTTPS and allows only

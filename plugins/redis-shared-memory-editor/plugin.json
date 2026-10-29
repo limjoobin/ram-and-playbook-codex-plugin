@@ -1,6 +1,6 @@
 {
   "name": "redis-shared-memory-editor",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "Capture private prompts, propose confirmed lifecycle updates, and use shared Redis Agent Memory and Playbook.",
   "author": {
     "name": "Redis Field Engineering",

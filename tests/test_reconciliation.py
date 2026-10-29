@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import sys
 import tempfile
@@ -22,6 +21,7 @@ from ram_plugin.promotion import (  # noqa: E402
     PromotionLedger,
     PromotionService,
 )
+from ram_plugin.ram import RAMHTTPError  # noqa: E402
 from reconciliation.job import ReconciliationJob  # noqa: E402
 
 
@@ -119,6 +119,8 @@ class FakeRAM:
         return {"created": [item["id"] for item in batch], "errors": []}
 
     def get(self, memory_id):
+        if memory_id not in self.records:
+            raise RAMHTTPError(404)
         return self.records[memory_id]
 
     def add_session_event(self, **values):
@@ -615,8 +617,8 @@ class ReconciliationTests(unittest.TestCase):
                 lambda: facade,
             )
             self.assertFalse(promoted["isError"])
-            shared_session_id = promoted["structuredContent"]["shared_session_id"]
-            envelope = json.loads(ram.sessions[shared_session_id][-1]["content"][0]["text"])
+            extracted_id = promoted["structuredContent"]["observation_memory_id"]
+            extracted_attributes = ram.records[extracted_id]["attributes"]
 
             capture.process(
                 {
@@ -628,24 +630,12 @@ class ReconciliationTests(unittest.TestCase):
             )
             self.assertEqual(len(ledger.candidates()), 1)
 
-        extracted_attributes = envelope["observation"]
-        self.assertEqual(envelope["confirmed_by"], "andrew")
         self.assertEqual(extracted_attributes["state_id"], state_id)
         self.assertEqual(extracted_attributes["lifecycle_status"], "completed")
         self.assertEqual(extracted_attributes["evidence_role"], "resolves")
         self.assertEqual(extracted_attributes["observed_at"], capture_time)
         self.assertEqual(extracted_attributes["resolved_at"], completion_time)
 
-        # Simulate RAM's asynchronous custom extraction of the confirmed envelope.
-        extracted_id = "observation-andrew-completed-trend-watching"
-        ram.records[extracted_id] = {
-            "id": extracted_id,
-            "text": extracted_attributes["subject"],
-            "namespace": CONFIG.namespace,
-            "ownerId": CONFIG.agenda_owner_id,
-            "memoryType": "organizational_state",
-            "attributes": extracted_attributes,
-        }
         job = ReconciliationJob(CONFIG, ram, self.bundle)
         applied = job.run(apply=True, wait_for_candidate=candidate_id)
         self.assertEqual(applied["status"], "applied")
@@ -656,7 +646,7 @@ class ReconciliationTests(unittest.TestCase):
 
         repeated = job.run(apply=True, wait_for_candidate=candidate_id)
         self.assertEqual(repeated["status"], "no_changes")
-        self.assertEqual(len(ram.created), 1)
+        self.assertEqual(len(ram.created), 2)
 
     def test_no_new_observation_leaves_open_projection_unchanged(self):
         opened = observation("observation-open", "open", "creates", "2026-01-01T00:00:00Z")
@@ -679,7 +669,7 @@ class ReconciliationTests(unittest.TestCase):
             wait_for_candidate="candidate-" + "b" * 48,
         )
 
-        self.assertEqual(result["status"], "awaiting_extraction")
+        self.assertEqual(result["status"], "awaiting_observation")
         self.assertEqual(ram.created, [])
 
 

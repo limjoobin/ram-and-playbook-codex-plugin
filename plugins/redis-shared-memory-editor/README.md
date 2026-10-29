@@ -61,11 +61,11 @@ current projections.
 Session events first enter RAM under `RAM_PERSONAL_NAMESPACE`, where RAM owns
 native session memory and any configured personal extraction. The local
 candidate ledger is only a bounded review queue. `memory_candidate_promote`
-does not move or mutate private memory: it appends a new, confirmed shared
-session observation with deterministic provenance and lets RAM's
-`organizational_state` custom extractor create the shared observation.
+does not move or mutate private memory: it writes the confirmed, already
+structured `organizational_state` observation directly with deterministic
+provenance and verifies it by exact ID. MemoryETL is not used for this path.
 The repository's central reconciliation job then applies the single versioned
-projector after extraction; it is deliberately not run independently by every
+projector; it is deliberately not run independently by every
 desktop plugin.
 
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.

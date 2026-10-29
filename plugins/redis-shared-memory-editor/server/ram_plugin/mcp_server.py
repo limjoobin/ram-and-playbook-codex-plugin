@@ -228,7 +228,7 @@ TOOLS = [
     {
         "name": "memory_candidate_promote",
         "title": "Promote confirmed memory candidate",
-        "description": "Create a new shared organizational-state observation from an inspected private candidate only after the user explicitly confirms the exact observation. This preserves the private source and is safely idempotent.",
+        "description": "Directly store a new shared organizational-state observation from an inspected private candidate only after the user explicitly confirms the exact observation. This preserves the private source, verifies the write by exact ID, and is safely idempotent. The central projector updates the current view separately.",
         "inputSchema": _object_schema(
             {
                 "candidate_id": {"type": "string", "pattern": "^candidate-[a-f0-9]{48}$"},

@@ -1,4 +1,4 @@
-"""Run the one canonical projector after RAM extraction becomes visible."""
+"""Run the one canonical projector after RAM observations become visible."""
 
 from __future__ import annotations
 
@@ -167,11 +167,11 @@ class ReconciliationJob:
         if wait_for_candidate is not None and not candidate_visible:
             return {
                 "ok": True,
-                "status": "awaiting_extraction",
+                "status": "awaiting_observation",
                 "applied": False,
                 "candidate_id": wait_for_candidate,
                 "observation_count": len(observations),
-                "message": "The confirmed promotion is not visible in long-term memory yet. Do not promote it again.",
+                "message": "The confirmed promotion observation is not visible in long-term memory. Inspect it before retrying a write.",
             }
 
         try:

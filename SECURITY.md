@@ -111,11 +111,11 @@ instructs the agent not to repeat the write automatically.
 
 Private candidates are not shared facts. Listing and inspection are read-only.
 Promotion requires `confirmed: true` and the exact structured observation in
-the same tool call. It creates a new shared session event; it never moves,
-updates, or deletes the private RAM record. Deterministic candidate IDs,
-session IDs, event markers, and idempotency keys prevent a retry from creating
-a second observation. Rejection changes only the local review state and leaves
-private RAM evidence intact.
+the same tool call. It creates and reads back one immutable shared
+`organizational_state` record; it never moves, updates, or deletes the private
+RAM record. A deterministic observation ID makes retries idempotent, and a
+different record at that ID fails closed. Rejection changes only the local
+review state and leaves private RAM evidence intact.
 
 `memory_state_update_propose` is a private local write. It accepts only an exact
 prompt already recorded by `UserPromptSubmit`, verifies the referenced current

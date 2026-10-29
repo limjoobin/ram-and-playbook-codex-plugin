@@ -154,10 +154,10 @@ changing the tool model.
 
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
 a fact, `editor_update` replaces an existing fact by exact memory ID, and
-`memory_candidate_promote` creates a new shared source event after explicit
-confirmation. `memory_state_update_propose` creates only a private candidate
-from an exact hook-captured prompt and exact current state. Hooks themselves
-never write the shared namespace.
+`memory_candidate_promote` creates a new immutable shared organizational-state
+observation after explicit confirmation. `memory_state_update_propose` creates
+only a private candidate from an exact hook-captured prompt and exact current
+state. Hooks themselves never write the shared namespace.
 
 ## 4. Verify one user, then the group
 
@@ -245,8 +245,9 @@ capture time and makes no shared write. The agent must inspect the
 candidate and ask for explicit confirmation before calling
 `memory_candidate_promote`. `PostToolUse` and `Stop` remain inactive.
 
-After promotion, RAM extraction is asynchronous. The central administrator
-then runs the versioned reconciliation job from a repository checkout:
+After promotion, the shared observation is already stored and verified; there
+is no MemoryETL wait. The central administrator then runs the versioned
+reconciliation job from a repository checkout:
 
 ```sh
 python3 scripts/reconcile_management_state.py \
@@ -261,8 +262,8 @@ does not originate from an interactive promotion. RAM's ingestion webhook is a
 blocking decision hook, not a completion notification, so it is not used as a
 post-extraction trigger.
 
-Expected: once the extracted observation is visible, the deterministic current
-projection changes to the confirmed lifecycle. An unconfirmed or merely
+Expected: the deterministic current projection changes to the confirmed
+lifecycle. An unconfirmed or merely
 "probably completed" action remains nonterminal. See
 [docs/management-reconciliation.md](docs/management-reconciliation.md).
 
@@ -320,8 +321,8 @@ remove it through the laptop's approved file-management process.
 | `configuration_missing` | Create the file at the exact path above and fill the eight required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
 | Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. |
 | Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
-| Promotion is accepted but history is unchanged | Wait for the RAM custom-extraction window, then verify the store's `organizational_state` extractor accepts `personal-to-shared-promotion-v1`. Do not resubmit. |
-| History contains the promoted observation but current state is unchanged | Run the central reconciliation job for the returned candidate ID. Do not promote again. |
+| Promotion returns `write_unverified` | Read the deterministic observation ID from the candidate before attempting another write. Do not blindly resubmit. |
+| History contains the promoted observation but current state is unchanged | Run the central reconciliation job for the returned candidate ID, or wait for the five-minute central schedule. Do not promote again. |
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
 | `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
 | `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |

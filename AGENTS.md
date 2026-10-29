@@ -43,7 +43,7 @@ Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
 | `server/ram_plugin/playbook.py` | Allowlisted Streamable HTTP client for Playbook reads |
 | `server/ram_plugin/agenda.py` | Runtime Skill verification and evidence-bound agenda preparation |
 | `server/ram_plugin/promotion.py` | Private hook capture, candidate review, and confirmed source-linked promotion |
-| `reconciliation/job.py` | Central deterministic post-MemoryETL projection job using the versioned projector |
+| `reconciliation/job.py` | Central deterministic observation-projection job using the versioned projector |
 | `scripts/reconcile_management_state.py` | Explicit administrator plan/apply entry point for reconciliation |
 | `server/ram_plugin/config.py` | Configuration validation, version, and public errors |
 | `server/ram_plugin/credentials.py` | Secure parsing of the external `.env` file |

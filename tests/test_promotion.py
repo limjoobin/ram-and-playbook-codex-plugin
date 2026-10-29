@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import replace
-import json
 from pathlib import Path
 import sys
 import tempfile
@@ -21,6 +20,7 @@ from ram_plugin.promotion import (  # noqa: E402
     PromotionLedger,
     PromotionService,
 )
+from ram_plugin.ram import RAMHTTPError  # noqa: E402
 
 
 CONFIG = Config(
@@ -41,6 +41,8 @@ class FakePromotionRAM:
         self.calls: list[dict] = []
         self.sessions: dict[str, list[dict]] = {}
         self.keys: dict[str, dict] = {}
+        self.records: dict[str, dict] = {}
+        self.created: list[list[dict]] = []
 
     def add_session_event(self, **values):
         key = values["idempotency_key"]
@@ -61,8 +63,16 @@ class FakePromotionRAM:
         self.keys[key] = result
         return result
 
-    def get_session(self, session_id, timeout_ms=None):
-        return {"events": list(self.sessions.get(session_id, []))}
+    def create(self, memories):
+        batch = [dict(item) for item in memories]
+        self.created.append(batch)
+        self.records.update({str(item["id"]): item for item in batch})
+        return {"created": [item["id"] for item in batch], "errors": []}
+
+    def get(self, memory_id):
+        if memory_id not in self.records:
+            raise RAMHTTPError(404)
+        return self.records[memory_id]
 
 
 class EmptyBase:
@@ -243,22 +253,21 @@ class PromotionTests(unittest.TestCase):
                 confirmed=False,
                 observation=observation(),
             )
-        private_calls = len(self.ram.calls)
         result = service.candidate_promote(
             candidate_id=candidate_id,
             confirmed=True,
             observation=observation(),
         )
-        self.assertEqual(result["outcome"], "promotion_submitted")
-        shared = self.ram.calls[private_calls:]
-        self.assertEqual(len(shared), 2)
-        self.assertTrue(all(call["namespace"] == CONFIG.namespace for call in shared))
-        self.assertEqual(shared[0]["actor_id"], CONFIG.agenda_owner_id)
-        self.assertEqual(shared[1]["actor_id"], CONFIG.participant)
-        envelope = json.loads(shared[1]["text"])
-        self.assertEqual(envelope["observation"]["schema_version"], OBSERVATION_SCHEMA)
+        self.assertEqual(result["outcome"], "promotion_saved")
+        self.assertEqual(result["projection_status"], "pending_reconciliation")
+        self.assertEqual(len(self.ram.created), 1)
+        shared = self.ram.created[0][0]
+        self.assertEqual(shared["namespace"], CONFIG.namespace)
+        self.assertEqual(shared["ownerId"], CONFIG.agenda_owner_id)
+        self.assertEqual(shared["memoryType"], "organizational_state")
+        self.assertEqual(shared["attributes"]["schema_version"], OBSERVATION_SCHEMA)
         self.assertEqual(
-            set(envelope["observation"]),
+            set(shared["attributes"]),
             {
                 "schema_version", "state_id", "state_kind", "lifecycle_status", "evidence_role",
                 "subject", "project_id", "project_step_id", "meeting_id", "accountable_entity_id",
@@ -268,19 +277,20 @@ class PromotionTests(unittest.TestCase):
                 "evidence_locator",
             },
         )
-        self.assertEqual(envelope["observation"]["relations"], {"edges": []})
-        self.assertEqual(
-            envelope["source_private_event_ids"],
-            self.ledger.candidates()[candidate_id]["source_private_event_ids"],
-        )
-        call_count = len(self.ram.calls)
+        self.assertEqual(shared["attributes"]["relations"], {"edges": []})
+        self.assertIn(candidate_id, shared["attributes"]["evidence_locator"])
+        created_count = len(self.ram.created)
         repeated = service.candidate_promote(
             candidate_id=candidate_id,
             confirmed=True,
             observation=observation(),
         )
         self.assertEqual(repeated["outcome"], "already_submitted")
-        self.assertEqual(len(self.ram.calls), call_count)
+        self.assertEqual(len(self.ram.created), created_count)
+        self.assertEqual(
+            self.ledger.candidates()[candidate_id]["observation_memory_id"],
+            shared["id"],
+        )
 
     def test_explicit_state_update_proposal_uses_exact_private_prompt_and_current_state(self):
         statement = "I finished the trend-watching action."
@@ -324,6 +334,41 @@ class PromotionTests(unittest.TestCase):
         )
         self.assertFalse(promoted["isError"])
         self.assertEqual(promoted["structuredContent"]["state_id"], candidate["current_state"]["state_id"])
+
+    def test_pre_direct_write_promotion_can_be_materialized_idempotently(self):
+        candidate_id = self._candidate()
+        self.ledger.append(
+            "candidate_promoted",
+            {
+                "candidate_id": candidate_id,
+                "promoted_at": "2026-10-27T09:20:00Z",
+                "state_id": "state-launch-approved",
+                "shared_session_id": "legacy-shared-session",
+            },
+            event_id=f"promote-{candidate_id}",
+        )
+        service = PromotionService(CONFIG, self.ram, self.ledger)
+
+        materialized = service.candidate_promote(
+            candidate_id=candidate_id,
+            confirmed=True,
+            observation=observation(),
+        )
+
+        self.assertEqual(materialized["outcome"], "promotion_materialized")
+        memory_id = materialized["observation_memory_id"]
+        self.assertEqual(self.ram.records[memory_id]["memoryType"], "organizational_state")
+        self.assertEqual(
+            self.ledger.candidates()[candidate_id]["observation_memory_id"],
+            memory_id,
+        )
+        repeated = service.candidate_promote(
+            candidate_id=candidate_id,
+            confirmed=True,
+            observation=observation(),
+        )
+        self.assertEqual(repeated["outcome"], "already_submitted")
+        self.assertEqual(len(self.ram.created), 1)
 
     def test_state_update_proposal_rejects_stale_state_and_uncaptured_evidence(self):
         self.capture.process(prompt(text="I finished the trend-watching action."))
@@ -387,10 +432,11 @@ class PromotionTests(unittest.TestCase):
             PromotionService(bob_config, bob_ram, bob_ledger).candidate_promote(
                 candidate_id=bob_id, confirmed=True, observation=observation()
             )
-            self.assertEqual(self.ram.calls[-1]["namespace"], CONFIG.namespace)
-            self.assertEqual(bob_ram.calls[-1]["namespace"], CONFIG.namespace)
-            self.assertEqual(self.ram.calls[-1]["actor_id"], "alice")
-            self.assertEqual(bob_ram.calls[-1]["actor_id"], "bob")
+            self.assertEqual(self.ram.created[-1][0]["namespace"], CONFIG.namespace)
+            self.assertEqual(bob_ram.created[-1][0]["namespace"], CONFIG.namespace)
+            self.assertEqual(self.ram.created[-1][0]["ownerId"], CONFIG.agenda_owner_id)
+            self.assertEqual(bob_ram.created[-1][0]["ownerId"], CONFIG.agenda_owner_id)
+            self.assertNotEqual(self.ram.created[-1][0]["id"], bob_ram.created[-1][0]["id"])
 
 
 if __name__ == "__main__":

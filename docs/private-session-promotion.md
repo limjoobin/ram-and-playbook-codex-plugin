@@ -27,13 +27,12 @@ observation shown during inspection. The model cannot replace that proposal in
 the promotion call. Older candidates retain the explicit-observation input for
 compatibility.
 
-Promotion appends a new session in `RAM_NAMESPACE`: an owner-lane bootstrap
-event followed by the participant's confirmed JSON envelope. The envelope uses
-`personal-to-shared-promotion-v1` and emits the immutable
-`organizational-state-v3` fields, including an empty generic relationship set.
-RAM's existing custom extractor then creates
-the source-linked shared `organizational_state` memory asynchronously. The
-private source is referenced, not moved, updated, or deleted.
+Promotion creates the reviewed immutable `organizational-state-v3` record
+directly in `RAM_NAMESPACE`, under `RAM_AGENDA_OWNER_ID`, with a deterministic
+memory ID and private candidate/event references retained as provenance. The
+write is read back by exact ID before success is returned. MemoryETL is not
+used for this already-structured, human-confirmed update. The private source is
+referenced, not moved, updated, or deleted.
 
 Legacy v2 lifecycle observations remain readable during the v3 relation-model
 migration and contain no relationship assertion. Explicit generic
@@ -46,11 +45,9 @@ invent them. The central projector may independently derive a narrow exact
 - The RAM session worker and its model provider must be running.
 - The store must enable the intended personal-memory extraction for private
   sessions.
-- The `organizational_state` custom extractor must accept the confirmed
-  `personal-to-shared-promotion-v1` envelope and copy its observation exactly.
 - `RAM_AGENDA_OWNER_ID` must remain the management-state owner lane used by the
   existing projection/reconciliation implementation.
-- Session extraction first makes the observation available through
+- A confirmed promotion is immediately available through
   `ram_search_state(view="history")`. The shared central projector—not this
   plugin—must process that observation before it appears in `current` or
   `conflicts`. This preserves one reconciliation implementation.
@@ -62,9 +59,10 @@ configuration. `RAM_PARTICIPANT`, `RAM_PERSONAL_NAMESPACE`, and preferably both
 API keys are per-user. Participant is attribution, not authenticated identity;
 server-side API-key policy remains the authorization boundary.
 
-Candidate IDs include participant, source session, turn, and subject. Shared
-session IDs, event markers, and RAM idempotency keys are deterministic. A retry
-therefore returns the prior submission instead of creating duplicate state.
+Candidate IDs include participant, source session, turn, and subject. The
+shared observation ID is derived from that candidate ID. A retry therefore
+returns the prior exact observation instead of creating duplicate state; a
+different record at that ID fails closed.
 
 ## Hook trust
 
@@ -92,7 +90,8 @@ the event contracts and trust flow in the
    Verify the proposal retains the exact private statement, existing
    `state_id`, capture time, and explicit `resolved_at`, while current shared
    state remains unchanged.
-5. Inspect and explicitly confirm the candidate, then promote it. Verify a new
-   shared source session exists and the private record remains intact.
+5. Inspect and explicitly confirm the candidate, then promote it. Verify one
+   shared immutable observation exists, its candidate provenance is retained,
+   and the private record remains intact.
 6. Include a token-shaped value and a malicious transcript-path string in a
    test session. Verify neither appears in the local ledger or MCP output.
