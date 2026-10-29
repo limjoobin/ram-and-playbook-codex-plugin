@@ -107,6 +107,52 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(server["command"], "/bin/sh")
         self.assertIn(f"/{VERSION}", server["args"][1])
         self.assertIn("$plugin_cache_root/server/main.py", server["args"][1])
+        self.assertIn("export PLUGIN_DATA=", server["args"][1])
+        self.assertGreaterEqual(
+            hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"],
+            4,
+        )
+
+    def test_compatibility_launcher_shares_plugin_data_with_hooks(self):
+        mcp = json.loads((PLUGIN_ROOT / ".mcp.json").read_text())
+        server = mcp["mcpServers"]["redis-shared-memory-editor"]
+        with tempfile.TemporaryDirectory() as directory:
+            codex_home = Path(directory) / "codex-home"
+            server_root = (
+                codex_home
+                / "plugins"
+                / "cache"
+                / "redis-field-engineering"
+                / "redis-shared-memory-editor"
+                / VERSION
+                / "server"
+            )
+            server_root.mkdir(parents=True)
+            (server_root / "main.py").write_text(
+                "import os\nprint(os.environ.get('PLUGIN_DATA', ''))\n",
+                encoding="utf-8",
+            )
+            process = subprocess.run(
+                [server["command"], *server["args"]],
+                env={
+                    "CODEX_HOME": str(codex_home),
+                    "HOME": directory,
+                    "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                },
+                text=True,
+                capture_output=True,
+                timeout=5,
+                check=True,
+            )
+        self.assertEqual(
+            process.stdout.strip(),
+            str(
+                codex_home
+                / "plugins"
+                / "data"
+                / "redis-shared-memory-editor-redis-field-engineering"
+            ),
+        )
 
     def test_configuration_rejects_missing_and_credential_bearing_endpoint(self):
         with self.assertRaisesRegex(PluginError, "RAM_API_KEY"):

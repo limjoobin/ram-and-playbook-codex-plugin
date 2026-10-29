@@ -51,7 +51,7 @@ def handle(payload: Any, environment: Mapping[str, str] | None = None) -> dict[s
     try:
         config = load_credential_file(_config_path(values))
         ledger = PromotionLedger.from_environment(values)
-        timeout_ms = 800 if event_name == "SessionEnd" else 1_500
+        timeout_ms = 800 if event_name == "SessionEnd" else 2_500
         return HookCapture(config, RAMClient(config, timeout_ms=timeout_ms), ledger, timeout_ms).process(
             payload
         )
