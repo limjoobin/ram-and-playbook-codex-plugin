@@ -425,6 +425,77 @@ def _legacy_supersedes_edges(
     return inferred
 
 
+def _policy_relation_edges(
+    selected: list[dict[str, Any]],
+    projected_by_family: dict[str, dict[str, Any]],
+    aliases: dict[str, str],
+    policy: dict[str, Any],
+    allowed_predicates: frozenset[str],
+) -> list[tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]]:
+    """Derive reviewed, deterministic links declared by the context policy."""
+
+    relation_policy = policy.get("relationPolicy") or {}
+    rules = relation_policy.get("derivedRelations", [])
+    if not isinstance(rules, list):
+        raise ValueError("projection policy derived relations are invalid")
+    records_by_id = {
+        str(record["id"]): record
+        for record in selected
+        if isinstance(record.get("id"), str) and record["id"]
+    }
+    inferred: list[
+        tuple[tuple[Any, ...], str, dict[str, Any], dict[str, Any]]
+    ] = []
+    seen: set[tuple[str, str, str]] = set()
+    for rule in rules:
+        if not isinstance(rule, dict):
+            raise ValueError("projection policy derived relation is invalid")
+        source_family_id = rule.get("sourceStateFamilyId")
+        predicate = rule.get("predicate")
+        target_family_id = rule.get("targetStateFamilyId")
+        if (
+            not isinstance(source_family_id, str)
+            or not source_family_id
+            or predicate not in allowed_predicates
+            or not isinstance(target_family_id, str)
+            or not target_family_id
+        ):
+            raise ValueError("projection policy derived relation is invalid")
+        source_family_id = aliases.get(source_family_id, source_family_id)
+        target_family_id = aliases.get(target_family_id, target_family_id)
+        key = (source_family_id, str(predicate), target_family_id)
+        if source_family_id == target_family_id or key in seen:
+            raise ValueError("projection policy derived relation is invalid or duplicated")
+        seen.add(key)
+
+        source_projection = projected_by_family.get(source_family_id)
+        target_projection = projected_by_family.get(target_family_id)
+        if source_projection is None or target_projection is None:
+            continue
+        source_attributes = source_projection["attributes"]
+        if source_attributes["lifecycle_status"] not in AUTOMATIC_RELATION_SOURCE_STATUSES:
+            continue
+        source_record = records_by_id.get(source_attributes["current_memory_id"])
+        if source_record is None:
+            raise ValueError("projection policy relation source is missing")
+        source_id = str(source_record["id"])
+        inferred.append(
+            (
+                _resolved_event_key(source_record, policy),
+                source_family_id,
+                {
+                    "predicate": predicate,
+                    "target_state_id": target_family_id,
+                    "confidence": 1.0,
+                    "assertion_status": "confirmed",
+                    "evidence_memory_ids": [source_id],
+                },
+                source_record,
+            )
+        )
+    return inferred
+
+
 @dataclass(frozen=True)
 class ProjectionMemory:
     memory_id: str
@@ -538,6 +609,15 @@ def build_projections(
     confirmed_edges.extend(
         _automatic_fulfills_edges(
             selected, projected_by_family, current_keys, aliases, policy
+        )
+    )
+    confirmed_edges.extend(
+        _policy_relation_edges(
+            selected,
+            projected_by_family,
+            aliases,
+            policy,
+            allowed_predicates,
         )
     )
 

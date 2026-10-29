@@ -514,6 +514,139 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(projections[issue_id]["lifecycle_status"], "resolved")
         self.assertEqual(projections[old_decision_id]["lifecycle_status"], "superseded")
 
+    def test_policy_relations_resolve_current_state_in_the_same_pass(self):
+        requirements_id = "project-ami-es2002-action-item-product-requirements"
+        budget_issue_id = "project-ami-es2002-issue-design-over-budget"
+        lcd_dependency_id = (
+            "project-ami-es2002-dependency-lcd-station-listings-input-device"
+        )
+        old_power_id = "project-ami-es2002-decision-kinetic-power-battery-backup"
+        observations = [
+            observation(
+                "observation-requirements-action",
+                "open",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id=requirements_id,
+                subject="Determine remote-control requirements",
+                event_sequence=1,
+            ),
+            observation(
+                "observation-final-functions",
+                "decided",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id="project-ami-es2002-decision-final-functionalities",
+                state_kind="decision",
+                subject="Final product functionalities",
+                source_artifact_id="ami-es2002-final-report",
+                event_sequence=5,
+            ),
+            observation(
+                "observation-over-budget",
+                "open",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id=budget_issue_id,
+                state_kind="issue",
+                subject="Design cost over budget",
+                event_sequence=4,
+                source_offset_ms=1,
+            ),
+            observation(
+                "observation-within-budget",
+                "decided",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id="project-ami-es2002-decision-costs-within-budget",
+                state_kind="decision",
+                subject="Costs within budget",
+                event_sequence=4,
+                source_offset_ms=2,
+            ),
+            observation(
+                "observation-lcd-dependency",
+                "open",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id=lcd_dependency_id,
+                state_kind="dependency",
+                subject="LCD listings require an input device",
+                event_sequence=3,
+            ),
+            observation(
+                "observation-remove-lcd",
+                "decided",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id="project-ami-es2002-decision-remove-lcd-advanced-chip",
+                state_kind="decision",
+                subject="Remove LCD and advanced chip",
+                event_sequence=4,
+            ),
+            observation(
+                "observation-old-power",
+                "decided",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id=old_power_id,
+                state_kind="decision",
+                subject="Kinetic power with battery backup",
+                event_sequence=3,
+            ),
+            observation(
+                "observation-final-power",
+                "decided",
+                "creates",
+                "2004-12-13T00:00:00Z",
+                state_id="project-ami-es2002-decision-batteries-only-power-source",
+                state_kind="decision",
+                subject="Batteries as sole power source",
+                source_artifact_id="ami-es2002-final-report",
+                event_sequence=5,
+            ),
+        ]
+
+        projections = self._projections(observations)
+
+        self.assertEqual(projections[requirements_id]["lifecycle_status"], "completed")
+        self.assertEqual(projections[budget_issue_id]["lifecycle_status"], "resolved")
+        self.assertEqual(projections[lcd_dependency_id]["lifecycle_status"], "resolved")
+        self.assertEqual(projections[old_power_id]["lifecycle_status"], "superseded")
+        self.assertIn(
+            "observation-within-budget",
+            projections[budget_issue_id]["supporting_memory_ids"],
+        )
+
+    def test_policy_relation_cannot_override_a_later_target_frontier(self):
+        issue_id = "project-ami-es2002-issue-design-over-budget"
+        source = observation(
+            "observation-within-budget-earlier",
+            "decided",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            state_id="project-ami-es2002-decision-costs-within-budget",
+            state_kind="decision",
+            subject="Costs within budget",
+            event_sequence=4,
+            source_offset_ms=1,
+        )
+        later_issue = observation(
+            "observation-over-budget-later",
+            "open",
+            "creates",
+            "2004-12-13T00:00:00Z",
+            state_id=issue_id,
+            state_kind="issue",
+            subject="Design cost over budget",
+            event_sequence=4,
+            source_offset_ms=2,
+        )
+
+        projected = self._projections([source, later_issue])[issue_id]
+
+        self.assertEqual(projected["lifecycle_status"], "open")
+
     def test_confirmed_non_lifecycle_relation_preserves_status_and_support(self):
         action_id = "project-ami-es2002-action-launch"
         issue = observation(

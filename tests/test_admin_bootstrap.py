@@ -124,7 +124,7 @@ class FakeAdapter:
 
     @staticmethod
     def assert_projection_contract(projections: tuple) -> None:
-        if not projections or projections[0].attributes["resolution_policy_id"] != "ami-es2002-state-families-v3":
+        if not projections or projections[0].attributes["resolution_policy_id"] != "ami-es2002-state-families-v4":
             raise AssertionError("the authoritative projector was not used")
 
     def verify(self, bundle: Bundle, projections: tuple) -> dict:

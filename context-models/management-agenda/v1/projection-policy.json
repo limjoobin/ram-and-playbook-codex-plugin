@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "policyId": "ami-es2002-state-families-v3",
+  "policyId": "ami-es2002-state-families-v4",
   "resolution": "latest-source-event-wins-unless-conflict-is-at-or-after-the-current-frontier",
   "relationPolicy": {
     "allowedPredicates": [
@@ -21,7 +21,7 @@
       },
       {
         "predicate": "resolves",
-        "targetKinds": ["risk", "issue", "conflict"],
+        "targetKinds": ["risk", "issue", "dependency", "conflict"],
         "targetStatus": "resolved"
       },
       {
@@ -36,6 +36,68 @@
           "conflict"
         ],
         "targetStatus": "superseded"
+      }
+    ],
+    "derivedRelations": [
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-final-functionalities",
+        "predicate": "fulfills",
+        "targetStateFamilyId": "project-ami-es2002-action-item-product-requirements"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-final-functionalities",
+        "predicate": "fulfills",
+        "targetStateFamilyId": "project-ami-es2002-action-item-user-interface-functions"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-final-input-controls",
+        "predicate": "fulfills",
+        "targetStateFamilyId": "project-ami-es2002-action-user-interface-concept"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-final-design-plastic-colours",
+        "predicate": "fulfills",
+        "targetStateFamilyId": "project-ami-es2002-action-item-industrial-design"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-project-evaluated",
+        "predicate": "fulfills",
+        "targetStateFamilyId": "project-ami-es2002-action-conduct-design-evaluation"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-costs-within-budget",
+        "predicate": "resolves",
+        "targetStateFamilyId": "project-ami-es2002-issue-design-over-budget"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-product-slogan",
+        "predicate": "resolves",
+        "targetStateFamilyId": "project-ami-es2002-conflict-slogan-treatment"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-product-slogan",
+        "predicate": "resolves",
+        "targetStateFamilyId": "project-ami-es2002-issue-corporate-slogan-placement"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-lcd-interface",
+        "predicate": "resolves",
+        "targetStateFamilyId": "project-ami-es2002-dependency-lcd-station-listings-input-device"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-double-curved-plastic-case",
+        "predicate": "supersedes",
+        "targetStateFamilyId": "project-ami-es2002-dependency-rubber-case-solar-panels"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-final-design-plastic-colours",
+        "predicate": "supersedes",
+        "targetStateFamilyId": "project-ami-es2002-issue-material-combination-restrictions"
+      },
+      {
+        "sourceStateFamilyId": "project-ami-es2002-decision-power-source",
+        "predicate": "supersedes",
+        "targetStateFamilyId": "project-ami-es2002-decision-kinetic-power-battery-backup"
       }
     ]
   },

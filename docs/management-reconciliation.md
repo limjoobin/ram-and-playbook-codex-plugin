@@ -4,7 +4,7 @@
 
 Organizational observations are immutable. Current state is a rebuildable
 `organizational_state_projection` produced by the versioned projector and
-`ami-es2002-state-families-v3` policy. Reconciliation never treats the
+`ami-es2002-state-families-v4` policy. Reconciliation never treats the
 read-only action audit as an ingestion source and never closes a
 "probably completed" action without a new explicit observation.
 
@@ -21,13 +21,18 @@ to a superseded target. The other predicates add relation evidence without
 changing lifecycle status. A relationship older than the target's current
 frontier cannot close or supersede a later state.
 
-The same projector performs one deliberately narrow automatic resolution: it
+The same projector performs two deliberately narrow automatic resolutions. It
 may derive `fulfills` from a later terminal observation to an unresolved action
 only when it contains every normalized concept token from the action's
 canonical state ID and the action has at least two such tokens. This is exact deterministic
 coverage, not fuzzy similarity or a model judgement. It needs no per-edge
 human confirmation, is rebuilt on every run, and is not written back into
-immutable observations. Legacy explicit `supersedes_state_ids` values are
+immutable observations. The context policy can also declare reviewed source-family,
+predicate, and target-family triples for relationships that exact token matching
+cannot express. Those links still require a later terminal source before their
+lifecycle effect is applied. The current AMI policy uses this for final-artifact
+fulfilments, later decisions that resolve issues or dependencies, and decisions
+that supersede obsolete state. Legacy explicit `supersedes_state_ids` values are
 honored in the same pass. Ambiguous and partial matches remain open.
 
 The repository exposes one administrator job:
@@ -104,6 +109,8 @@ is required.
 - Stable projection IDs make repeated runs idempotent.
 - Automatic fulfilment requires a later terminal source, the same project,
   and exact concept coverage; it cannot act on topical similarity.
+- Policy-derived links are explicit, versioned, source-grounded, chronological,
+  and applied by the same projector; no fuzzy resolver or second job is involved.
 - Only changed projections are written and every write is read back.
 - A missing promoted observation returns `awaiting_observation` without
   changing current state.
