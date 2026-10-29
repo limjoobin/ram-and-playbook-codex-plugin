@@ -82,7 +82,7 @@ class PluginTests(unittest.TestCase):
         marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text())
         manifest = json.loads((PLUGIN_ROOT / "plugin.json").read_text())
         overlay = json.loads((PLUGIN_ROOT / ".codex-plugin/plugin.json").read_text())
-        mcp = json.loads((PLUGIN_ROOT / "mcp.json").read_text())
+        mcp = json.loads((PLUGIN_ROOT / ".mcp.json").read_text())
 
         self.assertEqual(marketplace["name"], "redis-field-engineering")
         self.assertEqual(marketplace["plugins"][0]["name"], manifest["name"])
@@ -94,8 +94,7 @@ class PluginTests(unittest.TestCase):
         self.assertEqual(overlay["version"], VERSION)
         self.assertNotIn("$schema", manifest)
         self.assertNotIn("extensions", manifest)
-        self.assertEqual(overlay["mcpServers"], "./mcp.json")
-        self.assertNotIn("hooks", overlay)
+        self.assertEqual(overlay["mcpServers"], "./.mcp.json")
         self.assertEqual(
             overlay["interface"]["capabilities"],
             ["Read", "Write"],
@@ -105,8 +104,9 @@ class PluginTests(unittest.TestCase):
         hooks = json.loads((PLUGIN_ROOT / "hooks/hooks.json").read_text())
         self.assertEqual(set(hooks["hooks"]), {"UserPromptSubmit", "SessionEnd"})
         server = mcp["mcpServers"]["redis-shared-memory-editor"]
-        self.assertEqual(server["command"], "python3")
-        self.assertEqual(server["args"], ["-I", "${PLUGIN_ROOT}/server/main.py"])
+        self.assertEqual(server["command"], "/bin/sh")
+        self.assertIn(f"/{VERSION}", server["args"][1])
+        self.assertIn("$plugin_cache_root/server/main.py", server["args"][1])
 
     def test_configuration_rejects_missing_and_credential_bearing_endpoint(self):
         with self.assertRaisesRegex(PluginError, "RAM_API_KEY"):
