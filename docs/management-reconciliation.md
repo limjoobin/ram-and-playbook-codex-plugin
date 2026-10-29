@@ -73,6 +73,19 @@ without changing the reconciliation implementation.
 Human-confirmed promotions do not wait for MemoryETL; they are picked up by the
 same next scheduled run.
 
+Run the scheduler from a clean checkout detached at the same reviewed commit
+or tag used to install the desktop plugin. Do not leave the scheduler on an
+older branch checkout. For an approved commit SHA:
+
+```sh
+git -C "/path/to/central/ram-and-playbook-codex-plugin" fetch origin <approved-sha>
+git -C "/path/to/central/ram-and-playbook-codex-plugin" switch --detach <approved-sha>
+test "$(git -C "/path/to/central/ram-and-playbook-codex-plugin" rev-parse HEAD)" = "<approved-sha>"
+```
+
+After switching, kick the LaunchAgent once and confirm its last exit status is
+zero before relying on the five-minute schedule.
+
 The plugin therefore performs the human interaction and confirmed shared
 promotion, while this job owns deterministic relationship resolution and
 projection. The two active hooks

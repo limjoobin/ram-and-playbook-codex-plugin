@@ -34,6 +34,13 @@ write is read back by exact ID before success is returned. MemoryETL is not
 used for this already-structured, human-confirmed update. The private source is
 referenced, not moved, updated, or deleted.
 
+The promoted record is also a first-class evidence source. Because it has no
+document source traversal, callers use `ram_get_evidence` with its exact
+`memory_id` and omit `source_id`. The service returns it only when the record
+matches the configured owner, namespace, memory type, schema, and confirmed
+candidate provenance. Agenda output can therefore cite the completion report
+instead of falling back to the earlier assignment evidence.
+
 Legacy v2 lifecycle observations remain readable during the v3 relation-model
 migration and contain no relationship assertion. Explicit generic
 relationships remain immutable v3 observation data; lifecycle hooks must not
@@ -93,5 +100,8 @@ the event contracts and trust flow in the
 5. Inspect and explicitly confirm the candidate, then promote it. Verify one
    shared immutable observation exists, its candidate provenance is retained,
    and the private record remains intact.
-6. Include a token-shaped value and a malicious transcript-path string in a
+6. Read the promoted observation through `ram_get_evidence` using its exact
+   memory ID and no source ID. Verify its lifecycle, owner, and resolution time
+   match the confirmed update.
+7. Include a token-shaped value and a malicious transcript-path string in a
    test session. Verify neither appears in the local ledger or MCP output.

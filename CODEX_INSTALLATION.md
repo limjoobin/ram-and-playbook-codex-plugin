@@ -256,6 +256,13 @@ python3 scripts/reconcile_management_state.py \
   --timeout-seconds 420
 ```
 
+The promoted observation has no document source. Verify it independently by
+calling `ram_get_evidence` with the exact promoted `memory_id` and no
+`source_id`; the returned lifecycle, owner, resolution time, and candidate
+locator must match the reviewed update. A subsequent agenda should cite this
+RAM-memory reference for completed work rather than only the original
+assignment document.
+
 The PoC host also runs the same command centrally every five minutes with
 `--apply --quiet-no-changes`. This catches document and session extraction that
 does not originate from an interactive promotion. RAM's ingestion webhook is a
@@ -274,6 +281,12 @@ clean checkout:
 python3 -m unittest discover -s tests -v
 python3 evaluation/run.py
 ```
+
+The central scheduler checkout must be clean and pinned to that same approved
+commit or tag. Detach it at the approved SHA, kick the scheduler once, and
+confirm `git rev-parse HEAD` matches the plugin release before completing the
+live acceptance test. See
+[docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 ## Update
 

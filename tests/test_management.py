@@ -280,6 +280,53 @@ class ManagementTests(unittest.TestCase):
             [{"entry_key": "prepare-management-review-agenda"}],
         )
 
+    def test_confirmed_human_observation_is_independently_citable(self):
+        direct = observation(
+            "observation-human",
+            "state-a",
+            status="completed",
+            artifact="personal-candidate-candidate-abc",
+            schema_version="organizational-state-v3",
+        )
+        direct["sources"] = []
+        direct["attributes"].update(
+            {
+                "evidence_locator": "candidate:candidate-abc;private-session:session-1;turn:turn-1",
+                "resolved_at": "2026-01-02T00:00:00Z",
+            }
+        )
+        service = PluginService(
+            CONFIG,
+            FakeRAM(supporting=[direct]),
+            FakePlaybook(),
+            FakeEditor(),
+        )
+
+        result = service.ram_get_evidence("observation-human")
+
+        self.assertEqual(result["source"]["referenceType"], "ram_memory")
+        evidence = result["source"]["evidence"][0]["observation"]
+        self.assertEqual(evidence["lifecycle_status"], "completed")
+        self.assertEqual(evidence["resolved_at"], "2026-01-02T00:00:00Z")
+        self.assertEqual(
+            evidence["accountable_entity_id"],
+            "employee-laura-project-manager",
+        )
+
+    def test_ordinary_memory_requires_a_returned_document_source_id(self):
+        ordinary = observation("memory", "state-a")
+        service = PluginService(
+            CONFIG,
+            FakeRAM(supporting=[ordinary]),
+            FakePlaybook(),
+            FakeEditor(),
+        )
+
+        with self.assertRaises(PluginError) as raised:
+            service.ram_get_evidence("memory")
+
+        self.assertEqual(raised.exception.code, "evidence_unavailable")
+
     def test_playbook_streamable_http_initializes_and_lists_tools(self):
         client = PlaybookClient(CONFIG)
         client._opener = QueueOpener(

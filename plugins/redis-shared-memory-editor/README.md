@@ -68,6 +68,12 @@ The repository's central reconciliation job then applies the single versioned
 projector; it is deliberately not run independently by every
 desktop plugin.
 
+`ram_get_evidence` accepts a returned source ID for document evidence. For a
+confirmed human promotion, it accepts the exact returned memory ID without a
+source ID and exposes the scoped immutable observation as evidence. Agenda
+progress therefore cites the human completion report itself as well as any
+earlier document evidence.
+
 See the repository's `CODEX_INSTALLATION.md` for installation and verification.
 Maintainers should read `AGENTS.md`, `SECURITY.md`, and
 `docs/adding-tools.md` before changing behavior.

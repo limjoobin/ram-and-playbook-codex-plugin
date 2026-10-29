@@ -11,7 +11,7 @@ from urllib.error import URLError
 from urllib.parse import SplitResult, urlsplit
 
 
-VERSION = "0.12.5"
+VERSION = "0.12.6"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 SETTING_NAMES = (
     "RAM_ENDPOINT",

@@ -262,18 +262,36 @@ def _observation(record: dict[str, Any]) -> dict[str, Any]:
         "state_id": attributes.get("state_id"),
         "state_kind": attributes.get("state_kind"),
         "project_id": attributes.get("project_id"),
+        "accountable_entity_id": attributes.get("accountable_entity_id"),
         "evidence_role": attributes.get("evidence_role"),
         "lifecycle_status": attributes.get("lifecycle_status"),
         "observed_at": attributes.get("observed_at"),
         "event_sequence": attributes.get("event_sequence"),
         "source_offset_ms": attributes.get("source_offset_ms"),
         "effective_at": attributes.get("effective_at"),
+        "resolved_at": attributes.get("resolved_at"),
         "source_artifact_id": attributes.get("source_artifact_id"),
         "source_revision": attributes.get("source_revision"),
         "evidence_locator": attributes.get("evidence_locator"),
         "relations": relations,
         "sources": record.get("sources") if isinstance(record.get("sources"), list) else [],
     }
+
+
+def _is_direct_human_observation(record: dict[str, Any], config: Config) -> bool:
+    """Recognize the narrow, explicitly confirmed promotion provenance."""
+
+    if not _scope_matches(record, config):
+        return False
+    attributes = _attributes(record)
+    artifact = attributes.get("source_artifact_id")
+    locator = attributes.get("evidence_locator")
+    return (
+        isinstance(artifact, str)
+        and artifact.startswith("personal-candidate-")
+        and isinstance(locator, str)
+        and "candidate:candidate-" in locator
+    )
 
 
 def _projection_state(
@@ -569,10 +587,42 @@ class PluginService:
     def ram_get_evidence(
         self,
         memory_id: str,
-        source_id: str,
+        source_id: str | None = None,
         limit: int = 100,
         page_token: str | None = None,
     ) -> dict[str, Any]:
+        if source_id is None:
+            try:
+                record = self.ram.get(memory_id)
+            except Exception as error:
+                raise PluginError(
+                    "evidence_unavailable",
+                    "The exact human observation is unavailable.",
+                ) from error
+            if not _is_direct_human_observation(record, self.config):
+                raise PluginError(
+                    "evidence_unavailable",
+                    "The memory is not a scoped, confirmed human observation. Use a returned source ID for document evidence.",
+                )
+            observation = _observation(record)
+            source = {
+                "sourceId": memory_id,
+                "kind": "long-term-memory",
+                "referenceType": "ram_memory",
+                "identity": {"memoryId": memory_id},
+                "evidence": [
+                    {
+                        "text": observation.get("text"),
+                        "observation": observation,
+                    }
+                ],
+            }
+            return {
+                "ok": True,
+                "memory_id": memory_id,
+                "source": source,
+                "next_page_token": None,
+            }
         response = self.ram.evidence(memory_id, source_id, limit, page_token)
         source = response.get("source")
         if not isinstance(source, dict):

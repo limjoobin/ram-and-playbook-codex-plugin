@@ -328,6 +328,47 @@ class AgendaTests(unittest.TestCase):
         self.assertEqual(result["confirmed_decisions"][0]["owner"], "")
         self.assertFalse(result["deferred_candidates"])
 
+    def test_completed_work_cites_the_confirmed_human_observation(self):
+        assignment = record(
+            "assignment",
+            "state-completed",
+            state_kind="action_item",
+            status="open",
+            subject="Complete the evaluation criteria",
+            observed_at="2026-10-20T09:00:00Z",
+        )
+        completion = record(
+            "human-completion",
+            "state-completed",
+            state_kind="action_item",
+            status="completed",
+            sources=False,
+            artifact="personal-candidate-candidate-abc",
+            subject="Complete the evaluation criteria",
+            observed_at="2026-10-21T09:00:00Z",
+            event_sequence=2,
+        )
+        completion["attributes"].update(
+            {
+                "schema_version": "organizational-state-v3",
+                "evidence_locator": "candidate:candidate-abc;private-session:session-1;turn:turn-1",
+                "resolved_at": "2026-10-21T09:00:00Z",
+            }
+        )
+        service, ram, _ = self.service([assignment, completion])
+
+        result = service.agenda_prepare("2026-11-01")
+
+        reference = result["completed_work"][0]["evidence_references"][0]
+        self.assertEqual(reference["reference_type"], "ram_memory")
+        self.assertEqual(reference["memory_id"], "human-completion")
+        evidence = service.ram_get_evidence("human-completion")
+        self.assertEqual(
+            evidence["source"]["evidence"][0]["observation"]["lifecycle_status"],
+            "completed",
+        )
+        self.assertNotIn(("human-completion", None), ram.evidence_calls)
+
     def test_context_registers_are_not_capped_by_agenda_capacity(self):
         records = [
             record(

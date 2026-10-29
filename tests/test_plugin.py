@@ -269,6 +269,8 @@ class PluginTests(unittest.TestCase):
              False, True, True, False, False],
         )
         self.assertTrue(TOOLS[3]["annotations"]["destructiveHint"])
+        evidence_tool = next(tool for tool in TOOLS if tool["name"] == "ram_get_evidence")
+        self.assertEqual(evidence_tool["inputSchema"]["required"], ["memory_id"])
         client = FakeRAM()
         service = SharedMemory(CONFIG, client, visibility_ms=1, poll_ms=1)
         invalid = call_tool(

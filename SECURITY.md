@@ -96,6 +96,10 @@ parent is mode `0700`.
   successfully traversed source-evidence reference. Terminal and superseded
   state are excluded. Missing owner, impact, or requested-decision fields stay
   visible; insufficient source evidence is reported separately.
+- Document evidence requires a source ID returned by RAM. A direct human
+  promotion is readable without a source ID only by its exact memory ID and
+  only when owner, namespace, memory type, schema, and confirmed candidate
+  provenance all match. This is not an arbitrary memory-read surface.
 
 ## Write safety
 
@@ -129,6 +133,9 @@ versioned relationship-resolution/projector pass, and upserts only changed
 derived projections after an explicit `--apply`. It never turns audit
 classifications, partial matches, or inferred "probably completed" states into
 terminal observations.
+Its scheduler checkout must be clean and pinned to the same reviewed commit or
+tag as the installed plugin so projection policy and runtime contracts cannot
+silently drift.
 
 ## Supply chain
 

@@ -124,7 +124,7 @@ TOOLS = [
     {
         "name": "ram_get_evidence",
         "title": "Read RAM source evidence",
-        "description": "Traverse one source link for a retrieved RAM memory. Use IDs returned by ram_search_state; no arbitrary endpoint is accepted.",
+        "description": "Traverse evidence for a retrieved RAM memory. Pass source_id for document evidence; omit it only for an exact confirmed human observation returned by ram_search_state. No arbitrary endpoint is accepted.",
         "inputSchema": _object_schema(
             {
                 "memory_id": {"type": "string", "minLength": 1, "maxLength": 256},
@@ -132,7 +132,7 @@ TOOLS = [
                 "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 100},
                 "page_token": {"type": "string", "minLength": 1, "maxLength": 2048},
             },
-            ["memory_id", "source_id"],
+            ["memory_id"],
         ),
         "annotations": READ_ANNOTATIONS,
     },
@@ -395,10 +395,10 @@ def _validate_arguments(name: str, arguments: Any) -> dict[str, Any]:
             "similarity_threshold": float(threshold) if threshold is not None else None,
         }
     if name == "ram_get_evidence":
-        values = _shape(arguments, {"memory_id", "source_id", "limit", "page_token"}, {"memory_id", "source_id"})
+        values = _shape(arguments, {"memory_id", "source_id", "limit", "page_token"}, {"memory_id"})
         return {
             "memory_id": _text(values, "memory_id", 256, True),
-            "source_id": _text(values, "source_id", 256, True),
+            "source_id": _text(values, "source_id", 256),
             "limit": _integer(values, "limit", 100, 1, 100),
             "page_token": _text(values, "page_token", 2048),
         }

@@ -93,6 +93,11 @@ read-only second pass compares first-pass conflicts with later cited state and
 reports reconciled, unresolved, and ambiguous results without mutating RAM. It
 is not a generic HTTP or MCP proxy.
 
+Document-derived observations remain citable through their RAM source links.
+An explicitly confirmed human promotion is independently citable through its
+exact scoped RAM memory ID, so a completion shown in an agenda points to the
+completion report itself rather than only to the original assignment.
+
 Management state uses two RAM lanes. `organizational_state` is the immutable,
 source-linked observation ledger. `organizational_state_projection` is a
 deterministic current-state view built by the ingestion pipeline from a

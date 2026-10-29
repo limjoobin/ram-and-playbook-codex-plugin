@@ -202,6 +202,30 @@ def _source_id(source: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _direct_memory_reference(observation: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a citable reference for one explicitly confirmed human update."""
+
+    memory_id = observation.get("memory_id")
+    artifact = observation.get("source_artifact_id")
+    locator = observation.get("evidence_locator")
+    if not (
+        isinstance(memory_id, str)
+        and memory_id
+        and isinstance(artifact, str)
+        and artifact.startswith("personal-candidate-")
+        and isinstance(locator, str)
+        and "candidate:candidate-" in locator
+    ):
+        return None
+    return {
+        "reference_type": "ram_memory",
+        "memory_id": memory_id,
+        "source_artifact_id": artifact,
+        "source_revision": observation.get("source_revision"),
+        "evidence_locator": locator,
+    }
+
+
 def _references(service: Any, state: dict[str, Any]) -> list[dict[str, Any]]:
     references: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -214,6 +238,16 @@ def _references(service: Any, state: dict[str, Any]) -> list[dict[str, Any]]:
         memory_id = observation.get("memory_id")
         if not isinstance(memory_id, str) or not memory_id:
             continue
+        direct = _direct_memory_reference(observation)
+        if direct is not None and (memory_id, "") not in seen:
+            evidence = service.ram_get_evidence(memory_id, None, 100, None)
+            resolved = evidence.get("source")
+            passages = resolved.get("evidence") if isinstance(resolved, dict) else None
+            if passages:
+                seen.add((memory_id, ""))
+                references.append(direct)
+                if len(references) == 3:
+                    return references
         for source in observation.get("sources") or []:
             source_id = _source_id(source)
             if source_id is None or (memory_id, source_id) in seen:
@@ -252,6 +286,12 @@ def _linked_references(state: dict[str, Any]) -> list[dict[str, Any]]:
         memory_id = observation.get("memory_id")
         if not isinstance(memory_id, str) or not memory_id:
             continue
+        direct = _direct_memory_reference(observation)
+        if direct is not None and (memory_id, "") not in seen:
+            seen.add((memory_id, ""))
+            references.append(direct)
+            if len(references) == 3:
+                return references
         for source in observation.get("sources") or []:
             source_id = _source_id(source)
             if source_id is None or (memory_id, source_id) in seen:
