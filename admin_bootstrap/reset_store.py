@@ -25,12 +25,16 @@ def _next_token(payload: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _long_term_ids(ram: Any) -> list[str]:
+def _search_ids(ram: Any, namespace_filter: dict[str, str]) -> set[str]:
     token: str | None = None
     seen_tokens: set[str] = set()
-    ids: list[str] = []
+    ids: set[str] = set()
     while True:
-        request: dict[str, Any] = {"limit": 100}
+        request: dict[str, Any] = {
+            "filter": {"namespace": namespace_filter},
+            "filterOp": "all",
+            "limit": 100,
+        }
         if token:
             request["pageToken"] = token
         page = ram.search(request, timeout_ms=30_000)
@@ -38,13 +42,24 @@ def _long_term_ids(ram: Any) -> list[str]:
             memory_id = item.get("id") if isinstance(item, dict) else None
             if not isinstance(memory_id, str) or not memory_id:
                 raise StoreResetError("RAM returned a memory without an identity")
-            ids.append(memory_id)
+            ids.add(memory_id)
         token = _next_token(page)
         if token is None:
             return ids
         if token in seen_tokens:
             raise StoreResetError("RAM repeated a long-term-memory page token")
         seen_tokens.add(token)
+
+
+def _long_term_ids(config: Any, ram: Any) -> list[str]:
+    # Search requires a structured filter. Namespace `ne` includes unnamespaced
+    # records; the paired `eq` pass closes the one excluded namespace exactly.
+    marker = "reset-" + hashlib.sha256(
+        f"{config.endpoint}\0{config.store_id}".encode("utf-8")
+    ).hexdigest()[:40]
+    return sorted(
+        _search_ids(ram, {"ne": marker}) | _search_ids(ram, {"eq": marker})
+    )
 
 
 def _session_ids(ram: Any) -> list[str]:
@@ -69,7 +84,7 @@ def _session_ids(ram: Any) -> list[str]:
 def plan_reset(config: Any, ram: Any) -> dict[str, Any]:
     """Inventory the exact configured store without returning data or identifiers."""
 
-    memories = _long_term_ids(ram)
+    memories = _long_term_ids(config, ram)
     sessions = _session_ids(ram)
     target = hashlib.sha256(
         f"{config.endpoint}\0{config.store_id}".encode("utf-8")
@@ -94,7 +109,7 @@ def apply_reset(config: Any, ram: Any) -> dict[str, Any]:
     """Delete all current entries, then prove both visible entry lanes are empty."""
 
     before = plan_reset(config, ram)
-    memory_ids = _long_term_ids(ram)
+    memory_ids = _long_term_ids(config, ram)
     deleted_memories = 0
     for offset in range(0, len(memory_ids), 100):
         batch = memory_ids[offset : offset + 100]
