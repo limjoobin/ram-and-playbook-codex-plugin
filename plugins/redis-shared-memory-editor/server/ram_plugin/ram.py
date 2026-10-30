@@ -201,6 +201,43 @@ class RAMClient:
             timeout_ms=timeout_ms,
         )
 
+    def bulk_delete_long_term_memories(
+        self, memory_ids: list[str], timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Delete an explicit bounded set of long-term memory IDs."""
+
+        return self._request(
+            "DELETE",
+            self.base_url,
+            {"memoryIds": memory_ids},
+            timeout_ms,
+        )
+
+    def list_sessions(
+        self, page_token: str | None = None, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """List every session ID in the configured store for administrator reset."""
+
+        query = "?includeAll=true&limit=1000"
+        if page_token:
+            query += f"&pageToken={quote(page_token, safe='')}"
+        return self._request(
+            "GET",
+            f"{self.store_url}/session-memory{query}",
+            timeout_ms=timeout_ms,
+        )
+
+    def delete_session(
+        self, session_id: str, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Delete one explicit session and all its events."""
+
+        return self._request(
+            "DELETE",
+            f"{self.store_url}/session-memory/{quote(session_id, safe='')}",
+            timeout_ms=timeout_ms,
+        )
+
 
 def _field(record: dict[str, Any], camel: str, snake: str) -> Any:
     return record.get(camel, record.get(snake))

@@ -36,6 +36,16 @@ source documents through RAM MemoryETL and inspects its source-linked output.
 
 2. Provision RAM and Playbook using the supported instructions for the
    deployed release.
+   To reuse an existing non-production RAM store, first inspect and explicitly
+   empty only its entries:
+
+   ```sh
+   python3 scripts/reset_demo_ram.py
+   python3 scripts/reset_demo_ram.py --apply --confirm-empty-store
+   ```
+
+   This preserves the store, namespaces, custom-memory types, and document
+   extractors while deleting all long-term memories and private sessions.
 3. In RAM, register the two exact JSON contracts under
    `context-models/management-agenda/v1/memory-types/`. Configure a document
    extractor for `organizational_state` with `extraction-prompt.txt`. Keep

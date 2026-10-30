@@ -156,6 +156,7 @@ checkout. It is not installed independently by every plugin user. See
 - the two-document bootstrap smoke corpus;
 - deterministic source-envelope rendering, expected MemoryETL output, and an
   offline end-to-end context validator;
+- an explicit plan/confirm/verify reset command for a non-production RAM store;
 - a bounded MemoryETL corpus submission command;
 - a credential-free 15-case agenda evaluation; and
 - installation, administration, security, reconciliation, and demo guidance.

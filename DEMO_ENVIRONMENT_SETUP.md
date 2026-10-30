@@ -71,6 +71,19 @@ Use a fresh non-production RAM store for a schema-breaking change. Never paste
 credentials into chat, write them into the repository, or reuse a publisher
 credential as the participant runtime key.
 
+For a repeatable smoke test on an existing non-production store whose schemas
+and extractor already match this bundle, use the checked-in reset command:
+
+```sh
+python3 scripts/reset_demo_ram.py
+python3 scripts/reset_demo_ram.py --apply --confirm-empty-store
+```
+
+Review the first command's target hash and counts. The applied command deletes
+all long-term memories and private sessions from the exact store in
+`editor.env`, verifies both lanes are empty, and preserves declarations and
+extractors. It does not reset Playbook or modify credentials.
+
 Shared endpoints must use HTTPS. Loopback HTTP is acceptable only when every
 component is on the same development machine.
 
