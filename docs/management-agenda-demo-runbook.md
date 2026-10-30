@@ -60,14 +60,11 @@ Expected:
 Stop if RAM or Playbook is unavailable, the namespace is unexpected, or the
 participant does not match the employee being demonstrated.
 
-For the currently prepared snapshot, a useful sanity check is:
-
-- 21 action projections: 15 open, 1 in progress, and 5 completed;
-- 45 decision projections;
-- 9 risks, 24 issues, 5 dependencies, and 4 registered conflicts.
-
-These are projection counts, not counts of unique, presently authoritative
-business facts.
+As a behavioral sanity check, confirm that the current view and immutable
+history are both readable, document evidence can be traversed, and terminal or
+superseded observations are not presented as current. Do not use exact
+projection counts as an acceptance gate; they change when extraction,
+relationships, policy, or confirmed human updates change.
 
 ## Demo 1 — Source-grounded project recall
 
@@ -173,9 +170,10 @@ Expected:
 
 Use these labels:
 
-- **“21 action projections”**, not “21 unquestionably current tasks.”
-- **“16 projected active actions”**, followed by a data-quality caveat.
-- **“45 decision projections”**, not “45 unique current decisions.”
+- **“Action projections”**, not “unquestionably current tasks.”
+- Separate active and completed actions and include the applicable data-quality
+  caveat.
+- **“Decision projections”**, not “unique current decisions.”
 - **“Historical project-process observations”** for collaboration and meeting
   problems recorded during the final retrospective.
 
@@ -187,7 +185,7 @@ an explicit relation or human-confirmed completion reconciles them, describe
 these as **open in RAM, with possible later fulfilment evidence**, not as known
 unfinished work.
 
-Similarly, the 45 decision projections contain duplicate formulations and
+Similarly, the decision projections contain duplicate formulations and
 historical choices. Kinetic power with battery backup, plastic and rubber
 materials, and earlier interface concepts should be presented as decision
 history when later evidence replaces them. The final report is authoritative
