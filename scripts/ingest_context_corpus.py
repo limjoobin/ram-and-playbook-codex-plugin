@@ -33,6 +33,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--timeout-seconds", type=int, default=600)
     parser.add_argument("--poll-seconds", type=float, default=2.0)
+    parser.add_argument(
+        "--rehydration-id",
+        help=(
+            "stable identifier for one intentional reprocessing after a store reset; "
+            "reuse the same value when retrying that run"
+        ),
+    )
     return parser
 
 
@@ -44,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     from admin_bootstrap.context_pipeline import ingestion_documents
     from admin_bootstrap.memory_etl import MemoryETLError, ingest_documents
     from ram_plugin.credentials import load_credential_file
-    from ram_plugin.ram import RAMClient
+    from ram_plugin.ram import RAMClient, RAMHTTPError
 
     try:
         bundle = Bundle.load(ROOT / "context-models" / "management-agenda" / "v1")
@@ -67,9 +74,24 @@ def main(argv: list[str] | None = None) -> int:
                 extractor_id=args.extractor_id,
                 timeout_seconds=args.timeout_seconds,
                 poll_seconds=args.poll_seconds,
+                rehydration_id=args.rehydration_id,
             )
     except (BundleError, MemoryETLError) as error:
         result = {"ok": False, "status": "failed", "message": str(error)}
+    except RAMHTTPError as error:
+        problem = f" ({error.error_type})" if error.error_type else ""
+        if error.status_code == 409:
+            message = (
+                "RAM rejected the MemoryETL request as a conflict"
+                f"{problem}. The idempotency key or immutable document revision is "
+                "already reserved in this store."
+            )
+        else:
+            message = (
+                f"RAM rejected the MemoryETL request with HTTP status "
+                f"{error.status_code}{problem}."
+            )
+        result = {"ok": False, "status": "failed", "message": message}
     except Exception:
         result = {
             "ok": False,

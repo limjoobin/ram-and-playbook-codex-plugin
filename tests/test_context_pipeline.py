@@ -17,6 +17,7 @@ from admin_bootstrap.context_pipeline import (  # noqa: E402
     verify_context_pipeline,
 )
 from admin_bootstrap.memory_etl import ingest_documents  # noqa: E402
+from admin_bootstrap.memory_etl import MemoryETLError  # noqa: E402
 
 
 BUNDLE_ROOT = ROOT / "context-models" / "management-agenda" / "v1"
@@ -38,6 +39,17 @@ class FakeMemoryETL:
 
     def list_document_ingestion_outputs(self, ingestion_id, timeout_ms=None):
         return {"items": [{"memoryId": f"memory-{ingestion_id}"}]}
+
+
+class CurrentContractMemoryETL(FakeMemoryETL):
+    def get_document_ingestion(self, ingestion_id, timeout_ms=None):
+        count = self.reads.get(ingestion_id, 0)
+        self.reads[ingestion_id] = count + 1
+        processing = "running" if count == 0 else "succeeded"
+        return {"ingestion": {"ingestionId": ingestion_id, "status": {"processing": processing}}}
+
+    def list_document_ingestion_outputs(self, ingestion_id, timeout_ms=None):
+        return {"memoryIds": [f"memory-{ingestion_id}"]}
 
 
 class ContextPipelineTests(unittest.TestCase):
@@ -96,6 +108,79 @@ class ContextPipelineTests(unittest.TestCase):
             all(item["idempotency_key"] for item in ram.submissions)
         )
         self.assertIn("reconcile_management_state.py --apply", result["nextStep"])
+
+    def test_rehydration_id_scopes_idempotency_without_changing_documents(self):
+        documents = ingestion_documents(self.bundle)
+        first = FakeMemoryETL()
+        retry = FakeMemoryETL()
+        next_reset = FakeMemoryETL()
+
+        for ram, rehydration_id in (
+            (first, "reset-2032-07-19"),
+            (retry, "reset-2032-07-19"),
+            (next_reset, "reset-2032-07-20"),
+        ):
+            ingest_documents(
+                ram,
+                documents,
+                owner_id="orion-project-office",
+                extractor_id="organizational-state-documents",
+                rehydration_id=rehydration_id,
+                poll_seconds=0.01,
+                sleep=lambda _: None,
+            )
+
+        first_keys = [item["idempotency_key"] for item in first.submissions]
+        self.assertEqual(
+            first_keys,
+            [item["idempotency_key"] for item in retry.submissions],
+        )
+        self.assertNotEqual(
+            first_keys,
+            [item["idempotency_key"] for item in next_reset.submissions],
+        )
+        first_revisions = [item["revision"] for item in first.submissions]
+        self.assertEqual(
+            first_revisions,
+            [item["revision"] for item in retry.submissions],
+        )
+        self.assertNotEqual(
+            first_revisions,
+            [item["revision"] for item in next_reset.submissions],
+        )
+        self.assertTrue(all("-rehydration-" in item for item in first_revisions))
+        for submission in first.submissions:
+            prefix = submission["content"].split(b"\n\n", 1)[0]
+            self.assertIn(submission["revision"].encode("utf-8"), prefix)
+        self.assertEqual(documents, ingestion_documents(self.bundle))
+
+    def test_rehydration_id_is_bounded(self):
+        with self.assertRaises(MemoryETLError):
+            ingest_documents(
+                FakeMemoryETL(),
+                ingestion_documents(self.bundle),
+                owner_id="orion-project-office",
+                extractor_id="organizational-state-documents",
+                rehydration_id="contains spaces",
+            )
+
+    def test_current_nested_memory_etl_contract_is_supported(self):
+        ram = CurrentContractMemoryETL()
+
+        result = ingest_documents(
+            ram,
+            ingestion_documents(self.bundle),
+            owner_id="orion-project-office",
+            extractor_id="organizational-state-documents",
+            poll_seconds=0.01,
+            sleep=lambda _: None,
+        )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            [artifact["outputCount"] for artifact in result["artifacts"]],
+            [1, 1],
+        )
 
     def test_validation_cli_is_offline_and_machine_readable(self):
         process = subprocess.run(

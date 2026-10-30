@@ -79,8 +79,15 @@ acceptance check.
 
    ```sh
    python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
-   python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply
+   python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
+     --rehydration-id RESET-YYYYMMDD-A
    ```
+
+   `--rehydration-id` is required when intentionally repopulating a store whose
+   prior MemoryETL receipts and immutable source identities remain after its
+   memories were emptied. It deterministically creates a new source revision
+   in both the RAM request and source envelope. Choose a new value for each
+   reset, and reuse that value for retries of the same run.
 
 7. Build current state and prove idempotency:
 

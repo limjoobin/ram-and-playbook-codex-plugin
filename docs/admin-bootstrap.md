@@ -69,8 +69,16 @@ MemoryETL smoke-corpus submission is available as a separate, explicit command:
 
 ```sh
 python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
-python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply
+python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
+  --rehydration-id RESET-YYYYMMDD-A
 ```
+
+Use `--rehydration-id` only for an intentional repopulation after emptying a
+test store. Pick a new value for each reset and reuse it for retries of that
+same run. RAM retains MemoryETL receipts even after their output memories are
+deleted, so the ordinary deterministic request key and immutable source
+revision cannot recreate deleted outputs. The rehydration ID deterministically
+creates a matching new revision in both the request and source envelope.
 
 Its three RAM HTTP operations are isolated in `RAMClient`; a service API change
 can update that seam and its fake tests without changing the versioned context
