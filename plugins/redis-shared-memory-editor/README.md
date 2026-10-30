@@ -46,6 +46,12 @@ preferably, their own service API keys.
 `RAM_PARTICIPANT` is contributor attribution, not verified identity. Never put
 the populated file in the repository, plugin cache, or chat.
 
+An environment administrator may also use the exact optional settings
+`RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and `OPENAI_API_KEY` in this
+same private prototype file. The desktop MCP accepts but does not retain them
+in its runtime configuration. Ordinary participant installations leave them
+blank.
+
 `agenda_prepare` does not bundle a second copy of the management policy. It
 discovers and loads `prepare-management-review-agenda` from Playbook at runtime,
 fetches the five required policy resources, verifies every digest, retrieves

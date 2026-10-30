@@ -6,7 +6,13 @@ import os
 from pathlib import Path
 import stat
 
-from .config import Config, PluginError, SETTING_NAMES, load_config
+from .config import (
+    ADMIN_SETTING_NAMES,
+    Config,
+    PluginError,
+    SETTING_NAMES,
+    load_config,
+)
 
 
 def load_credential_file(path: Path) -> Config:
@@ -53,7 +59,10 @@ def load_credential_file(path: Path) -> Config:
         if descriptor >= 0:
             os.close(descriptor)
 
-    allowed = set(SETTING_NAMES)
+    # A prototype administrator may keep bootstrap credentials in the same
+    # private file. The desktop MCP validates their names but deliberately
+    # drops them before constructing its least-privilege runtime Config.
+    allowed = set(SETTING_NAMES) | set(ADMIN_SETTING_NAMES)
     values: dict[str, str] = {}
     for line in text.splitlines():
         line = line.strip()

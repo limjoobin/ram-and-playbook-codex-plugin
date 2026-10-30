@@ -134,6 +134,11 @@ RAM_API_KEY=your-user-api-key
 RAM_AGENDA_OWNER_ID=ami-project-office
 PLAYBOOK_MCP_URL=https://your-playbook-endpoint.redis.io/v1/playbooks/your-playbook-id/mcp
 PLAYBOOK_API_KEY=your-user-playbook-api-key
+
+# Optional: only for a person also administering a fresh prototype environment.
+RAM_ADMIN_API_KEY=
+PLAYBOOK_PUBLISHER_API_KEY=
+OPENAI_API_KEY=
 ```
 
 Do not paste the API key into a ChatGPT conversation or commit it to Git.
@@ -151,6 +156,15 @@ The values have these roles:
 | `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing immutable `organizational_state` observations and derived `organizational_state_projection` records. |
 | `PLAYBOOK_MCP_URL` | Shared | Full approved Playbook MCP URL ending in `/v1/playbooks/{playbookId}/mcp`. |
 | `PLAYBOOK_API_KEY` | Per user when supported | Credential that authenticates Playbook MCP requests. |
+| `RAM_ADMIN_API_KEY` | Environment administrator, optional | Separate credential for future bootstrap control-plane and ingestion operations. Leave blank when the deployment has no separate administrator key. |
+| `PLAYBOOK_PUBLISHER_API_KEY` | Environment administrator, optional | Publishes the checked-in Skill and resources; ordinary participants do not need it. |
+| `OPENAI_API_KEY` | Environment administrator, optional | Configures a local/dev RAM model provider when required. Managed RAM normally provisions its provider separately. |
+
+For this prototype, one administrator who is also a participant may keep all
+of these values in the same `0600` file. The desktop MCP accepts the three
+administrator names but deliberately omits their values from its runtime
+configuration. The current bootstrap adapter reserves them for future live
+setup automation; adding values does not yet enable service mutations.
 
 Store ID, namespace, participant, and agenda owner accept 1–64 letters,
 digits, or hyphens.

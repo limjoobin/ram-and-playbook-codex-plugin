@@ -31,6 +31,14 @@ contributor attribution and can be spoofed by someone who controls the local
 file; it is not authenticated human identity. Until server-validated OAuth is
 added, authorization must come from the API key and RAM service policy.
 
+For the test prototype, the same private file may also contain the exact
+optional names `RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and
+`OPENAI_API_KEY`. The desktop MCP validates those names but does not retain the
+values in its runtime `Config`. They are reserved for administrator bootstrap;
+ordinary participants should leave them blank. Because the MCP process still
+opens the containing file, use a separate administrator file for any rollout
+whose threat model requires strict process-level least privilege.
+
 All users in a collaboration group intentionally configure the same endpoint,
 store, and namespace. They should configure distinct participant values and,
 when supported, distinct API keys.

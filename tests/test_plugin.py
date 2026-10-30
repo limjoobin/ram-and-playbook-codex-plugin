@@ -192,14 +192,21 @@ class PluginTests(unittest.TestCase):
                 "RAM_PARTICIPANT=participant\nRAM_API_KEY=secret\n"
                 "RAM_AGENDA_OWNER_ID=ami-project-office\n"
                 "PLAYBOOK_MCP_URL=https://playbook.example.test/v1/playbooks/shared/mcp\n"
-                "PLAYBOOK_API_KEY=secret\n",
+                "PLAYBOOK_API_KEY=secret\n"
+                "RAM_ADMIN_API_KEY=admin-secret\n"
+                "PLAYBOOK_PUBLISHER_API_KEY=publisher-secret\n"
+                "OPENAI_API_KEY=model-secret\n",
                 encoding="utf-8",
             )
             path.chmod(0o644)
             with self.assertRaisesRegex(PluginError, "0600"):
                 load_credential_file(path)
             path.chmod(0o600)
-            self.assertEqual(load_credential_file(path).store_id, "store")
+            config = load_credential_file(path)
+            self.assertEqual(config.store_id, "store")
+            self.assertFalse(hasattr(config, "ram_admin_api_key"))
+            self.assertFalse(hasattr(config, "playbook_publisher_api_key"))
+            self.assertFalse(hasattr(config, "openai_api_key"))
             path.write_text(path.read_text() + "UNEXPECTED=value\n", encoding="utf-8")
             with self.assertRaisesRegex(PluginError, "unexpected"):
                 load_credential_file(path)

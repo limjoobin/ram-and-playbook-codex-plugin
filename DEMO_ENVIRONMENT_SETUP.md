@@ -83,7 +83,11 @@ Review every target hash, component version, digest, and blocker. The command
 uses `~/.config/redis-shared-memory/editor.env` for its safe read-only service
 preflight; create that file with an environment-specific runtime reader key as
 described in [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md#2-create-the-private-configuration).
-Do not place administrator or publisher credentials in that participant file.
+For this test prototype, an administrator who is also a participant may keep
+`RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and `OPENAI_API_KEY` in the
+same `0600` file. Ordinary participants leave them blank. The desktop MCP
+drops those values from its runtime configuration, and the current read-only
+bootstrap adapter does not consume them yet.
 
 ## 3. Provision RAM and Playbook
 
@@ -98,6 +102,11 @@ Before continuing, verify:
 - RAM has its model provider and asynchronous MemoryETL processing available;
 - the shared namespace and management owner lane are agreed; and
 - the Playbook publisher credential is held only by the administrator.
+
+Managed Redis Agent Memory provisions its model and embedding provider with
+the service, so it normally does not require `OPENAI_API_KEY` in this local
+file. A local/dev RAM deployment may use it when its documented setup requires
+a client-supplied provider key.
 
 The desktop plugin installation is not a service deployment mechanism.
 

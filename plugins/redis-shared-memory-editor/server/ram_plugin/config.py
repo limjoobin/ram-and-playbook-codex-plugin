@@ -11,7 +11,7 @@ from urllib.error import URLError
 from urllib.parse import SplitResult, urlsplit
 
 
-VERSION = "0.12.6"
+VERSION = "0.12.7"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 SETTING_NAMES = (
     "RAM_ENDPOINT",
@@ -23,6 +23,11 @@ SETTING_NAMES = (
     "RAM_AGENDA_OWNER_ID",
     "PLAYBOOK_MCP_URL",
     "PLAYBOOK_API_KEY",
+)
+ADMIN_SETTING_NAMES = (
+    "RAM_ADMIN_API_KEY",
+    "PLAYBOOK_PUBLISHER_API_KEY",
+    "OPENAI_API_KEY",
 )
 REQUIRED_SETTING_NAMES = tuple(
     name for name in SETTING_NAMES if name != "RAM_PERSONAL_NAMESPACE"
