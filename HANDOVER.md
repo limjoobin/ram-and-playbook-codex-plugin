@@ -24,6 +24,25 @@ The expected-observation JSONL is a deterministic contract fixture, not a
 claim about model extraction quality. The live acceptance still submits the
 source documents through RAM MemoryETL and inspects its source-linked output.
 
+## Projector reuse acceptance
+
+The projector is infrastructure, not an AMI-specific resolver. Handover
+acceptance requires all of the following:
+
+- `projector.py` contains no AMI, Real Reaction, ES2002, meeting-name, subject,
+  or project-specific state identity;
+- entity mappings, aliases, state families, and any fixture-specific relation
+  rules remain in the versioned entity registry or projection policy;
+- tests exercise temporal ordering with an unrelated fictional project,
+  different dates, and non-AMI event sequences; and
+- connector/source-envelope event order is authoritative. A heading that
+  references an earlier meeting may identify context but never backdates the
+  observation. Heading-based ordering is only a policy fallback when the
+  envelope sequence is unknown.
+
+Run `python3 -m unittest tests.test_projector_reusability -v` as the focused
+acceptance check.
+
 ## Clean setup order
 
 1. Clone the approved commit or tag and run:
