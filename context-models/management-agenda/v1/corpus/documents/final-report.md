@@ -1,7 +1,7 @@
 ---
 document_id: ami-es2002-final-report
 revision: ami-v1
-project_id: ami-es2002
+project_id: project-ami-es2002
 effective_date: 2004-12-13
 source_system: ami-meeting-corpus
 source_url: https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002d/shared-doc/

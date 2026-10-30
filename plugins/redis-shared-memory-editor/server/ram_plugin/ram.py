@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import ssl
 import time
@@ -146,6 +147,57 @@ class RAMClient:
         return self._request(
             "GET",
             f"{self.store_url}/session-memory/{quote(session_id, safe='')}",
+            timeout_ms=timeout_ms,
+        )
+
+    def create_document_ingestion(
+        self,
+        *,
+        document_id: str,
+        revision: str,
+        content: bytes,
+        media_type: str,
+        owner_id: str,
+        extractor_id: str,
+        idempotency_key: str,
+        timeout_ms: int | None = None,
+    ) -> dict[str, Any]:
+        """Submit one immutable document revision through RAM MemoryETL."""
+
+        return self._request(
+            "POST",
+            f"{self.store_url}/document-ingestions",
+            {
+                "documentId": document_id,
+                "revision": revision,
+                "content": base64.b64encode(content).decode("ascii"),
+                "mediaType": media_type,
+                "ownerId": owner_id,
+                "extractorId": extractor_id,
+                "idempotencyKey": idempotency_key,
+            },
+            timeout_ms,
+        )
+
+    def get_document_ingestion(
+        self, ingestion_id: str, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Read asynchronous MemoryETL processing and cleanup state."""
+
+        return self._request(
+            "GET",
+            f"{self.store_url}/document-ingestions/{quote(ingestion_id, safe='')}",
+            timeout_ms=timeout_ms,
+        )
+
+    def list_document_ingestion_outputs(
+        self, ingestion_id: str, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Return the RAM memory IDs produced by one document ingestion."""
+
+        return self._request(
+            "GET",
+            f"{self.store_url}/document-ingestions/{quote(ingestion_id, safe='')}/outputs?limit=1000&offset=0",
             timeout_ms=timeout_ms,
         )
 

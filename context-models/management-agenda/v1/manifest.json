@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contextModelVersion": "management-agenda-bootstrap-v5",
+  "contextModelVersion": "management-agenda-bootstrap-v6",
   "sourceProvenance": {
     "repository": "iris-playbook-management-agenda",
     "commit": "f36230cf6fc8f7bc89e52c69963a0e6d60900c4d",
@@ -34,7 +34,7 @@
       "files": ["extraction-prompt.txt"]
     },
     "playbook": {
-      "version": "prepare-management-review-agenda-v3",
+      "version": "prepare-management-review-agenda-v4",
       "stage": "playbook",
       "files": [
         "playbook/manifest.json",
@@ -47,10 +47,11 @@
       ]
     },
     "corpus": {
-      "version": "ami-es2002-bootstrap-smoke-v1",
+      "version": "ami-es2002-bootstrap-smoke-v2",
       "stage": "corpus",
       "files": [
         "corpus/manifest.json",
+        "corpus/expected-observations.jsonl",
         "corpus/verification-cases.json",
         "corpus/documents/final-report.md",
         "corpus/documents/minutes-kickoff.md"
@@ -62,7 +63,7 @@
       "files": ["projection-policy.json"]
     },
     "projectionImplementation": {
-      "version": "organizational-state-projector-v4",
+      "version": "organizational-state-projector-v5",
       "stage": "projection",
       "files": ["projector.py"]
     }

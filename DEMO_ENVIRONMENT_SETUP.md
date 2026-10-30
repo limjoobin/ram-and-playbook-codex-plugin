@@ -6,6 +6,9 @@ environment. After the environment passes acceptance, each participant follows
 [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) to install the desktop plugin,
 configure their own credentials, and trust the two reviewed hooks.
 
+For the clean-machine checklist and release-specific seams, read
+[HANDOVER.md](HANDOVER.md) first.
+
 ## What this guide does—and does not automate
 
 The repository contains the complete versioned context-model contract:
@@ -14,13 +17,15 @@ The repository contains the complete versioned context-model contract:
 - the `organizational_state_projection` schema and deterministic projector;
 - the canonical management-agenda Playbook Skill and its resources;
 - a two-document AMI ES2002 smoke corpus; and
-- read-only planning, verification, reconciliation, and evaluation commands.
+- a credential-free context check, bounded MemoryETL submission,
+  reconciliation, and evaluation commands.
 
 The current configured-services bootstrap adapter is deliberately read-only.
 It does **not** provision RAM or Playbook, declare memory types, publish the
-Skill, or submit documents to MemoryETL. A fresh service therefore still needs
-those mutations through an approved RAM/Playbook administrator interface. The
-repository refuses to guess undocumented control-plane or ingestion APIs.
+Skill, or guess a release-specific control plane. A fresh service therefore
+still needs those administrator mutations through its supported interface.
+MemoryETL corpus submission is a separate thin adapter so transport changes do
+not alter the context schemas, prompt, policy, or projector.
 
 Do not tell a tester that cloning this repository recreates the prepared
 15-artifact environment. The checked-in bundle contains only kickoff minutes
@@ -52,6 +57,15 @@ Before changing a service, record these values outside the repository:
 - Playbook service endpoint, Playbook ID, publisher credential, and a separate
   runtime reader credential when supported; and
 - one central host that can run Python 3.10+ and the reconciliation command.
+
+Prove the checked-in context pipeline before connecting to either service:
+
+```sh
+python3 scripts/validate_context_pipeline.py
+```
+
+Do not continue unless every check passes. This is the portable handover gate
+and does not depend on the original developer's laptop or prepared Redis data.
 
 Use a fresh non-production RAM store for a schema-breaking change. Never paste
 credentials into chat, write them into the repository, or reuse a publisher
@@ -161,10 +175,25 @@ declares two immutable source artifacts:
 - `ami-es2002-minutes-kickoff`; and
 - `ami-es2002-final-report`.
 
-Before ingestion, verify each file's byte count and SHA-256 digest against the
-manifest. Submit each document once through the approved RAM MemoryETL
-document-ingestion interface. Use `documentId` and `revision` from the
-manifest as the deterministic source identity and idempotency boundary.
+Preview the credential-free ingestion plan with the document extractor created
+from the checked-in extraction prompt:
+
+```sh
+python3 scripts/ingest_context_corpus.py \
+  --extractor-id YOUR_DOCUMENT_EXTRACTOR_ID
+```
+
+After reviewing the target configuration, submit and wait for both revisions:
+
+```sh
+python3 scripts/ingest_context_corpus.py \
+  --extractor-id YOUR_DOCUMENT_EXTRACTOR_ID \
+  --apply
+```
+
+The command verifies the checked-in bytes, prepends the exact source envelope,
+uses deterministic idempotency keys, and waits for terminal MemoryETL success.
+It reports safe identities and counts, never document text or credentials.
 
 Each submitted text must include one connector-supplied
 `[RAM_SOURCE_ENVELOPE]` JSON line with the exact source artifact ID, revision,
@@ -183,9 +212,10 @@ verify that extracted `organizational_state` observations:
 Do not blind-retry an ambiguous ingestion. Read the service state by
 deterministic document ID and revision first.
 
-The repository does not currently submit these documents to a live service.
-Its fake-adapter tests validate the intended order only. To recreate the
-prepared 15-artifact research environment, an administrator must additionally
+If a GA release changes the MemoryETL API, update the isolated RAM transport
+and its fake contract tests; do not change the context model merely to fit a
+new wire format. To recreate the prepared 15-artifact research environment,
+an administrator must additionally
 obtain the approved normalized corpus and a reviewed ingestion adapter; those
 13 artifacts are not checked into this repository.
 

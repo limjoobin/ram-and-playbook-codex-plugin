@@ -308,6 +308,7 @@ Before asking users to install a release, the maintainer should also run in a
 clean checkout:
 
 ```sh
+python3 scripts/validate_context_pipeline.py
 python3 -m unittest discover -s tests -v
 python3 evaluation/run.py
 ```

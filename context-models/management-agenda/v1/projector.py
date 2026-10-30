@@ -85,6 +85,8 @@ def _effective_sequence(record: dict[str, Any], policy: dict[str, Any]) -> int:
     attributes = record.get("attributes") or {}
     sequence = attributes.get("event_sequence", 0)
     resolved = sequence if isinstance(sequence, int) and not isinstance(sequence, bool) else 0
+    if resolved > 0:
+        return resolved
     locator = str(attributes.get("evidence_locator", "")).casefold()
     for rule in policy.get("historicalLocatorSequences", []):
         marker = rule.get("locatorContains") if isinstance(rule, dict) else None

@@ -60,13 +60,23 @@ versioned representative retrieval cases. It never rewrites the attestation.
 ## Current adapter boundary
 
 The configured-services adapter deliberately performs only read-only RAM and
-Playbook preflight. The plugin's external configuration provides data-plane
-and read-only Playbook access, but no reviewed RAM control-plane, document
-ingestion, or Playbook publication operation. Consequently, a live `apply`
-currently exits with `unsupported_mutation` blockers before changing state.
-This is intentional: add a live administrator adapter only after its endpoint,
-authentication, publication, ingestion-idempotency, and ambiguous-write
-contracts are approved. Do not infer those contracts from the local prototype.
+Playbook preflight. Consequently, its live `apply` exits with
+`unsupported_mutation` blockers before changing state. This is intentional:
+RAM declarations and Playbook publication must use the supported administrator
+surface for the deployed release rather than a guessed control-plane contract.
+
+MemoryETL smoke-corpus submission is available as a separate, explicit command:
+
+```sh
+python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
+python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply
+```
+
+Its three RAM HTTP operations are isolated in `RAMClient`; a service API change
+can update that seam and its fake tests without changing the versioned context
+bundle. Run `python3 scripts/validate_context_pipeline.py` first to prove the
+service-independent schemas, envelopes, expected extraction contract, and
+projector.
 
 The contract tests exercise the complete intended order with a fake adapter:
 

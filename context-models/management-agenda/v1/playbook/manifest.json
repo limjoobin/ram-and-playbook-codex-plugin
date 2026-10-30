@@ -2,20 +2,19 @@
   "schemaVersion": 1,
   "entryKey": "prepare-management-review-agenda",
   "entryType": "skill",
-  "version": 3,
+  "version": 4,
   "name": "Prepare management review agenda",
   "description": "Prepare an evidence-backed management review with complete state context, a human-editable topic draft, and bounded conflict reconciliation.",
   "intents": [
     "prepare management review agenda",
     "management meeting agenda",
-    "executive risk review",
-    "management project update",
+    "executive risk and project review",
     "review confirmed decisions and open work",
     "reconcile management review conflicts"
   ],
   "attributes": {
     "forum": "management-review",
-    "corpus": "management-agenda-bootstrap-v1"
+    "corpus": "management-agenda-bootstrap-v6"
   },
   "resources": [
     {"path": "SKILL.md", "sha256": "91374f853e8ce7da02f03feef29529097a29b0cc3f226371221b52718f4ae105"},

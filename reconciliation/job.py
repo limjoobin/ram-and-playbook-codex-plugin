@@ -104,6 +104,15 @@ class ReconciliationJob:
             for record in observations
         )
 
+    def load_observations(self) -> list[dict[str, Any]]:
+        """Read the complete immutable observation lane for projection or verification."""
+
+        return [
+            record
+            for schema in OBSERVATION_SCHEMAS
+            for record in self._search_all(OBSERVATION_TYPE, schema)
+        ]
+
     def _observations(
         self,
         wait_for_candidate: str | None,
@@ -112,11 +121,7 @@ class ReconciliationJob:
     ) -> tuple[list[dict[str, Any]], bool]:
         deadline = time.monotonic() + timeout_seconds
         while True:
-            observations = [
-                record
-                for schema in OBSERVATION_SCHEMAS
-                for record in self._search_all(OBSERVATION_TYPE, schema)
-            ]
+            observations = self.load_observations()
             visible = wait_for_candidate is None or self._candidate_visible(
                 observations, wait_for_candidate
             )

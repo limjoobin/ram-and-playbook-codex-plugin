@@ -1,36 +1,45 @@
 {
   "schemaVersion": 1,
   "dataset": "AMI ES2002 bootstrap smoke subset",
-  "corpusVersion": "ami-es2002-bootstrap-smoke-v1",
+  "corpusVersion": "ami-es2002-bootstrap-smoke-v2",
   "artifactCount": 2,
   "transcriptCount": 0,
+  "expectedObservationsPath": "corpus/expected-observations.jsonl",
   "excludedModalities": ["audio", "video", "image", "whiteboard", "pen"],
   "artifacts": [
     {
       "path": "corpus/documents/final-report.md",
       "documentId": "ami-es2002-final-report",
       "revision": "ami-v1",
-      "projectId": "ami-es2002",
+      "projectId": "project-ami-es2002",
       "effectiveDate": "2004-12-13",
+      "observedAt": "2004-12-13T00:00:00Z",
+      "eventSequence": 5,
+      "meetingId": "",
+      "projectStepId": "",
       "artifactKind": "project-document",
       "sourceUrl": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002d/shared-doc/",
       "sourceFilename": "ES2002docs.ProjectDocuments.Final.Report.doc",
       "mediaType": "text/markdown",
-      "contentSha256": "3b6fffd6bec2cd689870f9a77080ff1ab9eb08b586d92d72802c223fdebcac8f",
-      "byteCount": 1879
+      "contentSha256": "3c9a8d31a0476179f48899930f3bce809747ae903525a21cf94846cd9069bb5e",
+      "byteCount": 1887
     },
     {
       "path": "corpus/documents/minutes-kickoff.md",
       "documentId": "ami-es2002-minutes-kickoff",
       "revision": "ami-v1",
-      "projectId": "ami-es2002",
+      "projectId": "project-ami-es2002",
       "effectiveDate": "2004-12-13",
+      "observedAt": "2004-12-13T00:00:00Z",
+      "eventSequence": 1,
+      "meetingId": "meeting-ami-es2002a-kickoff",
+      "projectStepId": "project-step-ami-es2002-kickoff",
       "artifactKind": "project-document",
       "sourceUrl": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002d/shared-doc/",
       "sourceFilename": "ES2002docs.ProjectDocuments.Minutes.of.Kickoff-meeting.doc",
       "mediaType": "text/markdown",
-      "contentSha256": "29825a537dcdb4902f24b9d29fb9cbbfffb8440ab33fb996761ae83fd0567699",
-      "byteCount": 1376
+      "contentSha256": "ccf5982a0257eb1178a9e8c008c9b13c77d585b44fcf63a703ab8a31177d01e5",
+      "byteCount": 1384
     }
   ]
 }

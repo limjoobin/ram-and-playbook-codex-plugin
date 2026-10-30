@@ -187,12 +187,20 @@ class Bundle:
     def _validate_corpus(cls, root: Path) -> tuple[set[str], int]:
         manifest = _object(cls._file(root, "corpus/manifest.json"))
         artifacts = manifest.get("artifacts")
+        expected_observations = manifest.get("expectedObservationsPath")
         if manifest.get("schemaVersion") != 1 or not isinstance(artifacts, list) or not artifacts:
             raise BundleError("corpus manifest is incomplete")
+        if not isinstance(expected_observations, str) or not expected_observations:
+            raise BundleError("corpus expected-observation fixture is missing")
         if manifest.get("artifactCount") != len(artifacts):
             raise BundleError("corpus artifact count does not match its manifest")
         document_ids: set[str] = set()
-        files = {"corpus/manifest.json"}
+        files = {"corpus/manifest.json", expected_observations}
+        cls._file(root, expected_observations)
+        envelope_fields = {
+            "documentId", "revision", "projectId", "observedAt", "eventSequence",
+            "meetingId", "projectStepId", "mediaType", "contentSha256", "byteCount",
+        }
         for artifact in artifacts:
             if not isinstance(artifact, dict):
                 raise BundleError("corpus artifact declaration is invalid")
@@ -200,6 +208,18 @@ class Bundle:
             document_id = artifact.get("documentId")
             if not isinstance(relative, str) or not isinstance(document_id, str) or not document_id:
                 raise BundleError("corpus artifact identity is missing")
+            if not envelope_fields <= set(artifact):
+                raise BundleError(f"corpus source envelope is incomplete: {document_id}")
+            if (
+                not isinstance(artifact.get("projectId"), str)
+                or not artifact.get("projectId")
+                or not isinstance(artifact.get("observedAt"), str)
+                or isinstance(artifact.get("eventSequence"), bool)
+                or not isinstance(artifact.get("eventSequence"), int)
+                or not isinstance(artifact.get("meetingId"), str)
+                or not isinstance(artifact.get("projectStepId"), str)
+            ):
+                raise BundleError(f"corpus source envelope is invalid: {document_id}")
             if document_id in document_ids:
                 raise BundleError("corpus document identities must be unique")
             document_ids.add(document_id)
@@ -213,6 +233,7 @@ class Bundle:
     def _validate_playbook(cls, root: Path) -> set[str]:
         manifest = _object(cls._file(root, "playbook/manifest.json"))
         resources = manifest.get("resources")
+        intents = manifest.get("intents")
         if (
             manifest.get("schemaVersion") != 1
             or manifest.get("entryType") != "skill"
@@ -220,6 +241,9 @@ class Bundle:
             or not isinstance(manifest.get("version"), int)
             or not isinstance(resources, list)
             or not resources
+            or not isinstance(intents, list)
+            or not 1 <= len(intents) <= 5
+            or any(not isinstance(intent, str) or not intent for intent in intents)
         ):
             raise BundleError("Playbook bundle manifest is incomplete")
         paths = {"playbook/manifest.json"}

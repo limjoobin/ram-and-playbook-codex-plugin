@@ -4,6 +4,10 @@ This repository packages an installable ChatGPT desktop plugin and a versioned
 context model for one experiment: turn meeting evidence and human-confirmed
 work updates into an evidence-backed management-review agenda.
 
+For a clean-machine handover, start with [HANDOVER.md](HANDOVER.md). It
+distinguishes the stable context pipeline from the small RAM/Playbook service
+adapters that may need adjustment when a service release changes its API.
+
 The plugin exposes Redis Agent Memory (RAM) and Redis Agent Playbook through one
 local MCP server. Multiple people can install the same plugin, connect to the
 same RAM store and Playbook, inspect shared organizational state, publish
@@ -150,6 +154,9 @@ checkout. It is not installed independently by every plugin user. See
   and canonical projector;
 - the Playbook Skill and its resources;
 - the two-document bootstrap smoke corpus;
+- deterministic source-envelope rendering, expected MemoryETL output, and an
+  offline end-to-end context validator;
+- a bounded MemoryETL corpus submission command;
 - a credential-free 15-case agenda evaluation; and
 - installation, administration, security, reconciliation, and demo guidance.
 
@@ -182,9 +189,11 @@ authenticate requests. The participant value records attribution but is not
 proof of identity.
 
 Installing the plugin does not provision RAM or Playbook, publish the Skill,
-seed the full corpus, or start a scheduler. The current configured-services
-bootstrap adapter is deliberately read-only and blocks live mutations until
-those administrator contracts are reviewed.
+declare custom memory types, or start a scheduler. The service-independent
+context contract is executable offline; RAM control-plane declarations and
+Playbook publication still use the supported administrator surface for the
+deployed release. The current configured-services bootstrap adapter remains
+read-only rather than guessing those release-specific contracts.
 
 ## Install and run the demo
 
@@ -196,6 +205,17 @@ those administrator contracts are reviewed.
    manual hook trust, verification, updates, and removal.
 3. Use [the management-agenda demo runbook](docs/management-agenda-demo-runbook.md)
    for the human test flow.
+
+Before connecting to any service, validate the entire checked-in context path:
+
+```sh
+python3 scripts/validate_context_pipeline.py
+```
+
+This renders the exact MemoryETL source envelopes, validates all 24 custom
+memory attributes, loads deterministic expected extraction output, runs the
+real projector, and verifies representative current-state cases. It does not
+use credentials or modify a service.
 
 The repository bootstrap can be inspected without writing to either service:
 
