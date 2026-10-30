@@ -10,6 +10,9 @@ class StoreResetError(RuntimeError):
     """A sanitized destructive reset failure."""
 
 
+DELETE_BATCH_SIZE = 20
+
+
 def _items(payload: dict[str, Any], *names: str) -> list[Any]:
     for name in names:
         value = payload.get(name)
@@ -111,9 +114,9 @@ def apply_reset(config: Any, ram: Any) -> dict[str, Any]:
     before = plan_reset(config, ram)
     memory_ids = _long_term_ids(config, ram)
     deleted_memories = 0
-    for offset in range(0, len(memory_ids), 100):
-        batch = memory_ids[offset : offset + 100]
-        response = ram.bulk_delete_long_term_memories(batch, timeout_ms=30_000)
+    for offset in range(0, len(memory_ids), DELETE_BATCH_SIZE):
+        batch = memory_ids[offset : offset + DELETE_BATCH_SIZE]
+        response = ram.bulk_delete_long_term_memories(batch, timeout_ms=120_000)
         errors = response.get("errors", [])
         deleted = response.get("deleted", [])
         if not isinstance(errors, list) or errors:

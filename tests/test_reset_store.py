@@ -76,7 +76,10 @@ class ResetStoreTests(unittest.TestCase):
         self.assertEqual(result["status"], "emptied")
         self.assertEqual(result["deletedLongTermMemoryCount"], 205)
         self.assertEqual(result["deletedSessionCount"], 2)
-        self.assertEqual([len(batch) for batch in ram.deleted_batches], [100, 100, 5])
+        self.assertEqual(
+            [len(batch) for batch in ram.deleted_batches],
+            [20] * 10 + [5],
+        )
         self.assertFalse(ram.memories)
         self.assertFalse(ram.sessions)
 
