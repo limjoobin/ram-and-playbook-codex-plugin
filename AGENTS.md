@@ -30,7 +30,8 @@ The runtime calls reviewed RAM HTTPS operations directly and allows only the
 reviewed Playbook MCP reads. It is not a generic HTTP or MCP proxy.
 
 Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
-`SECURITY.md`, `docs/adding-tools.md`, and the relevant source and tests.
+`DEMO_ENVIRONMENT_SETUP.md`, `SECURITY.md`, `docs/adding-tools.md`, and the
+relevant source and tests.
 
 ## Source map
 
@@ -58,6 +59,7 @@ Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
 | `admin_bootstrap/` | Explicit repository-only plan/apply/verify harness |
 | `context-models/management-agenda/` | Versioned schemas, prompts, policy, Playbook, projector, and corpus |
 | `scripts/admin_bootstrap.py` | Administrator CLI; never called by plugin install or startup |
+| `DEMO_ENVIRONMENT_SETUP.md` | End-to-end administrator and participant handoff sequence |
 | `docs/admin-bootstrap.md` | Bootstrap modes, upgrade rules, and live acceptance gate |
 
 Paths beginning with `server/` in the table are relative to

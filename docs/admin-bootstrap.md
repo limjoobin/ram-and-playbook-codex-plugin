@@ -1,5 +1,11 @@
 # Administrator context bootstrap
 
+For the complete operator sequence—service prerequisites, context
+declarations, Playbook publication, MemoryETL ingestion, reconciliation, and
+participant handoff—start with
+[`DEMO_ENVIRONMENT_SETUP.md`](../DEMO_ENVIRONMENT_SETUP.md). This document
+describes the repository harness and its safety boundary.
+
 The repository now contains an explicit, versioned bootstrap harness for the
 shared RAM and Playbook context model. It is separate from the installable
 plugin under `plugins/`: installing or starting the plugin never imports or

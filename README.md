@@ -188,11 +188,12 @@ those administrator contracts are reviewed.
 
 ## Install and run the demo
 
-1. Follow [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) for Git marketplace or
-   local-checkout installation, private configuration, verification, updates,
-   removal, and enterprise prerequisites.
-2. Review [the administrator bootstrap](docs/admin-bootstrap.md) before
-   changing a RAM or Playbook environment.
+1. An environment administrator follows
+   [DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) to prepare RAM,
+   Playbook, MemoryETL ingestion, and central reconciliation.
+2. Each participant follows [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) for
+   Git marketplace or local-checkout installation, private configuration,
+   manual hook trust, verification, updates, and removal.
 3. Use [the management-agenda demo runbook](docs/management-agenda-demo-runbook.md)
    for the human test flow.
 
@@ -233,6 +234,12 @@ Read [AGENTS.md](AGENTS.md) before changing code. Use
 [docs/adding-tools.md](docs/adding-tools.md) when adding an MCP tool, and review
 [SECURITY.md](SECURITY.md) before changing identity, credentials, permissions,
 data scope, or network behavior.
+
+The administrator/user handoff is defined in
+[DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) and
+[CODEX_INSTALLATION.md](CODEX_INSTALLATION.md). The bootstrap harness's current
+read-only adapter boundary is documented in
+[docs/admin-bootstrap.md](docs/admin-bootstrap.md).
 
 The private-to-shared trust boundary and acceptance cases are in
 [docs/private-session-promotion.md](docs/private-session-promotion.md). The

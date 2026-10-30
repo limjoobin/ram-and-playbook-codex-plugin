@@ -1,9 +1,20 @@
-# ChatGPT desktop plugin installation
+# Per-user ChatGPT desktop plugin installation
 
 This plugin lets multiple users and their agents work from one Redis Agent
 Memory store and approved Redis Agent Playbook. Every user installs the same
 plugin and configures the same service endpoints, RAM store ID, and namespace.
 Credentials stay on that user's computer.
+
+This is the participant installation guide. It assumes an administrator has
+already provisioned RAM and Playbook, declared the two memory types, published
+the agenda Skill, ingested the approved corpus, and started central
+reconciliation. For a fresh environment, complete
+[DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) first.
+
+Installing the plugin does not deploy either service, run MemoryETL, hydrate
+the shared store, publish Playbook content, or install the central scheduler.
+Hook trust is also a manual per-user decision; it cannot be granted by this
+repository or by the environment administrator.
 
 ## Before you begin
 
@@ -19,6 +30,11 @@ You need:
 - a participant ID plus RAM and Playbook API keys for this user; and
 - enterprise approval for the Git repository/ref, local Python execution, and
   outbound HTTPS access to both service endpoints.
+
+The environment administrator should also give you the exact approved Git
+tag or commit, confirm that the management context and corpus are ready, and
+confirm that central reconciliation is healthy. If any of those are missing,
+stop here and use [the administrator guide](DEMO_ENVIRONMENT_SETUP.md).
 
 Check the local prerequisites:
 
@@ -223,7 +239,7 @@ relationships remain visible only in history and never change projected
 lifecycle status. Existing v2 stores remain readable, but reinstalling the
 plugin does not add the v3 `relations` field to an existing RAM custom-memory
 type; use the reviewed fresh-store bootstrap path described in
-[docs/admin-bootstrap.md](docs/admin-bootstrap.md).
+[DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md).
 
 These checks are the manual acceptance gate. Passing repository tests and the
 offline evaluation does not prove that a customer's network, credentials,
@@ -263,11 +279,11 @@ locator must match the reviewed update. A subsequent agenda should cite this
 RAM-memory reference for completed work rather than only the original
 assignment document.
 
-The PoC host also runs the same command centrally every five minutes with
-`--apply --quiet-no-changes`. This catches document and session extraction that
-does not originate from an interactive promotion. RAM's ingestion webhook is a
-blocking decision hook, not a completion notification, so it is not used as a
-post-extraction trigger.
+The environment administrator's PoC host also runs the same command centrally
+every five minutes with `--apply --quiet-no-changes`. This catches document and
+session extraction that does not originate from an interactive promotion.
+RAM's ingestion webhook is a blocking decision hook, not a completion
+notification, so it is not used as a post-extraction trigger.
 
 Expected: the deterministic current projection changes to the confirmed
 lifecycle. An unconfirmed or merely
@@ -282,10 +298,11 @@ python3 -m unittest discover -s tests -v
 python3 evaluation/run.py
 ```
 
-The central scheduler checkout must be clean and pinned to that same approved
-commit or tag. Detach it at the approved SHA, kick the scheduler once, and
-confirm `git rev-parse HEAD` matches the plugin release before completing the
-live acceptance test. See
+The administrator-owned central scheduler checkout must be clean and pinned to
+that same approved commit or tag. Detach it at the approved SHA, kick the
+scheduler once, and confirm `git rev-parse HEAD` matches the plugin release
+before completing the live acceptance test. See
+[DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) and
 [docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 ## Update
