@@ -207,6 +207,119 @@ read-only rather than guessing those release-specific contracts.
 3. Use [the management-agenda demo runbook](docs/management-agenda-demo-runbook.md)
    for the human test flow.
 
+### Guided tour: prompts to try
+
+Run these prompts in order in a fresh chat after the prepared environment has
+passed preflight. Mention the Redis Shared Memory + Playbook plugin if it is
+not selected automatically. Answers can evolve as confirmed updates are added,
+so evaluate the demonstrated behavior and the highlighted facts rather than
+exact record counts.
+
+#### 1. Verify the connection
+
+> Check the Redis Shared Memory connection status.
+
+**Demonstrates:** direct service health and participant-scoped configuration.
+
+**Expected answer highlights:** connected status, the configured namespace,
+participant, role, permissions, memory availability, and plugin version. Stop
+if the namespace or participant is unexpected, or if RAM or Playbook is
+unavailable.
+
+#### 2. Recall a current project decision
+
+> What are the final decisions regarding color for the Real Reaction project?
+
+**Demonstrates:** entity resolution and retrieval of current, source-grounded
+decision projections.
+
+**Expected answer highlights:** yellow is predominant; the final materials use
+yellow, blue, and red plastic; one special case color is not specified; and
+corporate-color verification or market acceptance remains a caveat where the
+current evidence does not settle it.
+
+#### 3. Retrieve one person's work
+
+> What are the open action items for me?
+
+**Demonstrates:** participant resolution, owner-filtered action retrieval, and
+separation of active work from completed work.
+
+**Expected answer highlights:** only actions owned by the configured
+participant, grouped or labelled by lifecycle status. For Andrew, representative
+items include the design evaluation and remote-control requirements. Completed
+work should not be presented as open, and missing due dates should not be
+invented.
+
+#### 4. Stage a safe shared-memory update
+
+Choose an action that step 3 still reports as open, substitute its exact name,
+and ask:
+
+> I have completed <action>. Please publish this update to the Real Reaction
+> shared memory, but show me the exact update first.
+
+**Demonstrates:** private prompt capture, exact current-state matching, and the
+review-before-write trust boundary.
+
+**Expected answer highlights:** a private candidate showing the project,
+action, owner, evidence, and proposed `open` to `completed` transition. The
+assistant must ask for explicit confirmation and must not publish yet.
+
+#### 5. Confirm and verify the update
+
+> Yes, publish it to shared memory.
+
+**Demonstrates:** human-confirmed promotion to an immutable shared observation
+and read-back verification.
+
+**Expected answer highlights:** successful publication and a reminder that the
+current projection may remain open until the central reconciliation job runs.
+Wait for that job; do not promote the same candidate again.
+
+#### 6. Generate a management-review agenda
+
+> Prepare an evidence-backed management review agenda for the Real Reaction
+> project for 15 November 2026. Use at most eight management topics. Keep the
+> action register, completed work, confirmed decisions, conflicts, and agenda
+> topics separate.
+
+**Demonstrates:** Playbook-governed synthesis over the complete current-state
+register, while retaining evidence and conflict treatment.
+
+**Expected answer highlights:** distinct action, completion, decision, open
+work, and conflict sections; no more than eight management topics; owners and
+status gaps; and caveats for conservative or contradictory projections. Allow
+roughly two minutes for this step and wait for the single agenda call.
+
+#### 7. Reconstruct decision history
+
+> What is the entire history of the LCD discussion?
+
+**Demonstrates:** immutable-history search, chronological reconstruction, and
+recognition that later evidence supersedes earlier choices.
+
+**Expected answer highlights:** the LCD was considered and selected, then
+removed after input-method and cost concerns; the final design has no LCD,
+uses a regular chip, and relies on the television for on-screen feedback.
+
+#### 8. Ask a precise follow-up
+
+> Has Laura already published the meeting minutes?
+
+**Demonstrates:** a narrow owner-and-action status check instead of a broad
+semantic answer.
+
+**Expected answer highlights:** the latest lifecycle state for Laura's exact
+meeting-minutes action and any closely related upload action. In the prepared
+snapshot these were still open; if the demo state has changed, report the
+newest projection rather than repeating the old result.
+
+Steps 4 and 5 change shared demo data and should be run once with an action that
+is genuinely still open. For presenter notes, evidence terminology, scheduler
+behavior, and troubleshooting, use the
+[full management-agenda demo runbook](docs/management-agenda-demo-runbook.md).
+
 Before connecting to any service, validate the entire checked-in context path:
 
 ```sh
