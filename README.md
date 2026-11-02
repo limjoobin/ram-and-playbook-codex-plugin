@@ -240,16 +240,23 @@ current evidence does not settle it.
 
 #### 3. Retrieve one person's work
 
+Before running this prompt, set `RAM_PARTICIPANT` in
+`~/.config/redis-shared-memory/editor.env` to one of the four prepared demo
+participants: `andrew`, `craig`, `david`, or `laura`. Restart ChatGPT
+desktop and start a fresh chat after changing it. “Me” resolves from this
+configured attribution value; it is not authenticated identity.
+
 > What are the open action items for me?
 
-**Demonstrates:** participant resolution, owner-filtered action retrieval, and
-separation of active work from completed work.
+**Demonstrates:** participant resolution from `RAM_PARTICIPANT`,
+owner-filtered action retrieval, and separation of active work from completed
+work.
 
 **Expected answer highlights:** only actions owned by the configured
-participant, grouped or labelled by lifecycle status. For Andrew, representative
-items include the design evaluation and remote-control requirements. Completed
-work should not be presented as open, and missing due dates should not be
-invented.
+participant, grouped or labelled by lifecycle status. For `andrew`,
+representative items include the design evaluation and remote-control
+requirements. Completed work should not be presented as open, and missing due
+dates should not be invented.
 
 #### 4. Stage a safe shared-memory update
 
