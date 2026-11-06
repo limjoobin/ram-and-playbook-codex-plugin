@@ -20,7 +20,16 @@ MAX_RESOURCE_BYTES = 1_048_576
 _TEXT_TYPES = ("text/", "application/json", "application/yaml", "application/x-yaml")
 
 
-def _public(error: BaseException) -> PluginError:
+# What a 404 means depends on the call: only Skill loads target an entry.
+_NOT_FOUND = {
+    "playbook": ("playbook_not_found", "The configured Playbook URL or playbook ID was not found."),
+    "entry": ("playbook_entry_not_found", "The requested Playbook entry is not published."),
+    "resource": ("playbook_resource_not_found", "The requested Playbook resource was not found."),
+}
+_MISSING = {"discover_entries": "playbook", "load_skill": "entry", "fetch_resource": "resource"}
+
+
+def _public(error: BaseException, missing: str = "playbook") -> PluginError:
     if isinstance(error, PluginError):
         return error
     status = getattr(error, "status_code", None)
@@ -29,8 +38,10 @@ def _public(error: BaseException) -> PluginError:
         return PluginError("playbook_authentication_failed", "Playbook rejected the configured credential.")
     if status in {408, 429} or (isinstance(status, int) and status >= 500):
         return PluginError("playbook_unavailable", "Playbook is temporarily unavailable.")
-    if name in {"EntryNotFound"} or status == 404:
-        return PluginError("playbook_entry_not_found", "The requested Playbook entry is not published.")
+    if name == "EntryNotFound":
+        return PluginError(*_NOT_FOUND["entry"])
+    if status == 404:
+        return PluginError(*_NOT_FOUND[missing])
     if isinstance(status, int):
         return PluginError("playbook_request_rejected", "Playbook rejected the read request.")
     if name == "ResourceTooLarge":
@@ -110,7 +121,7 @@ class PlaybookClient:
         except PluginError:
             raise
         except Exception as error:
-            raise _public(error) from None
+            raise _public(error, _MISSING[tool]) from None
 
     def _discover(self, arguments: dict[str, Any]) -> dict[str, Any]:
         pins = [

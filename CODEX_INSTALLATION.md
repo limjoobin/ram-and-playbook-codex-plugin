@@ -425,6 +425,8 @@ remove it through the laptop's approved file-management process.
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
 | `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
 | `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |
+| `playbook_not_found` | Check `IRIS_AGENT_PLAYBOOKS_URL` is the data-plane base URL with no path, and `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID` names an existing playbook. |
+| `playbook_entry_not_found` or `playbook_resource_not_found` | The agenda Skill version, or one of its resources, is not published. Republish the entry from `playbook/manifest.json`. |
 | `dependency_unavailable` | Retry a read once; if it persists, contact the Redis service owner. Do not blindly retry a write. |
 | A repository change is not visible | Upgrade the marketplace, restart the app, and start a new chat. |
 

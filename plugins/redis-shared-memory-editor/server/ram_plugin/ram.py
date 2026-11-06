@@ -114,6 +114,27 @@ class RAMClient:
         if cached:
             return cached
         scope, owner = self._scope(name)
+        found = self._find_namespace(name, scope, owner)
+        if found or not create:
+            return found
+        request: dict[str, Any] = {"name": name, "scope": scope}
+        if owner:
+            request["owner_id"] = owner
+        try:
+            created = _dump(self.sdk.create_namespace(request=request, timeout_ms=self.timeout_ms))
+        except Exception:
+            # A concurrent first write may have created it; resolve by a read, never a re-create.
+            found = self._find_namespace(name, scope, owner)
+            if found:
+                return found
+            raise
+        namespace = created.get("namespace", created)
+        namespace_id = namespace.get("namespaceId") if isinstance(namespace, dict) else None
+        if not isinstance(namespace_id, str) or not namespace_id:
+            raise PluginError("ram_contract_error", "RAM did not return the created namespace.")
+        return self._remember_namespace(namespace_id, name)
+
+    def _find_namespace(self, name: str, scope: str, owner: str | None) -> str | None:
         cursor: str | None = None
         seen: set[str] = set()
         while True:
@@ -136,19 +157,8 @@ class RAMClient:
                     return self._remember_namespace(item["namespaceId"], item["name"])
             cursor = page.get("nextCursor")
             if not isinstance(cursor, str) or not cursor or cursor in seen:
-                break
+                return None
             seen.add(cursor)
-        if not create:
-            return None
-        request: dict[str, Any] = {"name": name, "scope": scope}
-        if owner:
-            request["owner_id"] = owner
-        created = _dump(self.sdk.create_namespace(request=request, timeout_ms=self.timeout_ms))
-        namespace = created.get("namespace", created)
-        namespace_id = namespace.get("namespaceId") if isinstance(namespace, dict) else None
-        if not isinstance(namespace_id, str) or not namespace_id:
-            raise PluginError("ram_contract_error", "RAM did not return the created namespace.")
-        return self._remember_namespace(namespace_id, name)
 
     def namespace_name(self, namespace_id: str) -> str:
         cached = self._namespace_names.get(namespace_id)

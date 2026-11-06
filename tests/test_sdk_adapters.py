@@ -220,6 +220,27 @@ class RAMAdapterTests(unittest.TestCase):
             },
         )
 
+    def test_concurrent_namespace_create_resolves_the_existing_namespace(self):
+        sdk = self.sdk
+        original = sdk.create_namespace
+
+        def lose_the_race(**kwargs):
+            original(**kwargs)  # another writer created it first
+            raise StatusError(409, "namespace_already_exists")
+
+        sdk.create_namespace = lose_the_race
+        self.assertEqual(self.ram.namespace_id("raced-team", create=True), "ns_raced-team")
+        self.assertEqual(sdk.names().count("create_namespace"), 1)
+
+        def fail(**kwargs):
+            sdk._call("create_namespace", **kwargs)
+            raise StatusError(403)
+
+        sdk.create_namespace = fail
+        with self.assertRaises(StatusError):
+            self.ram.namespace_id("forbidden-team", create=True)
+        self.assertEqual(sdk.names().count("create_namespace"), 2)
+
     def test_session_events_use_a_personal_namespace_owned_by_the_participant(self):
         self.ram.add_session_event(
             session_id="session-1",
@@ -411,6 +432,31 @@ class PlaybookAdapterTests(unittest.TestCase):
         with self.assertRaises(PluginError) as unavailable:
             playbook.inventory()
         self.assertEqual(unavailable.exception.code, "playbook_unavailable")
+
+    def test_not_found_names_what_is_missing(self):
+        sdk = FakePlaybookSDK()
+        playbook = PlaybookClient(CONFIG, client=sdk)
+        sdk.health_error = StatusError(404)
+        with self.assertRaises(PluginError) as health:
+            playbook.inventory()
+        self.assertEqual(health.exception.code, "playbook_not_found")
+
+        def missing(*args, **kwargs):
+            raise StatusError(404)
+
+        sdk.discover = missing
+        with self.assertRaises(PluginError) as discover:
+            playbook.call("discover_entries", {"query": "agenda"})
+        self.assertEqual(discover.exception.code, "playbook_not_found")
+        loaded = playbook.call("load_skill", {"entry_id": "ent_1", "version": 3})
+        sdk.skill = missing
+        with self.assertRaises(PluginError) as entry:
+            playbook.call("load_skill", {"entry_id": "ent_1", "version": 3})
+        self.assertEqual(entry.exception.code, "playbook_entry_not_found")
+        sdk.skill_resource = missing
+        with self.assertRaises(PluginError) as resource:
+            playbook.call("fetch_resource", {"uri": loaded["content"]["resources"][0]["uri"]})
+        self.assertEqual(resource.exception.code, "playbook_resource_not_found")
 
 
 if __name__ == "__main__":
