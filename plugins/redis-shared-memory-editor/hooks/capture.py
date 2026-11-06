@@ -13,6 +13,30 @@ from typing import Any, Mapping
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "server"))
 
+
+def _enter_runtime() -> bool:
+    """Run under the plugin's private redis-iris runtime; never install from a hook.
+
+    Returns False when the runtime is not installed yet, so the hook fails open.
+    """
+
+    from launch import runtime_python
+
+    python = runtime_python()
+    if python is not None:
+        # A venv interpreter is a symlink to its base Python, so compare prefixes.
+        if Path(sys.prefix).resolve() != python.parent.parent.resolve():
+            os.execv(str(python), [str(python), "-I", str(Path(__file__).resolve())])
+        return True
+    try:
+        import redis_agent_memory  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+RUNTIME_READY = _enter_runtime() if __name__ == "__main__" else True
+
 from ram_plugin.credentials import load_credential_file
 from ram_plugin.promotion import HookCapture, PromotionLedger
 from ram_plugin.ram import RAMClient
@@ -69,7 +93,10 @@ def main() -> None:
     except (UnicodeError, json.JSONDecodeError):
         payload = None
     event_name = payload.get("hook_event_name") if isinstance(payload, dict) else ""
-    result = handle(payload)
+    if not RUNTIME_READY:
+        result = _safe_output(str(event_name), unavailable=True)
+    else:
+        result = handle(payload)
     if event_name in {"UserPromptSubmit", "PostToolUse", "Stop"} or result:
         sys.stdout.write(json.dumps(result, separators=(",", ":")) + "\n")
 

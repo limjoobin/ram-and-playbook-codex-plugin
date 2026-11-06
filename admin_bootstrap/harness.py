@@ -380,7 +380,9 @@ class ConfiguredServicesAdapter:
             "targets": {
                 "ramTargetSha256": _hash_target(self.config.endpoint, self.config.store_id),
                 "namespaceSha256": _hash_target(self.config.namespace),
-                "playbookTargetSha256": _hash_target(self.config.playbook_mcp_url),
+                "playbookTargetSha256": _hash_target(
+                    self.config.playbook_url, self.config.playbook_id
+                ),
             },
             "services": services,
             "schemaFingerprint": None,

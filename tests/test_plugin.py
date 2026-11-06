@@ -18,7 +18,15 @@ sys.path.insert(0, str(SERVER_ROOT))
 from ram_plugin.config import Config, PluginError, VERSION, load_config, public_error  # noqa: E402
 from ram_plugin.credentials import load_credential_file  # noqa: E402
 from ram_plugin.mcp_server import TOOLS, call_tool  # noqa: E402
-from ram_plugin.ram import RAMHTTPError, SharedMemory  # noqa: E402
+from ram_plugin.ram import SharedMemory  # noqa: E402
+
+
+class RAMHTTPError(Exception):
+    """Stand-in for a redis-iris SDK HTTP error, which exposes status_code."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
 
 
 CONFIG = Config(
@@ -29,7 +37,8 @@ CONFIG = Config(
     participant="alice",
     api_key="test-secret-never-display",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared-playbook/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="playbook-secret-never-display",
 )
 
@@ -106,7 +115,7 @@ class PluginTests(unittest.TestCase):
         server = mcp["mcpServers"]["redis-shared-memory-editor"]
         self.assertEqual(server["command"], "/bin/sh")
         self.assertIn(f"/{VERSION}", server["args"][1])
-        self.assertIn("$plugin_cache_root/server/main.py", server["args"][1])
+        self.assertIn("$plugin_cache_root/server/launch.py", server["args"][1])
         self.assertIn("export PLUGIN_DATA=", server["args"][1])
         self.assertGreaterEqual(
             hooks["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"],
@@ -128,7 +137,7 @@ class PluginTests(unittest.TestCase):
                 / "server"
             )
             server_root.mkdir(parents=True)
-            (server_root / "main.py").write_text(
+            (server_root / "launch.py").write_text(
                 "import os\nprint(os.environ.get('PLUGIN_DATA', ''))\n",
                 encoding="utf-8",
             )
@@ -155,23 +164,42 @@ class PluginTests(unittest.TestCase):
         )
 
     def test_configuration_rejects_missing_and_credential_bearing_endpoint(self):
-        with self.assertRaisesRegex(PluginError, "RAM_API_KEY"):
+        with self.assertRaisesRegex(PluginError, "IRIS_AGENT_MEMORY_API_KEY"):
             load_config({})
         values = {
-            "RAM_ENDPOINT": "https://user:password@example.test/path?secret=yes",
-            "RAM_STORE_ID": "store",
+            "IRIS_AGENT_MEMORY_URL": "https://user:password@example.test/path?secret=yes",
+            "IRIS_AGENT_MEMORY_STORE_ID": "st_0123456789abcdef0123456789abcdef",
+            "IRIS_AGENT_MEMORY_API_KEY": "secret",
             "RAM_NAMESPACE": "namespace",
             "RAM_PERSONAL_NAMESPACE": "private-participant",
             "RAM_PARTICIPANT": "participant",
-            "RAM_API_KEY": "secret",
             "RAM_AGENDA_OWNER_ID": "ami-project-office",
-            "PLAYBOOK_MCP_URL": "https://playbook.example.test/v1/playbooks/shared/mcp",
-            "PLAYBOOK_API_KEY": "secret",
+            "IRIS_AGENT_PLAYBOOKS_URL": "https://playbook.example.test",
+            "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID": "pb_0123456789abcdef0123456789abcdef",
+            "IRIS_AGENT_PLAYBOOKS_API_KEY": "secret",
         }
         with self.assertRaisesRegex(PluginError, "must not contain credentials"):
             load_config(values)
 
-        values["RAM_ENDPOINT"] = "https://example.test"
+        values["IRIS_AGENT_MEMORY_URL"] = "https://example.test"
+        values["IRIS_AGENT_PLAYBOOKS_URL"] = (
+            "https://playbook.example.test/iris/data/v1/agent-playbooks/playbooks/x/mcp"
+        )
+        with self.assertRaisesRegex(PluginError, "data-plane base URL"):
+            load_config(values)
+        values["IRIS_AGENT_PLAYBOOKS_URL"] = "http://playbook.example.test"
+        with self.assertRaisesRegex(PluginError, "must use HTTPS"):
+            load_config(values)
+        values["IRIS_AGENT_PLAYBOOKS_URL"] = "https://playbook.example.test"
+        values["IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID"] = "shared"
+        with self.assertRaisesRegex(PluginError, "pb_"):
+            load_config(values)
+        values["IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID"] = "pb_0123456789abcdef0123456789abcdef"
+        values["IRIS_AGENT_MEMORY_STORE_ID"] = "store/../other"
+        with self.assertRaisesRegex(PluginError, "IRIS_AGENT_MEMORY_STORE_ID"):
+            load_config(values)
+        values["IRIS_AGENT_MEMORY_STORE_ID"] = "st_0123456789abcdef0123456789abcdef"
+
         values["RAM_NAMESPACE"] = "same-namespace"
         values["RAM_PERSONAL_NAMESPACE"] = "same-namespace"
         with self.assertRaisesRegex(PluginError, "must differ"):
@@ -179,23 +207,32 @@ class PluginTests(unittest.TestCase):
 
         values["RAM_NAMESPACE"] = "shared"
         values.pop("RAM_PERSONAL_NAMESPACE")
-        self.assertEqual(load_config(values).personal_namespace, "private-participant")
+        config = load_config(values)
+        self.assertEqual(config.personal_namespace, "private-participant")
+        self.assertEqual(config.playbook_url, "https://playbook.example.test")
+        self.assertEqual(config.playbook_id, "pb_0123456789abcdef0123456789abcdef")
+
+        loopback = dict(values, IRIS_AGENT_PLAYBOOKS_URL="http://127.0.0.1:9201")
+        self.assertEqual(load_config(loopback).playbook_url, "http://127.0.0.1:9201")
 
     def test_credential_file_is_private_and_accepts_comments(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "editor.env"
             path.write_text(
                 "# Shared connection\n"
-                "RAM_ENDPOINT=https://example.test\n"
-                "RAM_STORE_ID=store\nRAM_NAMESPACE=namespace\n"
+                "IRIS_AGENT_MEMORY_URL=https://example.test\n"
+                "IRIS_AGENT_MEMORY_STORE_ID=store\nRAM_NAMESPACE=namespace\n"
                 "RAM_PERSONAL_NAMESPACE=private-participant\n"
-                "RAM_PARTICIPANT=participant\nRAM_API_KEY=secret\n"
+                "RAM_PARTICIPANT=participant\nIRIS_AGENT_MEMORY_API_KEY=secret\n"
                 "RAM_AGENDA_OWNER_ID=ami-project-office\n"
-                "PLAYBOOK_MCP_URL=https://playbook.example.test/v1/playbooks/shared/mcp\n"
-                "PLAYBOOK_API_KEY=secret\n"
-                "RAM_ADMIN_API_KEY=admin-secret\n"
-                "PLAYBOOK_PUBLISHER_API_KEY=publisher-secret\n"
-                "OPENAI_API_KEY=model-secret\n",
+                "IRIS_AGENT_PLAYBOOKS_URL=https://playbook.example.test\n"
+                "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID=pb_0123456789abcdef0123456789abcdef\n"
+                "IRIS_AGENT_PLAYBOOKS_API_KEY=secret\n"
+                "IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY=content-secret\n"
+                "IRIS_AGENT_PLAYBOOKS_SERVICE_URL=https://playbook-admin.example.test\n"
+                "IRIS_AGENT_PLAYBOOKS_SERVICE_TOKEN=playbook-admin-secret\n"
+                "IRIS_AGENT_MEMORY_SERVICE_URL=https://memory-admin.example.test\n"
+                "IRIS_AGENT_MEMORY_SERVICE_TOKEN=memory-admin-secret\n",
                 encoding="utf-8",
             )
             path.chmod(0o644)
@@ -204,9 +241,19 @@ class PluginTests(unittest.TestCase):
             path.chmod(0o600)
             config = load_credential_file(path)
             self.assertEqual(config.store_id, "store")
-            self.assertFalse(hasattr(config, "ram_admin_api_key"))
-            self.assertFalse(hasattr(config, "playbook_publisher_api_key"))
-            self.assertFalse(hasattr(config, "openai_api_key"))
+            rendered = repr(config)
+            for secret in (
+                "content-secret",
+                "playbook-admin-secret",
+                "memory-admin-secret",
+            ):
+                self.assertNotIn(secret, rendered)
+            for retired in ("RAM_ENDPOINT", "PLAYBOOK_MCP_URL", "RAM_ADMIN_API_KEY"):
+                old = path.read_text()
+                path.write_text(old + f"{retired}=value\n", encoding="utf-8")
+                with self.assertRaisesRegex(PluginError, "unexpected"):
+                    load_credential_file(path)
+                path.write_text(old, encoding="utf-8")
             path.write_text(path.read_text() + "UNEXPECTED=value\n", encoding="utf-8")
             with self.assertRaisesRegex(PluginError, "unexpected"):
                 load_credential_file(path)

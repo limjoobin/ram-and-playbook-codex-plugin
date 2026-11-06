@@ -404,7 +404,9 @@ class PluginService:
 
         playbook_status: dict[str, Any] = {
             "status": "available",
-            "endpoint_sha256": hashlib.sha256(self.config.playbook_mcp_url.encode()).hexdigest(),
+            "endpoint_sha256": hashlib.sha256(
+                f"{self.config.playbook_url}/{self.config.playbook_id}".encode()
+            ).hexdigest(),
             "credential_configured": bool(self.config.playbook_api_key),
             "required_read_tools": sorted(ALLOWED_TOOLS),
         }

@@ -51,9 +51,9 @@ Ask:
 
 Expected:
 
-- plugin version `0.12.6` or the currently approved successor;
+- plugin version `0.13.0` or the currently approved successor;
 - RAM and Playbook both available;
-- namespace `sboai-test` for the prepared PoC environment;
+- the namespace configured for the prepared environment;
 - role `editor`; and
 - the intended participant, such as `andrew`.
 

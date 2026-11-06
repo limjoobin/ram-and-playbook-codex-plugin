@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
-            "timeout": 4,
+            "timeout": 10,
             "statusMessage": "Capturing private memory intent",
             "additionalContextLimit": 300
           }
@@ -20,7 +20,7 @@
           {
             "type": "command",
             "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
-            "timeout": 3
+            "timeout": 8
           }
         ]
       }

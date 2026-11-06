@@ -1,9 +1,10 @@
 # Offline quality gate
 
-Run the fixed 15-case gate before sharing a release:
+Run the fixed 15-case gate before sharing a release, from the development
+environment that has the pinned redis-iris SDK installed (see `AGENTS.md`):
 
 ```sh
-python3 evaluation/run.py
+.venv/bin/python evaluation/run.py
 ```
 
 The corpus contains ten ordinary current-topic cases, three lifecycle/conflict
@@ -22,7 +23,7 @@ gate the build. To refresh the committed deterministic report after an
 intentional behavior or fixture change, run:
 
 ```sh
-python3 evaluation/run.py --write
+.venv/bin/python evaluation/run.py --write
 git diff -- evaluation/cases.json evaluation/results.json
 ```
 

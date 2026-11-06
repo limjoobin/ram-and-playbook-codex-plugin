@@ -21,7 +21,15 @@ from ram_plugin.promotion import (  # noqa: E402
     PromotionLedger,
     PromotionService,
 )
-from ram_plugin.ram import RAMHTTPError  # noqa: E402
+
+
+class RAMHTTPError(Exception):
+    """Stand-in for a redis-iris SDK HTTP error, which exposes status_code."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+
 from reconciliation.job import ReconciliationJob  # noqa: E402
 
 
@@ -33,7 +41,8 @@ CONFIG = Config(
     participant="andrew",
     api_key="secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="secret",
 )
 

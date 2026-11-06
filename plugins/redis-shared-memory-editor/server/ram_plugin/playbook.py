@@ -1,171 +1,192 @@
-"""Allowlisted Streamable HTTP MCP client for Redis Agent Playbook."""
+"""Allowlisted Redis Agent Playbooks reads through the redis-iris SDK.
+
+The SDK reaches the Playbooks REST data plane. Only three reviewed reads are
+exposed: discover published entries, load one exact Skill version, and fetch one
+resource that a loaded Skill lists. Results keep the shapes the agenda and MCP
+tools already consume.
+"""
 
 from __future__ import annotations
 
-import json
-import ssl
+import base64
+import hashlib
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.request import (
-    HTTPRedirectHandler,
-    HTTPSHandler,
-    Request,
-    build_opener,
-)
 
 from .config import Config, PluginError
 
 
 ALLOWED_TOOLS = frozenset({"discover_entries", "load_skill", "fetch_resource"})
-PROTOCOL_VERSION = "2025-06-18"
+MAX_RESOURCE_BYTES = 1_048_576
+_TEXT_TYPES = ("text/", "application/json", "application/yaml", "application/x-yaml")
 
 
-class _RejectRedirects(HTTPRedirectHandler):
-    def redirect_request(self, request, file_pointer, code, message, headers, new_url):
-        return None
+def _public(error: BaseException) -> PluginError:
+    if isinstance(error, PluginError):
+        return error
+    status = getattr(error, "status_code", None)
+    name = type(error).__name__
+    if status in {401, 403}:
+        return PluginError("playbook_authentication_failed", "Playbook rejected the configured credential.")
+    if status in {408, 429} or (isinstance(status, int) and status >= 500):
+        return PluginError("playbook_unavailable", "Playbook is temporarily unavailable.")
+    if name in {"EntryNotFound"} or status == 404:
+        return PluginError("playbook_entry_not_found", "The requested Playbook entry is not published.")
+    if isinstance(status, int):
+        return PluginError("playbook_request_rejected", "Playbook rejected the read request.")
+    if name == "ResourceTooLarge":
+        return PluginError("playbook_resource_too_large", "The Playbook resource exceeds the read limit.")
+    if "httpx" in type(error).__module__ or name in {"NoResponseError", "TimeoutError", "ConnectionError"}:
+        return PluginError("playbook_unavailable", "Playbook is temporarily unavailable.")
+    return PluginError("playbook_contract_error", "Playbook returned an incompatible response.")
 
 
-def _json_payload(payload: bytes, content_type: str) -> dict[str, Any]:
-    """Decode a JSON or server-sent-event MCP response."""
+def _entry(entry: Any) -> dict[str, Any]:
+    value: dict[str, Any] = {
+        "entry_id": entry.entry_id,
+        "entry_type": entry.entry_type,
+        "entry_key": entry.entry_key,
+        "version": entry.version,
+        "score": entry.score,
+        "intents": list(entry.intents),
+        "pinned": entry.pinned,
+    }
+    if entry.faq is not None:
+        value["faq"] = {"question": entry.faq.question, "answer": entry.faq.answer}
+    if entry.skill is not None:
+        value["skill"] = {
+            "name": entry.skill.name,
+            "description": entry.skill.description,
+            "uri": entry.skill.uri,
+        }
+    return value
 
-    candidates: list[str]
-    text = payload.decode("utf-8")
-    if "text/event-stream" in content_type:
-        candidates = [
-            line[5:].strip()
-            for line in text.splitlines()
-            if line.startswith("data:") and line[5:].strip() not in {"", "[DONE]"}
-        ]
-    else:
-        candidates = [text]
-    for candidate in reversed(candidates):
-        decoded = json.loads(candidate)
-        if isinstance(decoded, dict):
-            return decoded
-    raise PluginError("playbook_contract_error", "Playbook returned an incompatible MCP response.")
+
+def _digest_matches(data: bytes, expected: str) -> bool:
+    algorithm, separator, value = expected.partition(":")
+    if not separator:
+        algorithm, value = "sha256", expected
+    if algorithm.lower() != "sha256" or not value:
+        return False
+    return hashlib.sha256(data).hexdigest() == value.lower()
 
 
 class PlaybookClient:
-    """A minimal MCP client that can call only the reviewed Playbook read tools."""
+    """Read-only Playbook client that can call only the reviewed operations."""
 
-    def __init__(self, config: Config, timeout_seconds: float = 20.0) -> None:
-        self.url = config.playbook_mcp_url
-        self.api_key = config.playbook_api_key
-        self.timeout_seconds = timeout_seconds
-        self.session_id: str | None = None
-        self._initialized = False
-        self._next_id = 1
-        self._opener = build_opener(
-            _RejectRedirects(), HTTPSHandler(context=ssl.create_default_context())
-        )
+    def __init__(self, config: Config, timeout_seconds: float = 20.0, client: Any | None = None) -> None:
+        if client is None:
+            from redis_iris.agent_playbooks import AgentPlaybooks, AgentPlaybooksSettings
 
-    def _request(self, message: dict[str, Any], expect_response: bool = True) -> dict[str, Any]:
-        body = json.dumps(message, separators=(",", ":")).encode("utf-8")
-        headers = {
-            "Accept": "application/json, text/event-stream",
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "MCP-Protocol-Version": PROTOCOL_VERSION,
-        }
-        if self.session_id:
-            headers["MCP-Session-Id"] = self.session_id
-        request = Request(self.url, data=body, headers=headers, method="POST")
-        try:
-            with self._opener.open(request, timeout=self.timeout_seconds) as response:
-                self.session_id = response.headers.get("MCP-Session-Id") or self.session_id
-                payload = response.read(1_048_576)
-                content_type = response.headers.get("Content-Type", "application/json")
-        except HTTPError as error:
-            if error.code in {401, 403}:
-                raise PluginError(
-                    "playbook_authentication_failed",
-                    "Playbook rejected the configured credential.",
-                ) from None
-            if error.code in {408, 429} or error.code >= 500:
-                raise PluginError("playbook_unavailable", "Playbook is temporarily unavailable.") from None
-            raise PluginError("playbook_request_rejected", "Playbook rejected the read request.") from None
-        except (TimeoutError, URLError, OSError):
-            raise PluginError("playbook_unavailable", "Playbook is temporarily unavailable.") from None
-        if not expect_response:
-            return {}
-        if not payload:
-            raise PluginError(
-                "playbook_contract_error", "Playbook returned an incompatible MCP response."
+            client = AgentPlaybooks(
+                AgentPlaybooksSettings(
+                    url=config.playbook_url,
+                    playbook_id=config.playbook_id,
+                    api_key=config.playbook_api_key,
+                    timeout=timeout_seconds,
+                )
             )
-        try:
-            decoded = _json_payload(payload, content_type)
-        except (UnicodeError, json.JSONDecodeError):
-            raise PluginError(
-                "playbook_contract_error", "Playbook returned an incompatible MCP response."
-            ) from None
-        error = decoded.get("error")
-        if isinstance(error, dict):
-            raise PluginError("playbook_request_rejected", "Playbook rejected the read request.")
-        result = decoded.get("result")
-        if not isinstance(result, dict):
-            raise PluginError("playbook_contract_error", "Playbook returned an incompatible MCP response.")
-        return result
-
-    def _rpc(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        identifier = self._next_id
-        self._next_id += 1
-        message: dict[str, Any] = {
-            "jsonrpc": "2.0",
-            "id": identifier,
-            "method": method,
-        }
-        if params is not None:
-            message["params"] = params
-        return self._request(message)
-
-    def _initialize(self) -> None:
-        if self._initialized:
-            return
-        self._rpc(
-            "initialize",
-            {
-                "protocolVersion": PROTOCOL_VERSION,
-                "capabilities": {},
-                "clientInfo": {"name": "redis-shared-memory-editor", "version": "1"},
-            },
-        )
-        self._request(
-            {"jsonrpc": "2.0", "method": "notifications/initialized"},
-            expect_response=False,
-        )
-        self._initialized = True
+        self.sdk = client
+        # Resource URIs a loaded Skill listed, mapped to their exact identity.
+        self._resources: dict[str, dict[str, Any]] = {}
 
     def inventory(self) -> list[str]:
-        self._initialize()
-        result = self._rpc("tools/list")
-        tools = result.get("tools")
-        if not isinstance(tools, list) or any(not isinstance(tool, dict) for tool in tools):
-            raise PluginError("playbook_contract_error", "Playbook returned an incompatible tool list.")
-        return sorted(
-            tool["name"]
-            for tool in tools
-            if isinstance(tool.get("name"), str)
-        )
+        """Check the Playbook data plane and return the reviewed operations."""
+
+        try:
+            self.sdk.client.get_playbook_health()
+        except Exception as error:
+            raise _public(error) from None
+        return sorted(ALLOWED_TOOLS)
 
     def call(self, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if tool not in ALLOWED_TOOLS:
             raise PluginError("playbook_operation_denied", "That Playbook operation is not exposed.")
-        self._initialize()
-        result = self._rpc("tools/call", {"name": tool, "arguments": arguments})
-        if result.get("isError") is True:
-            raise PluginError("playbook_request_rejected", "Playbook rejected the read request.")
-        structured = result.get("structuredContent")
-        if isinstance(structured, dict):
-            return structured
-        content = result.get("content")
-        if isinstance(content, list):
-            for item in content:
-                if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
-                    try:
-                        parsed = json.loads(item["text"])
-                    except json.JSONDecodeError:
-                        continue
-                    if isinstance(parsed, dict):
-                        return parsed
-        raise PluginError("playbook_contract_error", "Playbook returned no structured result.")
+        try:
+            if tool == "discover_entries":
+                return self._discover(arguments)
+            if tool == "load_skill":
+                return self._load_skill(arguments)
+            return self._fetch_resource(arguments)
+        except PluginError:
+            raise
+        except Exception as error:
+            raise _public(error) from None
 
+    def _discover(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        pins = [
+            str(pin.get("entry_id") or pin.get("entry_key"))
+            for pin in arguments.get("pinned_entries") or []
+            if isinstance(pin, dict) and (pin.get("entry_id") or pin.get("entry_key"))
+        ]
+        found = self.sdk.discover(
+            str(arguments["query"]),
+            limit=int(arguments.get("limit") or 5),
+            pin=pins,
+        )
+        # Pinned entries first, then ranked discoveries, as one list.
+        entries = [_entry(entry) for entry in (*found.pinned, *found.discovered)]
+        return {
+            "entries": entries,
+            "truncated": bool(getattr(found, "truncated", False)),
+        }
+
+    def _load_skill(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        entry_id = str(arguments["entry_id"])
+        version = int(arguments["version"])
+        skill = self.sdk.skill(entry_id, version=version)
+        if skill.entry_id != entry_id or skill.version != version:
+            raise PluginError("playbook_contract_error", "Playbook loaded a different Skill version.")
+        resources = []
+        for resource in skill.resources:
+            descriptor = {
+                "resource_id": resource.resource_id,
+                "path": resource.path,
+                "mime_type": resource.mime_type,
+                "size_bytes": resource.size_bytes,
+                "uri": resource.uri,
+                "digest": resource.digest,
+            }
+            resources.append(descriptor)
+            if resource.uri:
+                self._resources[resource.uri] = {
+                    "skill": skill,
+                    "resource_id": resource.resource_id,
+                    "digest": resource.digest,
+                    "mime_type": resource.mime_type,
+                }
+        return {
+            "entry_id": skill.entry_id,
+            "entry_key": skill.entry_key,
+            "version": skill.version,
+            "content": {
+                "manifest": {"name": skill.name, "description": skill.description},
+                "instructions": skill.instructions,
+                "resources": resources,
+            },
+        }
+
+    def _fetch_resource(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        uri = str(arguments["uri"])
+        listed = self._resources.get(uri)
+        if listed is None:
+            raise PluginError(
+                "playbook_resource_unlisted",
+                "Load the Skill that lists this resource before fetching it.",
+            )
+        content = self.sdk.skill_resource(
+            listed["skill"], listed["resource_id"], max_bytes=MAX_RESOURCE_BYTES
+        )
+        data = bytes(content.data)
+        digest = str(listed["digest"] or "")
+        if digest and not _digest_matches(data, digest):
+            raise PluginError("playbook_digest_mismatch", "A Playbook resource failed digest verification.")
+        mime_type = str(content.mime_type or listed["mime_type"] or "application/octet-stream")
+        result: dict[str, Any] = {"uri": uri, "digest": digest, "mime_type": mime_type}
+        if mime_type.split(";")[0].strip().startswith(_TEXT_TYPES):
+            try:
+                result["text"] = data.decode("utf-8")
+                return result
+            except UnicodeDecodeError:
+                pass
+        result["blob"] = base64.b64encode(data).decode("ascii")
+        return result

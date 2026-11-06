@@ -24,7 +24,8 @@ CONFIG = Config(
     participant="alice",
     api_key="ram-secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="playbook-secret",
 )
 

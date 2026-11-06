@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import io
 import json
 from pathlib import Path
 import sys
 import unittest
-from urllib.error import HTTPError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,7 +12,6 @@ sys.path.insert(0, str(SERVER_ROOT))
 
 from ram_plugin.config import Config, PluginError  # noqa: E402
 from ram_plugin.management import PluginService, resolve_entities  # noqa: E402
-from ram_plugin.playbook import PlaybookClient  # noqa: E402
 
 
 CONFIG = Config(
@@ -25,7 +22,8 @@ CONFIG = Config(
     participant="alice",
     api_key="ram-secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="playbook-secret",
 )
 
@@ -148,34 +146,6 @@ class FakePlaybook:
 
 class FakeEditor:
     pass
-
-
-class FakeResponse:
-    def __init__(self, payload, headers=None):
-        self.payload = payload
-        self.headers = headers or {"Content-Type": "application/json"}
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-    def read(self, limit=None):
-        return self.payload
-
-
-class QueueOpener:
-    def __init__(self, responses):
-        self.responses = list(responses)
-        self.requests = []
-
-    def open(self, request, timeout=None):
-        self.requests.append(request)
-        response = self.responses.pop(0)
-        if isinstance(response, Exception):
-            raise response
-        return response
 
 
 class ManagementTests(unittest.TestCase):
@@ -326,51 +296,6 @@ class ManagementTests(unittest.TestCase):
             service.ram_get_evidence("memory")
 
         self.assertEqual(raised.exception.code, "evidence_unavailable")
-
-    def test_playbook_streamable_http_initializes_and_lists_tools(self):
-        client = PlaybookClient(CONFIG)
-        client._opener = QueueOpener(
-            [
-                FakeResponse(
-                    json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2025-06-18"}}).encode(),
-                    {"Content-Type": "application/json", "MCP-Session-Id": "session-1"},
-                ),
-                FakeResponse(b"", {"Content-Type": "application/json"}),
-                FakeResponse(
-                    json.dumps(
-                        {
-                            "jsonrpc": "2.0",
-                            "id": 2,
-                            "result": {"tools": [{"name": "load_skill"}, {"name": "discover_entries"}]},
-                        }
-                    ).encode()
-                ),
-            ]
-        )
-        self.assertEqual(client.inventory(), ["discover_entries", "load_skill"])
-        self.assertEqual(client.session_id, "session-1")
-        self.assertEqual(len(client._opener.requests), 3)
-
-    def test_playbook_auth_errors_are_sanitized(self):
-        client = PlaybookClient(CONFIG)
-        upstream_error = HTTPError(
-            CONFIG.playbook_mcp_url,
-            401,
-            CONFIG.playbook_api_key,
-            {},
-            io.BytesIO(b"{}"),
-        )
-        client._opener = QueueOpener(
-            [upstream_error]
-        )
-        try:
-            with self.assertRaises(PluginError) as raised:
-                client.inventory()
-        finally:
-            upstream_error.close()
-        self.assertEqual(raised.exception.code, "playbook_authentication_failed")
-        self.assertNotIn(CONFIG.playbook_api_key, str(raised.exception))
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,8 +21,12 @@ Redis Agent Memory store and namespace. It exposes:
 - `memory_candidate_promote`
 - `memory_candidate_reject`
 
-The MCP server and reviewed session-capture hooks are dependency-free Python
-3.10+ source. It has no installer, package-manager step, or runtime download.
+The MCP server and reviewed session-capture hooks are Python 3.11+ source on
+the pinned redis-iris SDK. On first launch (or `server/launch.py --install`),
+`server/launch.py` installs the exact pins in `server/requirements.txt` once
+into a private virtual environment under the plugin data directory; this needs
+HTTPS access to the Python package index. Hooks never install and fail open
+until the runtime is ready. Version 0.13.0 is macOS/Linux only.
 The active `UserPromptSubmit` and `SessionEnd` hooks write only to the
 configured personal namespace. Automatic candidate creation is paused while
 `PostToolUse` and `Stop` are inactive. A likely lifecycle report instead causes
@@ -36,21 +40,25 @@ Each user creates a private configuration file at:
 ~/.config/redis-shared-memory/editor.env
 ```
 
-Users in one collaboration group configure the same `RAM_ENDPOINT`,
-`RAM_STORE_ID`, `RAM_NAMESPACE`, `RAM_AGENDA_OWNER_ID`, and
-`PLAYBOOK_MCP_URL`. Each user configures their own `RAM_PERSONAL_NAMESPACE`,
+Users in one collaboration group configure the same
+`IRIS_AGENT_MEMORY_URL`, `IRIS_AGENT_MEMORY_STORE_ID`, `RAM_NAMESPACE`,
+`RAM_AGENDA_OWNER_ID`, `IRIS_AGENT_PLAYBOOKS_URL` (base URL only), and
+`IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`. Each user configures their own `RAM_PERSONAL_NAMESPACE`,
 `RAM_PARTICIPANT`, and,
 preferably, their own service API keys.
 
-`RAM_API_KEY` and `PLAYBOOK_API_KEY` authenticate requests.
+`IRIS_AGENT_MEMORY_API_KEY` and `IRIS_AGENT_PLAYBOOKS_API_KEY` (a reader key)
+authenticate requests.
 `RAM_PARTICIPANT` is contributor attribution, not verified identity. Never put
 the populated file in the repository, plugin cache, or chat.
 
-An environment administrator may also use the exact optional settings
-`RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and `OPENAI_API_KEY` in this
-same private prototype file. The desktop MCP accepts but does not retain them
-in its runtime configuration. Ordinary participant installations leave them
-blank.
+An environment administrator may also keep the optional names
+`IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`, `IRIS_AGENT_PLAYBOOKS_SERVICE_URL`,
+`IRIS_AGENT_PLAYBOOKS_SERVICE_TOKEN`, `IRIS_AGENT_MEMORY_SERVICE_URL`, and
+`IRIS_AGENT_MEMORY_SERVICE_TOKEN` in this same private prototype file. The
+desktop MCP accepts but does not retain them in its runtime configuration.
+Ordinary participant installations leave them unset. The pre-0.13.0 names are
+rejected; see "Upgrading from 0.12.x" in `CODEX_INSTALLATION.md`.
 
 `agenda_prepare` does not bundle a second copy of the management policy. It
 discovers and loads `prepare-management-review-agenda` from Playbook at runtime,

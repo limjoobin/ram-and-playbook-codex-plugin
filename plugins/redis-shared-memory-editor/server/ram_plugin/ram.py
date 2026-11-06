@@ -1,25 +1,14 @@
-"""Redis Agent Memory HTTPS operations and write reconciliation."""
+"""Redis Agent Memory operations through the redis-iris SDK, and write reconciliation."""
 
 from __future__ import annotations
 
 import base64
-import json
-import ssl
+from datetime import datetime
 import time
 from typing import Any, Protocol
-from urllib.error import HTTPError
-from urllib.parse import quote
-from urllib.request import Request, urlopen
 import uuid
 
 from .config import Config, PluginError, VERSION, public_error
-
-
-class RAMHTTPError(Exception):
-    def __init__(self, status_code: int, error_type: str | None = None) -> None:
-        super().__init__(f"RAM request failed with status {status_code}")
-        self.status_code = status_code
-        self.error_type = error_type
 
 
 class RAMOperations(Protocol):
@@ -36,65 +25,256 @@ class RAMOperations(Protocol):
     ) -> dict[str, Any]: ...
 
 
-class RAMClient:
-    """Small dependency-free client for the RAM data-plane operations used here."""
+_RECORD_FIELDS = (
+    ("ownerId", "owner_id"),
+    ("memoryType", "memory_type"),
+    ("sessionId", "session_id"),
+    ("topics", "topics"),
+    ("attributes", "attributes"),
+)
+_FILTER_FIELDS = (
+    ("ownerId", "owner_id"),
+    ("memoryType", "memory_type"),
+    ("sessionId", "session_id"),
+    ("topics", "topics"),
+    ("createdAt", "created_at"),
+    ("attributes", "attributes"),
+    ("unnamespaced", "unnamespaced"),
+)
 
-    def __init__(self, config: Config, timeout_ms: int = 8_000) -> None:
+
+def _dump(model: Any) -> dict[str, Any]:
+    """Return the SDK model as its camelCase JSON wire shape."""
+
+    if model is None:
+        return {}
+    if hasattr(model, "model_dump"):
+        value = model.model_dump(mode="json", by_alias=True, exclude_none=True)
+    else:
+        value = model
+    if not isinstance(value, dict):
+        raise ValueError("RAM returned a non-object response")
+    return value
+
+
+def _timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+class RAMClient:
+    """Adapter from the plugin's record contract to the redis-iris Agent Memory SDK.
+
+    The rest of the plugin speaks the camelCase record shape (``id``, ``text``,
+    ``namespace``, ``ownerId``, ``memoryType``, ``attributes``). This class is the
+    single seam that translates it to the generated ``redis_agent_memory`` client,
+    including the name-to-ID mapping for first-class RAM namespaces.
+    """
+
+    def __init__(self, config: Config, timeout_ms: int = 8_000, client: Any | None = None) -> None:
         self.config = config
         self.timeout_ms = timeout_ms
-        store_id = quote(config.store_id, safe="")
-        self.store_url = f"{config.endpoint}/v1/stores/{store_id}"
-        self.base_url = f"{self.store_url}/long-term-memory"
+        if client is None:
+            # Imported lazily so configuration errors never pay the SDK import cost.
+            from redis_agent_memory import AgentMemory
 
-    def _request(
-        self,
-        method: str,
-        url: str,
-        body: dict[str, Any] | None = None,
-        timeout_ms: int | None = None,
-    ) -> dict[str, Any]:
-        data = None if body is None else json.dumps(body, separators=(",", ":")).encode("utf-8")
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {self.config.api_key}",
-        }
-        if data is not None:
-            headers["content-type"] = "application/json"
-        request = Request(url, data=data, headers=headers, method=method)
+            client = AgentMemory(
+                server_url=config.endpoint,
+                api_key=config.api_key,
+                store_id=config.store_id,
+                timeout_ms=timeout_ms,
+            )
+        self.sdk = client
+        self._namespace_ids: dict[str, str] = {}
+        self._namespace_names: dict[str, str] = {}
+
+    def _timeout(self, timeout_ms: int | None) -> int:
+        return timeout_ms or self.timeout_ms
+
+    # Namespaces -------------------------------------------------------------
+
+    def _scope(self, name: str) -> tuple[str, str | None]:
+        if name.casefold() == self.config.personal_namespace.casefold():
+            return "PERSONAL", self.config.participant
+        return "SHARED", None
+
+    def _remember_namespace(self, namespace_id: str, name: str) -> str:
+        self._namespace_ids[name.casefold()] = namespace_id
+        self._namespace_names[namespace_id] = name
+        return namespace_id
+
+    def namespace_id(self, name: str, *, create: bool = False) -> str | None:
+        """Resolve a configured namespace name to its RAM namespace ID.
+
+        Reads never create a namespace. Writes create the exact configured
+        namespace on first use, scoped PERSONAL for the participant's private
+        namespace and SHARED otherwise.
+        """
+
+        cached = self._namespace_ids.get(name.casefold())
+        if cached:
+            return cached
+        scope, owner = self._scope(name)
+        cursor: str | None = None
+        seen: set[str] = set()
+        while True:
+            page = _dump(
+                self.sdk.list_namespaces(
+                    scope=scope,
+                    owner_id=owner,
+                    limit=200,
+                    cursor=cursor,
+                    timeout_ms=self.timeout_ms,
+                )
+            )
+            for item in page.get("items", []):
+                if (
+                    isinstance(item, dict)
+                    and isinstance(item.get("name"), str)
+                    and item["name"].casefold() == name.casefold()
+                    and isinstance(item.get("namespaceId"), str)
+                ):
+                    return self._remember_namespace(item["namespaceId"], item["name"])
+            cursor = page.get("nextCursor")
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                break
+            seen.add(cursor)
+        if not create:
+            return None
+        request: dict[str, Any] = {"name": name, "scope": scope}
+        if owner:
+            request["owner_id"] = owner
+        created = _dump(self.sdk.create_namespace(request=request, timeout_ms=self.timeout_ms))
+        namespace = created.get("namespace", created)
+        namespace_id = namespace.get("namespaceId") if isinstance(namespace, dict) else None
+        if not isinstance(namespace_id, str) or not namespace_id:
+            raise PluginError("ram_contract_error", "RAM did not return the created namespace.")
+        return self._remember_namespace(namespace_id, name)
+
+    def namespace_name(self, namespace_id: str) -> str:
+        cached = self._namespace_names.get(namespace_id)
+        if cached:
+            return cached
         try:
-            with urlopen(
-                request,
-                timeout=(timeout_ms or self.timeout_ms) / 1000,
-                context=ssl.create_default_context(),
-            ) as response:
-                payload = response.read()
-        except HTTPError as error:
-            error_type = None
-            try:
-                problem = json.loads(error.read(65_536).decode("utf-8"))
-                if isinstance(problem, dict) and isinstance(problem.get("type"), str):
-                    error_type = problem["type"]
-            except (UnicodeError, json.JSONDecodeError):
-                pass
-            raise RAMHTTPError(error.code, error_type) from error
-        if not payload:
-            return {}
-        decoded = json.loads(payload)
-        if not isinstance(decoded, dict):
-            raise ValueError("RAM returned a non-object JSON response")
-        return decoded
+            found = _dump(self.sdk.get_namespace(namespace_id=namespace_id, timeout_ms=self.timeout_ms))
+        except Exception:
+            # An unreadable namespace can never match the configured scope.
+            return namespace_id
+        namespace = found.get("namespace", found)
+        name = namespace.get("name") if isinstance(namespace, dict) else None
+        if not isinstance(name, str) or not name:
+            return namespace_id
+        self._remember_namespace(namespace_id, name)
+        return name
+
+    def namespace_ids(self) -> list[str]:
+        """Every namespace ID visible to this key, for administrator reset."""
+
+        ids: list[str] = []
+        cursor: str | None = None
+        seen: set[str] = set()
+        while True:
+            page = _dump(self.sdk.list_namespaces(limit=200, cursor=cursor, timeout_ms=30_000))
+            for item in page.get("items", []):
+                if isinstance(item, dict) and isinstance(item.get("namespaceId"), str):
+                    ids.append(item["namespaceId"])
+            cursor = page.get("nextCursor")
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                return ids
+            seen.add(cursor)
+
+    # Record translation -----------------------------------------------------
+
+    def _record(self, value: Any) -> dict[str, Any]:
+        record = _dump(value)
+        if "memoryId" in record:
+            record["id"] = record.pop("memoryId")
+        namespace_id = record.pop("namespaceId", None)
+        if isinstance(namespace_id, str) and namespace_id:
+            record["namespace"] = self.namespace_name(namespace_id)
+        return record
+
+    def _sdk_record(self, memory: dict[str, Any]) -> dict[str, Any]:
+        record: dict[str, Any] = {"memory_id": memory["id"], "text": memory["text"]}
+        for camel, snake in _RECORD_FIELDS:
+            value = memory.get(camel)
+            if value not in (None, ""):
+                record[snake] = value
+        namespace = memory.get("namespace")
+        if isinstance(namespace, str) and namespace:
+            record["namespace_id"] = self.namespace_id(namespace, create=True)
+        return record
+
+    def _search_request(self, request: dict[str, Any]) -> dict[str, Any] | None:
+        translated: dict[str, Any] = {}
+        if request.get("text") is not None:
+            translated["query"] = request["text"]
+        if request.get("similarityThreshold") is not None:
+            translated["min_score"] = request["similarityThreshold"]
+        if request.get("limit") is not None:
+            translated["limit"] = request["limit"]
+        if request.get("pageToken"):
+            translated["cursor"] = request["pageToken"]
+        source = request.get("filter") or {}
+        filters: dict[str, Any] = {}
+        for camel, snake in _FILTER_FIELDS:
+            if camel in source:
+                filters[snake] = source[camel]
+        if "namespaceId" in source:
+            filters["namespace_id"] = source["namespaceId"]
+        if "namespace" in source:
+            clause = source["namespace"]
+            if not isinstance(clause, dict) or set(clause) != {"eq"}:
+                raise PluginError("ram_contract_error", "Only exact namespace filters are supported.")
+            namespace_id = self.namespace_id(str(clause["eq"]))
+            if namespace_id is None:
+                return None  # The namespace does not exist yet, so it holds nothing.
+            filters["namespace_id"] = {"eq": namespace_id}
+        if filters:
+            if request.get("filterOp"):
+                filters["op"] = str(request["filterOp"]).upper()
+            translated["filter_"] = filters
+        return translated
+
+    # Long-term memory -------------------------------------------------------
 
     def search(self, request: dict[str, Any], timeout_ms: int | None = None) -> dict[str, Any]:
-        return self._request("POST", f"{self.base_url}/search", request, timeout_ms)
+        translated = self._search_request(request)
+        if translated is None:
+            return {"items": []}
+        result = _dump(
+            self.sdk.search_long_term_memory(request=translated, timeout_ms=self._timeout(timeout_ms))
+        )
+        items = [self._record(item) for item in result.get("items", [])]
+        response: dict[str, Any] = {"items": items}
+        if result.get("nextCursor"):
+            response["nextPageToken"] = result["nextCursor"]
+        return response
 
     def get(self, memory_id: str) -> dict[str, Any]:
-        return self._request("GET", f"{self.base_url}/{quote(memory_id, safe='')}")
+        return self._record(self.sdk.get_long_term_memory(memory_id=memory_id, timeout_ms=self.timeout_ms))
 
     def create(self, memories: list[dict[str, Any]]) -> dict[str, Any]:
-        return self._request("POST", self.base_url, {"memories": memories})
+        records = [self._sdk_record(memory) for memory in memories]
+        return _dump(
+            self.sdk.bulk_create_long_term_memories(memories=records, timeout_ms=self.timeout_ms)
+        )
 
     def update(self, memory_id: str, changes: dict[str, Any]) -> dict[str, Any]:
-        return self._request("PATCH", f"{self.base_url}/{quote(memory_id, safe='')}", changes)
+        arguments: dict[str, Any] = {}
+        for camel, snake in (("text", "text"), *_RECORD_FIELDS):
+            if snake == "attributes":
+                continue  # Attribute replacement is not part of the plugin's update contract.
+            value = changes.get(camel)
+            if value not in (None, ""):
+                arguments[snake] = value
+        namespace = changes.get("namespace")
+        if isinstance(namespace, str) and namespace:
+            arguments["namespace_id"] = self.namespace_id(namespace, create=True)
+        return self._record(
+            self.sdk.update_long_term_memory(
+                memory_id=memory_id, timeout_ms=self.timeout_ms, **arguments
+            )
+        )
 
     def evidence(
         self,
@@ -103,12 +283,33 @@ class RAMClient:
         limit: int = 100,
         page_token: str | None = None,
     ) -> dict[str, Any]:
-        query = f"?limit={limit}"
-        if page_token:
-            query += f"&pageToken={quote(page_token, safe='')}"
-        memory = quote(memory_id, safe="")
-        source = quote(source_id, safe="")
-        return self._request("GET", f"{self.base_url}/{memory}/sources/{source}/evidence{query}")
+        result = _dump(
+            self.sdk.list_memory_source_evidence(
+                memory_id=memory_id,
+                source_id=source_id,
+                limit=limit,
+                cursor=page_token,
+                timeout_ms=self.timeout_ms,
+            )
+        )
+        source = result.get("source", {})
+        response: dict[str, Any] = {"source": source}
+        if isinstance(source, dict) and source.get("evidenceNextCursor"):
+            response["evidenceNextPageToken"] = source["evidenceNextCursor"]
+        return response
+
+    def bulk_delete_long_term_memories(
+        self, memory_ids: list[str], timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Delete an explicit bounded set of long-term memory IDs."""
+
+        return _dump(
+            self.sdk.bulk_delete_long_term_memories(
+                memory_ids=memory_ids, timeout_ms=self._timeout(timeout_ms)
+            )
+        )
+
+    # Session memory ---------------------------------------------------------
 
     def add_session_event(
         self,
@@ -123,32 +324,61 @@ class RAMClient:
         idempotency_key: str,
         timeout_ms: int | None = None,
     ) -> dict[str, Any]:
-        """Append one attributed session event using the public RAM contract."""
+        """Append one attributed session event to the named (private) namespace."""
 
-        return self._request(
-            "POST",
-            f"{self.store_url}/session-memory/events",
-            {
-                "idempotencyKey": idempotency_key,
-                "sessionId": session_id,
-                "actorId": actor_id,
-                "namespace": namespace,
-                "role": role,
-                "content": [{"text": text}],
-                "createdAt": created_at,
-                "metadata": metadata,
-            },
-            timeout_ms,
+        return _dump(
+            self.sdk.add_session_event(
+                session_id=session_id,
+                actor_id=actor_id,
+                role=role.upper(),
+                content=[{"text": text}],
+                created_at=_timestamp(created_at),
+                idempotency_key=idempotency_key,
+                namespace_id=self.namespace_id(namespace, create=True),
+                metadata=metadata,
+                timeout_ms=self._timeout(timeout_ms),
+            )
         )
 
     def get_session(self, session_id: str, timeout_ms: int | None = None) -> dict[str, Any]:
         """Read a session for idempotency and promotion provenance checks."""
 
-        return self._request(
-            "GET",
-            f"{self.store_url}/session-memory/{quote(session_id, safe='')}",
-            timeout_ms=timeout_ms,
+        session = _dump(
+            self.sdk.get_session_memory(session_id=session_id, timeout_ms=self._timeout(timeout_ms))
         )
+        namespace_id = session.pop("namespaceId", None)
+        if isinstance(namespace_id, str) and namespace_id:
+            session["namespace"] = self.namespace_name(namespace_id)
+        return session
+
+    def list_sessions(
+        self, page_token: str | None = None, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """List every session ID in the configured store for administrator reset."""
+
+        result = _dump(
+            self.sdk.list_sessions(
+                include_all=True,
+                limit=100,
+                cursor=page_token,
+                timeout_ms=self._timeout(timeout_ms),
+            )
+        )
+        response: dict[str, Any] = {"items": result.get("items", [])}
+        if result.get("nextCursor"):
+            response["nextPageToken"] = result["nextCursor"]
+        return response
+
+    def delete_session(
+        self, session_id: str, timeout_ms: int | None = None
+    ) -> dict[str, Any]:
+        """Delete one explicit session and all its events."""
+
+        return _dump(
+            self.sdk.delete_session_memory(session_id=session_id, timeout_ms=self._timeout(timeout_ms))
+        )
+
+    # MemoryETL --------------------------------------------------------------
 
     def create_document_ingestion(
         self,
@@ -164,79 +394,53 @@ class RAMClient:
     ) -> dict[str, Any]:
         """Submit one immutable document revision through RAM MemoryETL."""
 
-        return self._request(
-            "POST",
-            f"{self.store_url}/document-ingestions",
-            {
-                "documentId": document_id,
-                "revision": revision,
-                "content": base64.b64encode(content).decode("ascii"),
-                "mediaType": media_type,
-                "ownerId": owner_id,
-                "extractorId": extractor_id,
-                "idempotencyKey": idempotency_key,
-            },
-            timeout_ms,
+        response = self.sdk.create_document_ingestion(
+            document_id=document_id,
+            revision=revision,
+            content=base64.b64encode(content).decode("ascii"),
+            media_type=media_type,
+            owner_id=owner_id,
+            extractor_id=extractor_id,
+            idempotency_key=idempotency_key,
+            timeout_ms=self._timeout(timeout_ms),
         )
+        result = _dump(getattr(response, "result", response))
+        ingestion = result.get("ingestion")
+        return ingestion if isinstance(ingestion, dict) else result
 
     def get_document_ingestion(
         self, ingestion_id: str, timeout_ms: int | None = None
     ) -> dict[str, Any]:
         """Read asynchronous MemoryETL processing and cleanup state."""
 
-        return self._request(
-            "GET",
-            f"{self.store_url}/document-ingestions/{quote(ingestion_id, safe='')}",
-            timeout_ms=timeout_ms,
+        return _dump(
+            self.sdk.get_document_ingestion(
+                ingestion_id=ingestion_id, timeout_ms=self._timeout(timeout_ms)
+            )
         )
 
     def list_document_ingestion_outputs(
         self, ingestion_id: str, timeout_ms: int | None = None
     ) -> dict[str, Any]:
-        """Return the RAM memory IDs produced by one document ingestion."""
+        """Return every RAM memory ID produced by one document ingestion."""
 
-        return self._request(
-            "GET",
-            f"{self.store_url}/document-ingestions/{quote(ingestion_id, safe='')}/outputs?limit=1000&offset=0",
-            timeout_ms=timeout_ms,
-        )
-
-    def bulk_delete_long_term_memories(
-        self, memory_ids: list[str], timeout_ms: int | None = None
-    ) -> dict[str, Any]:
-        """Delete an explicit bounded set of long-term memory IDs."""
-
-        return self._request(
-            "DELETE",
-            self.base_url,
-            {"memoryIds": memory_ids},
-            timeout_ms,
-        )
-
-    def list_sessions(
-        self, page_token: str | None = None, timeout_ms: int | None = None
-    ) -> dict[str, Any]:
-        """List every session ID in the configured store for administrator reset."""
-
-        query = "?includeAll=true&limit=1000"
-        if page_token:
-            query += f"&pageToken={quote(page_token, safe='')}"
-        return self._request(
-            "GET",
-            f"{self.store_url}/session-memory{query}",
-            timeout_ms=timeout_ms,
-        )
-
-    def delete_session(
-        self, session_id: str, timeout_ms: int | None = None
-    ) -> dict[str, Any]:
-        """Delete one explicit session and all its events."""
-
-        return self._request(
-            "DELETE",
-            f"{self.store_url}/session-memory/{quote(session_id, safe='')}",
-            timeout_ms=timeout_ms,
-        )
+        items: list[Any] = []
+        cursor: str | None = None
+        seen: set[str] = set()
+        while True:
+            page = _dump(
+                self.sdk.list_document_ingestion_outputs(
+                    ingestion_id=ingestion_id,
+                    limit=100,
+                    cursor=cursor,
+                    timeout_ms=self._timeout(timeout_ms),
+                )
+            )
+            items.extend(page.get("items", []))
+            cursor = page.get("nextCursor")
+            if not isinstance(cursor, str) or not cursor or cursor in seen:
+                return {"items": items}
+            seen.add(cursor)
 
 
 def _field(record: dict[str, Any], camel: str, snake: str) -> Any:

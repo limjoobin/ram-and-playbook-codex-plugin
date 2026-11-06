@@ -35,10 +35,11 @@ fulfilments, later decisions that resolve issues or dependencies, and decisions
 that supersede obsolete state. Legacy explicit `supersedes_state_ids` values are
 honored in the same pass. Ambiguous and partial matches remain open.
 
-The repository exposes one administrator job:
+The repository exposes one administrator job. Run it from the development
+environment that has the pinned redis-iris SDK installed (see `AGENTS.md`):
 
 ```sh
-python3 scripts/reconcile_management_state.py
+.venv/bin/python scripts/reconcile_management_state.py
 ```
 
 Without `--apply`, the command reads all scoped observations and projections
@@ -48,7 +49,7 @@ After an explicitly confirmed candidate is promoted and its direct shared
 observation has been verified, run:
 
 ```sh
-python3 scripts/reconcile_management_state.py \
+.venv/bin/python scripts/reconcile_management_state.py \
   --apply \
   --wait-for-candidate candidate-0123456789abcdef0123456789abcdef0123456789abcdef \
   --timeout-seconds 420
@@ -68,7 +69,7 @@ the same idempotent administrator command from one central scheduler every five
 minutes:
 
 ```sh
-python3 scripts/reconcile_management_state.py --apply --quiet-no-changes
+.venv/bin/python scripts/reconcile_management_state.py --apply --quiet-no-changes
 ```
 
 On macOS, install this command as one user LaunchAgent with `RunAtLoad` enabled

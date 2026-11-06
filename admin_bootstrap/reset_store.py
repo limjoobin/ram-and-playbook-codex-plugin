@@ -28,13 +28,13 @@ def _next_token(payload: dict[str, Any]) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def _search_ids(ram: Any, namespace_filter: dict[str, str]) -> set[str]:
+def _search_ids(ram: Any, scope_filter: dict[str, Any]) -> set[str]:
     token: str | None = None
     seen_tokens: set[str] = set()
     ids: set[str] = set()
     while True:
         request: dict[str, Any] = {
-            "filter": {"namespace": namespace_filter},
+            "filter": scope_filter,
             "filterOp": "all",
             "limit": 100,
         }
@@ -55,14 +55,12 @@ def _search_ids(ram: Any, namespace_filter: dict[str, str]) -> set[str]:
 
 
 def _long_term_ids(config: Any, ram: Any) -> list[str]:
-    # Search requires a structured filter. Namespace `ne` includes unnamespaced
-    # records; the paired `eq` pass closes the one excluded namespace exactly.
-    marker = "reset-" + hashlib.sha256(
-        f"{config.endpoint}\0{config.store_id}".encode("utf-8")
-    ).hexdigest()[:40]
-    return sorted(
-        _search_ids(ram, {"ne": marker}) | _search_ids(ram, {"eq": marker})
-    )
+    # Search requires a structured filter, and RAM namespaces are first-class
+    # resources. Unnamespaced records plus every visible namespace covers the store.
+    ids = _search_ids(ram, {"unnamespaced": True})
+    for namespace_id in ram.namespace_ids():
+        ids |= _search_ids(ram, {"namespaceId": {"eq": namespace_id}})
+    return sorted(ids)
 
 
 def _session_ids(ram: Any) -> list[str]:

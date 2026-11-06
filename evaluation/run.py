@@ -45,7 +45,8 @@ CONFIG = Config(
     participant="evaluation-user",
     api_key="not-a-real-key",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.evaluation.invalid/v1/playbooks/evaluation/mcp",
+    playbook_url="https://playbook.evaluation.invalid",
+    playbook_id="pb_00000000000000000000000000000000",
     playbook_api_key="not-a-real-key",
 )
 

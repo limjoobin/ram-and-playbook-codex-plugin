@@ -148,7 +148,7 @@ checkout. It is not installed independently by every plugin user. See
 
 ## What this repository contains
 
-- the dependency-free Python 3.10+ local MCP plugin;
+- the Python 3.11+ local MCP plugin on the pinned redis-iris SDK;
 - the two reviewed private-capture hooks;
 - the versioned RAM schemas, extraction prompt, entities, projection policy,
   and canonical projector;
@@ -171,7 +171,8 @@ The MCP surface is intentionally bounded:
 | Private-to-shared review | `memory_state_update_propose`, `memory_candidate_list`, `memory_candidate_inspect`, `memory_candidate_promote`, `memory_candidate_reject` |
 
 The runtime is not a generic HTTP or MCP proxy. It performs only reviewed RAM
-operations and three read-only Playbook MCP operations.
+operations through the redis-iris SDK and three read-only Playbook REST reads
+through the same SDK.
 
 ## External prerequisites
 
@@ -179,8 +180,8 @@ Provision or deploy these separately:
 
 - a RAM service with an endpoint, store, API key, management owner lane,
   configured custom memory types, and MemoryETL;
-- a Playbook service with the agenda Skill published and a readable MCP
-  endpoint;
+- a Playbook with the agenda Skill published and a readable data-plane REST
+  endpoint, playbook ID, and reader key;
 - one shared namespace plus a distinct private namespace per participant; and
 - one central host for the five-minute reconciliation scheduler.
 
@@ -197,6 +198,12 @@ deployed release. The current configured-services bootstrap adapter remains
 read-only rather than guessing those release-specific contracts.
 
 ## Install and run the demo
+
+Version 0.13.0 requires Python 3.11+, installs its pinned redis-iris runtime
+once into a private virtual environment on first launch, and renames the
+configuration settings (for example `RAM_API_KEY` is now
+`IRIS_AGENT_MEMORY_API_KEY`). See [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md),
+including "Upgrading from 0.12.x".
 
 1. An environment administrator follows
    [DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) to prepare RAM,
@@ -327,10 +334,18 @@ is genuinely still open. For presenter notes, evidence terminology, scheduler
 behavior, and troubleshooting, use the
 [full management-agenda demo runbook](docs/management-agenda-demo-runbook.md).
 
+Administrator and developer commands need the SDK. Create a development
+environment once (`.venv/` is gitignored; Python 3.11+):
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r plugins/redis-shared-memory-editor/server/requirements.txt
+```
+
 Before connecting to any service, validate the entire checked-in context path:
 
 ```sh
-python3 scripts/validate_context_pipeline.py
+.venv/bin/python scripts/validate_context_pipeline.py
 ```
 
 This renders the exact MemoryETL source envelopes, validates all 24 custom
@@ -341,7 +356,7 @@ use credentials or modify a service.
 The repository bootstrap can be inspected without writing to either service:
 
 ```sh
-python3 scripts/admin_bootstrap.py plan
+.venv/bin/python scripts/admin_bootstrap.py plan
 ```
 
 ## Quality gate
@@ -351,7 +366,7 @@ terminal-state exclusion, unresolved conflicts, owner gaps, missing-source
 abstention, evidence coverage, and exact Playbook attestation:
 
 ```sh
-python3 evaluation/run.py
+.venv/bin/python evaluation/run.py
 ```
 
 The committed deterministic result is in
