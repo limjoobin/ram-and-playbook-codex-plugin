@@ -102,6 +102,10 @@ Paths beginning with `server/` in the table are relative to
   private plugin runtime from the configured Python package index. Do not add
   other dependencies, lifecycle hooks, telemetry, or network destinations
   without explicit review. Hooks must never install.
+- Keep hooks standard-library only and off the network. A hook records its
+  event in the private ledger and queues the private RAM event in
+  `PrivateEventOutbox`; only the MCP server process loads the SDK and delivers
+  queued events, always with the event's RAM idempotency key.
 
 ## Make the smallest change
 

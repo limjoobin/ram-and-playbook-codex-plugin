@@ -187,10 +187,12 @@ fallback: the old names are rejected as unexpected. Edit the file in place.
 `RAM_AGENDA_OWNER_ID` are unchanged. Python 3.11+ is now required, and the new
 runtime must be installed (step 4).
 
-The hook definitions also changed: `UserPromptSubmit` now allows 10 seconds and
-`SessionEnd` 8 seconds, because each hook loads the SDK (typically 1.5–3
-seconds per hook). Review and trust both hooks again in `/hooks` after
-upgrading.
+The hook definitions are unchanged from 0.12.x, so existing hook trust still
+applies. Hooks stay standard-library only and never load the SDK or touch the
+network: each hook writes its private event to a local queue (`0600` files in
+a `0700` directory under the plugin data directory) and returns. The running
+MCP server, which loads the SDK once per session, delivers queued events to
+RAM, normally within a second.
 
 Namespace, participant, and agenda owner accept 1–64 letters, digits, or
 hyphens.
@@ -232,10 +234,12 @@ python3 "${CODEX_HOME:-$HOME/.codex}/plugins/cache/redis-field-engineering/redis
 ```
 
 `--check` exits 0 when the runtime is ready. The launcher is macOS/Linux only.
-Hooks re-exec into the ready runtime and never install; if the runtime is not
-installed yet, they fail open and report that private RAM capture is
-unavailable. Installing a new plugin version creates a new runtime directory
-the first time its requirements hash is used.
+Hooks do not need the runtime: they only queue private events locally, and the
+MCP server delivers them. Events captured while no MCP server is running (for
+example a `SessionEnd` after Codex stops the server) are delivered by the next
+server start. `system_status` reports the queue depth as
+`private_capture.queued_events`. Installing a new plugin version creates a new
+runtime directory the first time its requirements hash is used.
 
 ## 5. Verify one user, then the group
 
@@ -416,9 +420,10 @@ remove it through the laptop's approved file-management process.
 | Runtime install fails or the first MCP start is slow or times out | Confirm HTTPS access to the Python package index (pypi.org and files.pythonhosted.org, or the configured mirror), then run `launch.py --install` from step 4 and `--check`. |
 | `configuration_invalid` for the Playbook URL | `IRIS_AGENT_PLAYBOOKS_URL` must be the base URL only, with no `/iris/data/v1/agent-playbooks/...` or `/v1/playbooks/...` path. Put the ID in `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`. |
 | A pre-0.13.0 setting name is reported as unexpected | Rename it using the "Upgrading from 0.12.x" table. |
-| "Private RAM capture is unavailable" right after installing | The runtime is not installed yet. Hooks never install it; run `launch.py --install` from step 4. |
+| "Private RAM capture is unavailable" | The hook could not read the credential file or write the local queue. Check the credential file and that the plugin data directory is writable. |
+| `private_capture.queued_events` keeps growing | The MCP server cannot reach RAM. Fix the error `system_status` reports for RAM; queued events are delivered once it recovers. Events RAM rejects outright are moved to `promotion/outbox/rejected/`. |
 | `configuration_missing` | Create the file at the exact path above and fill the nine required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
-| Hooks do not capture | Confirm the runtime is installed (`launch.py --check`), review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. |
+| Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. Confirm the MCP runtime is installed (`launch.py --check`) so the server can deliver queued events. |
 | Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
 | Promotion returns `write_unverified` | Read the deterministic observation ID from the candidate before attempting another write. Do not blindly resubmit. |
 | History contains the promoted observation but current state is unchanged | Run the central reconciliation job for the returned candidate ID, or wait for the five-minute central schedule. Do not promote again. |

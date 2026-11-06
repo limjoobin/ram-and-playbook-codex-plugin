@@ -7,13 +7,21 @@ import os
 from pathlib import Path
 import re
 import sys
+import threading
 from typing import Any, Callable
 
 from .config import PluginError, VERSION, public_error
 from .credentials import load_credential_file
 from .management import LIFECYCLE_STATUSES, STATE_KINDS, STATE_VIEWS, PluginService
 from .playbook import PlaybookClient
-from .promotion import EVIDENCE_ROLES, PromotionFacade, PromotionLedger, PromotionService
+from .promotion import (
+    EVIDENCE_ROLES,
+    OutboxDelivery,
+    PrivateEventOutbox,
+    PromotionFacade,
+    PromotionLedger,
+    PromotionService,
+)
 from .ram import RAMClient, SharedMemory
 
 
@@ -279,24 +287,39 @@ INSTRUCTIONS = (
     "For a management-review request, call agenda_prepare once and present its owner-grouped action register, confirmed decisions, completed work, open work, reconciled conflicts, unresolved conflicts, and management topics as distinct sections. Use the returned second-pass conflict status; do not re-expand a reconciled conflict as current merely because its RAM projection remains registered."
 )
 _DEFAULT_SERVICE: Any | None = None
+_SERVICE_LOCK = threading.Lock()
 
 
 def default_service() -> Any:
     global _DEFAULT_SERVICE
-    if _DEFAULT_SERVICE is not None:
+    with _SERVICE_LOCK:
+        if _DEFAULT_SERVICE is not None:
+            return _DEFAULT_SERVICE
+        configured = (os.environ.get("REDIS_SHARED_MEMORY_CONFIG") or "").strip()
+        path = (
+            Path(configured).expanduser()
+            if configured
+            else Path.home() / ".config" / "redis-shared-memory" / "editor.env"
+        )
+        config = load_credential_file(path)
+        ram = RAMClient(config)
+        base = PluginService(config, ram, PlaybookClient(config), SharedMemory(config, ram))
+        ledger = PromotionLedger.from_environment()
+        outbox = PrivateEventOutbox(ledger)
+        promotion = PromotionService(config, ram, ledger, outbox)
+        # One SDK client and warm connection deliver every hook-queued private event.
+        OutboxDelivery(outbox, RAMClient(config), config).start()
+        _DEFAULT_SERVICE = PromotionFacade(base, promotion)
         return _DEFAULT_SERVICE
-    configured = (os.environ.get("REDIS_SHARED_MEMORY_CONFIG") or "").strip()
-    path = (
-        Path(configured).expanduser()
-        if configured
-        else Path.home() / ".config" / "redis-shared-memory" / "editor.env"
-    )
-    config = load_credential_file(path)
-    ram = RAMClient(config)
-    base = PluginService(config, ram, PlaybookClient(config), SharedMemory(config, ram))
-    promotion = PromotionService(config, ram, PromotionLedger.from_environment())
-    _DEFAULT_SERVICE = PromotionFacade(base, promotion)
-    return _DEFAULT_SERVICE
+
+
+def _warm_start() -> None:
+    """Load the SDK and start private-event delivery without waiting for a tool call."""
+
+    try:
+        default_service()
+    except Exception:
+        pass  # configuration errors surface on the first tool call, as before
 
 
 def _shape(arguments: Any, allowed: set[str], required: set[str] = frozenset()) -> dict[str, Any]:
@@ -552,6 +575,7 @@ def handle_message(message: Any) -> dict[str, Any] | None:
 
 
 def run() -> None:
+    threading.Thread(target=_warm_start, name="warm-start", daemon=True).start()
     for raw_line in sys.stdin.buffer:
         try:
             message = json.loads(raw_line)

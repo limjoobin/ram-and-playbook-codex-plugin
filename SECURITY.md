@@ -165,7 +165,11 @@ silently drift.
   `pip --only-binary=:all:`, into a private virtual environment under the
   plugin data directory, from the Python package index that `pip` is
   configured to use. It runs `pip` on first launch or `--install` only. Hooks
-  re-exec into the ready runtime and never install. The plugin has no other
+  are standard-library only: they never install, load the SDK, or open a
+  network connection. They queue private events as `0600` files in a `0700`
+  directory under the plugin data directory, next to the existing private
+  ledger, and the MCP server delivers them to `RAM_PERSONAL_NAMESPACE` with
+  each event's RAM idempotency key. The plugin has no other
   installer, telemetry, or runtime download. Its reviewed command hooks are
   declared in `hooks/hooks.json` and must be trusted by the user or enterprise
   policy.

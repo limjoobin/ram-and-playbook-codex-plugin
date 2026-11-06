@@ -9,6 +9,8 @@ import json
 import os
 from pathlib import Path
 import re
+import threading
+import time
 from typing import Any, Mapping, Protocol
 
 from .config import Config, PluginError, SLUG, public_error
@@ -301,8 +303,12 @@ class PromotionLedger:
 
     def candidates(self) -> dict[str, dict[str, Any]]:
         candidates: dict[str, dict[str, Any]] = {}
+        private_events: list[tuple[Any, Any, str]] = []
         for event in self.events():
             payload = event["payload"]
+            if event.get("kind") == "ram_private_event" and isinstance(payload.get("ram_event_id"), str):
+                private_events.append((payload.get("session_id"), payload.get("turn_id"), payload["ram_event_id"]))
+                continue
             candidate_id = payload.get("candidate_id")
             if not isinstance(candidate_id, str):
                 continue
@@ -325,15 +331,213 @@ class PromotionLedger:
                 candidates[candidate_id].update(
                     {"status": "rejected", "rejected_at": payload.get("rejected_at")}
                 )
+        # Private events are delivered to RAM after capture, so resolve their IDs at read time.
+        for candidate in candidates.values():
+            if candidate.get("status") != "pending":
+                continue  # a promoted observation keeps the provenance it was written with
+            session, turn = candidate.get("session_id"), candidate.get("turn_id")
+            ids = list(candidate.get("source_private_event_ids") or [])
+            for event_session, event_turn, ram_event_id in private_events:
+                if event_session == session and (not turn or event_turn in {None, "", turn}) and ram_event_id not in ids:
+                    ids.append(ram_event_id)
+            candidate["source_private_event_ids"] = ids
         return candidates
+
+
+class PrivateEventOutbox:
+    """Durable local queue of private RAM session events written by hooks.
+
+    Hooks run as short-lived processes and must stay fast, so they only queue
+    the exact event here. The long-running MCP server, which already holds the
+    redis-iris SDK and a warm connection, delivers queued events. Each event
+    carries its RAM idempotency key, so a redelivery after an uncertain write
+    is deduplicated by RAM rather than blindly repeated.
+    """
+
+    _FIELDS = ("session_id", "actor_id", "namespace", "role", "text", "created_at", "metadata", "idempotency_key")
+    STALE_CLAIM_SECONDS = 300
+
+    def __init__(self, ledger: PromotionLedger) -> None:
+        self.ledger = ledger
+        self.directory = ledger.path.parent / "outbox"
+        self._lock = threading.Lock()
+        self.blocked = False
+
+    def _prepare(self) -> None:
+        self.ledger._prepare_parent()
+        self.directory.mkdir(mode=0o700, exist_ok=True)
+        if self.directory.is_symlink() or not self.directory.is_dir():
+            raise PluginError("promotion_store_invalid", "The private event outbox is not a safe directory.")
+        os.chmod(self.directory, 0o700)
+
+    def put(self, request: Mapping[str, Any], context: Mapping[str, Any]) -> None:
+        self._prepare()
+        name = re.sub(r"[^A-Za-z0-9_-]", "", str(request["idempotency_key"]))[:128]
+        record = {"request": {key: request[key] for key in self._FIELDS}, "context": dict(context)}
+        encoded = _canonical(record).encode("utf-8")
+        if len(encoded) > 4 * MAX_EVENT_BYTES:
+            raise PluginError("promotion_event_too_large", "The private event exceeds its safe size limit.")
+        temporary = self.directory / f".{name}.{os.getpid()}.tmp"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(temporary, flags, 0o600)
+            try:
+                os.write(descriptor, encoded)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            # A duplicate hook delivery replaces the same file: one event per key.
+            os.replace(temporary, self.directory / f"{name}.json")
+        except OSError as error:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+            raise PluginError("promotion_store_unavailable", "The private event outbox could not be updated.") from error
+
+    def pending(self) -> int:
+        try:
+            return sum(1 for path in self.directory.glob("*.json"))
+        except OSError:
+            return 0
+
+    def _reclaim_stale(self) -> None:
+        now = time.time()
+        for claimed in self.directory.glob("*.json.inflight-*"):
+            owner = claimed.name.rsplit("-", 1)[-1]
+            alive = owner.isdigit() and _process_alive(int(owner))
+            try:
+                stale = now - claimed.stat().st_mtime > self.STALE_CLAIM_SECONDS
+                if not alive or stale:
+                    os.replace(claimed, claimed.with_name(claimed.name.split(".inflight-")[0]))
+            except OSError:
+                continue
+
+    def drain(self, ram: PromotionRAM, config: Config, *, limit: int = 100, timeout_ms: int = 8_000) -> int:
+        """Deliver queued events in capture order; returns how many were delivered.
+
+        Stops at the first transient failure and leaves the rest queued.
+        """
+
+        if not self.directory.is_dir():
+            self.blocked = False
+            return 0
+        delivered = attempts = 0
+        with self._lock:
+            self.blocked = False
+            self._reclaim_stale()
+            for path in sorted(self.directory.glob("*.json"), key=_mtime):
+                if attempts >= limit:
+                    break
+                claimed = path.with_name(f"{path.name}.inflight-{os.getpid()}")
+                try:
+                    os.replace(path, claimed)  # atomic claim; another server may hold it
+                except OSError:
+                    continue
+                try:
+                    record = json.loads(claimed.read_text(encoding="utf-8"))
+                    request = {key: record["request"][key] for key in self._FIELDS}
+                    context = dict(record.get("context") or {})
+                except (OSError, ValueError, KeyError, TypeError):
+                    self._set_aside(claimed, "unreadable")
+                    continue
+                if request["actor_id"] != config.participant or request["namespace"] != config.personal_namespace:
+                    # Captured under another configuration; leave it for a matching server.
+                    os.replace(claimed, path)
+                    continue
+                attempts += 1
+                try:
+                    result = ram.add_session_event(**request, timeout_ms=timeout_ms)
+                except Exception as error:
+                    status = getattr(error, "status_code", None)
+                    if status in {400, 409, 413, 422}:
+                        # RAM rejected this exact event; retrying cannot succeed.
+                        self._set_aside(claimed, f"http_{status}")
+                        continue
+                    os.replace(claimed, path)  # transient: retry later with the same key
+                    self.blocked = True
+                    break
+                ram_event_id = _ram_event_id(result)
+                if ram_event_id:
+                    self.ledger.append(
+                        "ram_private_event",
+                        {**context, "ram_event_id": ram_event_id},
+                        event_id=f"private-{request['idempotency_key']}",
+                    )
+                claimed.unlink(missing_ok=True)
+                delivered += 1
+        return delivered
+
+    def _set_aside(self, claimed: Path, reason: str) -> None:
+        """Move a permanently rejected event out of the queue for operator review."""
+
+        rejected = self.directory / "rejected"
+        try:
+            rejected.mkdir(mode=0o700, exist_ok=True)
+            os.replace(claimed, rejected / claimed.name.split(".inflight-")[0])
+        except OSError:
+            return
+        self.ledger.append("ram_private_event_rejected", {"file": claimed.name.split(".inflight-")[0], "reason": reason})
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+class OutboxDelivery(threading.Thread):
+    """Background delivery of hook-queued private events from the MCP server."""
+
+    BATCH = 100
+
+    def __init__(self, outbox: PrivateEventOutbox, ram: PromotionRAM, config: Config, interval: float = 0.25) -> None:
+        super().__init__(name="private-event-delivery", daemon=True)
+        self.outbox = outbox
+        self.ram = ram
+        self.config = config
+        self.interval = interval
+        self._halt = threading.Event()  # not "_stop": that name is Thread's own method
+
+    def stop(self) -> None:
+        self._halt.set()
+
+    def run(self) -> None:
+        wait = self.interval
+        while not self._halt.is_set():
+            try:
+                delivered = self.outbox.drain(self.ram, self.config, limit=self.BATCH)
+                if self.outbox.blocked:
+                    wait = min(max(wait, self.interval) * 2, 30.0)  # RAM unavailable: back off
+                elif delivered >= self.BATCH:
+                    wait = 0.0  # more than one batch queued
+                else:
+                    wait = self.interval
+            except Exception:
+                wait = min(max(wait, self.interval) * 2, 30.0)
+            self._halt.wait(wait)
 
 
 @dataclass
 class HookCapture:
     config: Config
-    ram: PromotionRAM
+    ram: PromotionRAM | None
     ledger: PromotionLedger
     timeout_ms: int = 1_500
+    outbox: PrivateEventOutbox | None = None
 
     def _private_event(
         self,
@@ -353,6 +557,30 @@ class HookCapture:
             "tool_use_id": _bounded_text(payload.get("tool_use_id") or "", 128),
             "private_only": True,
         }
+        context = {
+            "session_id": source_session,
+            "turn_id": payload.get("turn_id"),
+            "private_session_id": private_session,
+            "hook_event": payload.get("hook_event_name"),
+        }
+        if self.outbox is not None:
+            # Fast path for hook processes: queue locally; the MCP server delivers it.
+            self.outbox.put(
+                {
+                    "session_id": private_session,
+                    "actor_id": self.config.participant,
+                    "namespace": self.config.personal_namespace,
+                    "role": role,
+                    "text": text,
+                    "created_at": _now(),
+                    "metadata": metadata,
+                    "idempotency_key": hook_id[:128],
+                },
+                context,
+            )
+            return None
+        if self.ram is None:
+            raise PluginError("configuration_missing", "Hook capture needs RAM or a private event outbox.")
         try:
             result = self.ram.add_session_event(
                 session_id=private_session,
@@ -366,28 +594,13 @@ class HookCapture:
                 timeout_ms=self.timeout_ms,
             )
         except Exception:
-            self.ledger.append(
-                "ram_private_event_pending",
-                {
-                    "session_id": source_session,
-                    "turn_id": payload.get("turn_id"),
-                    "private_session_id": private_session,
-                    "hook_event": payload.get("hook_event_name"),
-                },
-                event_id=f"pending-{hook_id}",
-            )
+            self.ledger.append("ram_private_event_pending", context, event_id=f"pending-{hook_id}")
             return None
         ram_event_id = _ram_event_id(result)
         if ram_event_id:
             self.ledger.append(
                 "ram_private_event",
-                {
-                    "session_id": source_session,
-                    "turn_id": payload.get("turn_id"),
-                    "private_session_id": private_session,
-                    "ram_event_id": ram_event_id,
-                    "hook_event": payload.get("hook_event_name"),
-                },
+                {**context, "ram_event_id": ram_event_id},
                 event_id=f"private-{hook_id}",
             )
         return ram_event_id
@@ -528,10 +741,28 @@ class HookCapture:
 
 
 class PromotionService:
-    def __init__(self, config: Config, ram: PromotionRAM, ledger: PromotionLedger) -> None:
+    def __init__(
+        self,
+        config: Config,
+        ram: PromotionRAM,
+        ledger: PromotionLedger,
+        outbox: PrivateEventOutbox | None = None,
+    ) -> None:
         self.config = config
         self.ram = ram
         self.ledger = ledger
+        self.outbox = outbox
+
+    def _flush_private_events(self) -> None:
+        """Deliver queued hook events first so candidates carry their RAM event IDs."""
+
+        if self.outbox is None:
+            return
+        try:
+            self.outbox.drain(self.ram, self.config, timeout_ms=3_000)
+        except Exception:
+            # Still queued; promotion records "pending" provenance as before.
+            pass
 
     @staticmethod
     def _public(candidate: Mapping[str, Any]) -> dict[str, Any]:
@@ -565,6 +796,7 @@ class PromotionService:
         evidence_text: str,
         resolved_at: str | None = None,
     ) -> dict[str, Any]:
+        self._flush_private_events()
         source = self.ledger.prompt_source(evidence_text)
         if source is None:
             raise PluginError(
@@ -650,6 +882,7 @@ class PromotionService:
     def candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         if status not in {"pending", "promoted", "rejected", "all"}:
             raise PluginError("invalid_input", "status must be pending, promoted, rejected, or all.")
+        self._flush_private_events()
         candidates = list(self.ledger.candidates().values())
         if status != "all":
             candidates = [candidate for candidate in candidates if candidate.get("status") == status]
@@ -662,6 +895,7 @@ class PromotionService:
         }
 
     def candidate_inspect(self, candidate_id: str) -> dict[str, Any]:
+        self._flush_private_events()
         candidate = self.ledger.candidates().get(candidate_id)
         if candidate is None:
             raise PluginError("candidate_not_found", "The private promotion candidate was not found.")
@@ -861,6 +1095,7 @@ class PromotionService:
     ) -> dict[str, Any]:
         if confirmed is not True:
             raise PluginError("confirmation_required", "Explicit confirmation is required before shared promotion.")
+        self._flush_private_events()
         candidate = self.ledger.candidates().get(candidate_id)
         if candidate is None:
             raise PluginError("candidate_not_found", "The private promotion candidate was not found.")
@@ -942,6 +1177,13 @@ class PromotionFacade:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.base, name)
+
+    def system_status(self) -> dict[str, Any]:
+        result = self.base.system_status()
+        outbox = self.promotion.outbox
+        if outbox is not None and isinstance(result, dict):
+            result["private_capture"] = {"queued_events": outbox.pending()}
+        return result
 
     def memory_candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         return self.promotion.candidate_list(status=status, limit=limit)

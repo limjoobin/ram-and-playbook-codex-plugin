@@ -21,12 +21,14 @@ Redis Agent Memory store and namespace. It exposes:
 - `memory_candidate_promote`
 - `memory_candidate_reject`
 
-The MCP server and reviewed session-capture hooks are Python 3.11+ source on
-the pinned redis-iris SDK. On first launch (or `server/launch.py --install`),
-`server/launch.py` installs the exact pins in `server/requirements.txt` once
-into a private virtual environment under the plugin data directory; this needs
-HTTPS access to the Python package index. Hooks never install and fail open
-until the runtime is ready. Version 0.13.0 is macOS/Linux only.
+The MCP server is Python 3.11+ source on the pinned redis-iris SDK. On first
+launch (or `server/launch.py --install`), `server/launch.py` installs the
+exact pins in `server/requirements.txt` once into a private virtual
+environment under the plugin data directory; this needs HTTPS access to the
+Python package index. The reviewed session-capture hooks are standard-library
+only and never load the SDK: they queue each private event locally and the
+running MCP server, which loads the SDK once, delivers it to RAM. Version
+0.13.0 is macOS/Linux only.
 The active `UserPromptSubmit` and `SessionEnd` hooks write only to the
 configured personal namespace. Automatic candidate creation is paused while
 `PostToolUse` and `Stop` are inactive. A likely lifecycle report instead causes

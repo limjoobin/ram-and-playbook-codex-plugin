@@ -6,7 +6,15 @@ The plugin has one local Python MCP. It does not introduce a second service or
 a second organizational-state reconciler.
 
 The active `UserPromptSubmit` and `SessionEnd` hooks append bounded events to
-`RAM_PERSONAL_NAMESPACE`. `PostToolUse` and `Stop` are intentionally
+`RAM_PERSONAL_NAMESPACE`. A hook is a short-lived standard-library process: it
+records the event in the private local ledger, queues the exact RAM session
+event in the private outbox (`promotion/outbox/` under the plugin data
+directory), and returns without loading the SDK or opening a connection. The
+long-running MCP server delivers queued events with each event's RAM
+idempotency key, records the returned RAM event ID in the ledger, and delivers
+any backlog before the promotion tools read provenance. A candidate's private
+event IDs are resolved when it is read, so delivery after capture is safe.
+`PostToolUse` and `Stop` are intentionally
 unregistered for the current reduced-capture experiment. RAM owns session
 memory and any configured personal long-term-memory extraction. A local
 append-only ledger retains private capture metadata and any earlier review

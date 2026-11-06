@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Thin Codex hook adapter for private RAM capture and lifecycle-update guidance."""
+"""Thin Codex hook adapter for private RAM capture and lifecycle-update guidance.
+
+Standard library only: the hook never loads the redis-iris SDK or touches the
+network. It records the event in the private local ledger and queues the
+private RAM session event; the running MCP server delivers it.
+"""
 
 from __future__ import annotations
 
@@ -13,33 +18,8 @@ from typing import Any, Mapping
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "server"))
 
-
-def _enter_runtime() -> bool:
-    """Run under the plugin's private redis-iris runtime; never install from a hook.
-
-    Returns False when the runtime is not installed yet, so the hook fails open.
-    """
-
-    from launch import runtime_python
-
-    python = runtime_python()
-    if python is not None:
-        # A venv interpreter is a symlink to its base Python, so compare prefixes.
-        if Path(sys.prefix).resolve() != python.parent.parent.resolve():
-            os.execv(str(python), [str(python), "-I", str(Path(__file__).resolve())])
-        return True
-    try:
-        import redis_agent_memory  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
-RUNTIME_READY = _enter_runtime() if __name__ == "__main__" else True
-
 from ram_plugin.credentials import load_credential_file
-from ram_plugin.promotion import HookCapture, PromotionLedger
-from ram_plugin.ram import RAMClient
+from ram_plugin.promotion import HookCapture, PrivateEventOutbox, PromotionLedger
 
 
 def _config_path(environment: Mapping[str, str]) -> Path:
@@ -75,10 +55,7 @@ def handle(payload: Any, environment: Mapping[str, str] | None = None) -> dict[s
     try:
         config = load_credential_file(_config_path(values))
         ledger = PromotionLedger.from_environment(values)
-        timeout_ms = 800 if event_name == "SessionEnd" else 2_500
-        return HookCapture(config, RAMClient(config, timeout_ms=timeout_ms), ledger, timeout_ms).process(
-            payload
-        )
+        return HookCapture(config, None, ledger, outbox=PrivateEventOutbox(ledger)).process(payload)
     except Exception:
         return _safe_output(str(event_name), unavailable=True)
 
@@ -93,10 +70,7 @@ def main() -> None:
     except (UnicodeError, json.JSONDecodeError):
         payload = None
     event_name = payload.get("hook_event_name") if isinstance(payload, dict) else ""
-    if not RUNTIME_READY:
-        result = _safe_output(str(event_name), unavailable=True)
-    else:
-        result = handle(payload)
+    result = handle(payload)
     if event_name in {"UserPromptSubmit", "PostToolUse", "Stop"} or result:
         sys.stdout.write(json.dumps(result, separators=(",", ":")) + "\n")
 
