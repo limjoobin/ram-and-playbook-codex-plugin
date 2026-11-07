@@ -321,28 +321,30 @@ Wherever a later step says `codex`, use that same long path in its place.
 ### Step 12: Allow private capture
 
 The plugin includes two small "hooks". When you send ChatGPT a message, a hook
-saves a private copy to **your own personal memory space**, so the assistant
+keeps a private copy, and the plugin saves it to **your own personal memory
+space** so the assistant
 can turn a reported update into a proposal for you to review. Hooks never
 share anything with your team, and ChatGPT will not run them until you approve
 them.
 
-1. Paste `codex` into Terminal and press **Return**. Codex opens with
-   **Hooks need review: 2 hooks are new or changed**.
+You don't need to do anything yet. The first time you send a message after
+installing the plugin, which happens in Step 13, ChatGPT shows **Review hooks**
+with the plugin's two hooks:
 
-   ![Codex asking to review two new hooks](docs/images/getting-started/local-06-codex-hooks-review.png)
+- **Capturing private memory intent** runs when you send a message.
+- **Recording private session end** runs when a chat ends.
 
-2. Choose **1. Review hooks** and press **Return**. Check that both hooks come
-   from **redis-shared-memory-editor@redis-field-engineering**:
-   **UserPromptSubmit** and **SessionEnd**. Then trust them.
+![ChatGPT's Review hooks dialog with Allow all and Allow selected](docs/images/getting-started/local-06-chatgpt-review-hooks.png)
 
-   The warning that hooks "can run outside the sandbox" applies to all hooks.
-   These two only write to a private file on your Mac. They make no network
-   calls; the plugin itself sends your messages to your personal memory space.
+1. To see what a hook runs, open it with the arrow on the right. Both run
+   `capture.py` from the Redis Shared Memory + Playbook plugin. They only write
+   to a private file on your Mac and make no network calls. The plugin itself
+   sends your messages to your personal memory space.
+2. Select **Allow all**. If the dialog also lists hooks from other plugins,
+   tick only these two and select **Allow selected**.
 
-   If you choose **3. Continue without trusting**, the plugin still works, but
-   it won't capture your updates. If Codex doesn't show this prompt, type
-   `/hooks` and press **Return** to open the same review.
-3. Type `/quit` and press **Return** to leave Codex.
+If you choose **Not now**, the plugin still works, but it won't capture your
+updates. You can allow the hooks later in ChatGPT's settings.
 
 You only do this once. You are asked again only if a future version changes
 the hooks.
@@ -354,7 +356,9 @@ the hooks.
 
    > Check the Redis Shared Memory connection status.
 
-3. ChatGPT may ask permission before using the plugin. Allow it.
+3. If ChatGPT shows **Review hooks**, allow both hooks as described in
+   Step 12.
+4. ChatGPT may ask permission before using the plugin. Allow it.
 
    ![ChatGPT asking permission to use a Redis Shared Memory tool](docs/images/getting-started/local-08-chatgpt-tool-approval.png)
 
@@ -461,7 +465,7 @@ Presenters should also read the
 | `authentication_failed` or `playbook_authentication_failed` | A key is wrong or expired. Create a new one and run the setup command again. |
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
 | The first chat is very slow or times out | Run the setup command again (Step 11, item 4). |
-| Your updates are not being captured | Repeat Step 12, then quit and reopen ChatGPT. |
+| Your updates are not being captured | Allow the plugin's two hooks in ChatGPT's settings (Step 12), then quit and reopen ChatGPT. |
 | A published update is not in the current view yet | Run the command in tour prompt 5. Do not publish it again. |
 
 For every error code and more detail, see the troubleshooting table in

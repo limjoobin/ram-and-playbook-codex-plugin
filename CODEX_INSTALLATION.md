@@ -250,16 +250,12 @@ runtime directory the first time its requirements hash is used.
 
 ## 5. Verify one user, then the group
 
-Before testing private capture, review the installed hooks from Codex CLI:
-
-```sh
-cd /path/to/ram-and-playbook-codex-plugin
-codex
-```
-
-Enter `/hooks`, find `redis-shared-memory-editor@redis-field-engineering`,
-review `UserPromptSubmit` and `SessionEnd`, and trust them only after checking
-their commands and source. Then restart ChatGPT desktop and start a new chat.
+Review the installed hooks before testing private capture. ChatGPT desktop
+shows **Review hooks** on the first message after installation, listing
+**Capturing private memory intent** (`UserPromptSubmit`) and **Recording
+private session end** (`SessionEnd`). Allow them only after checking their
+commands and source. From Codex CLI, `codex` prompts for the same review, and
+`/hooks` opens it later.
 Hook trust is stored for the user and the exact hook definition; it is not tied
 to this working directory. Running from the plugin checkout simply makes local
 marketplace troubleshooting clearer. A changed hook definition requires a new
