@@ -326,16 +326,23 @@ can turn a reported update into a proposal for you to review. Hooks never
 share anything with your team, and ChatGPT will not run them until you approve
 them.
 
-1. Paste `codex` into Terminal and press **Return**.
-2. Type `/hooks` and press **Return**.
-3. Find **redis-shared-memory-editor@redis-field-engineering**, review its two
-   hooks, **UserPromptSubmit** and **SessionEnd**, and trust them.
+1. Paste `codex` into Terminal and press **Return**. Codex opens with
+   **Hooks need review: 2 hooks are new or changed**.
 
-   ![The Codex /hooks screen listing the plugin's two hooks](docs/images/getting-started/local-06-codex-hooks-list.png)
+   ![Codex asking to review two new hooks](docs/images/getting-started/local-06-codex-hooks-review.png)
 
-   ![Both hooks shown as trusted](docs/images/getting-started/local-07-codex-hooks-trusted.png)
+2. Choose **1. Review hooks** and press **Return**. Check that both hooks come
+   from **redis-shared-memory-editor@redis-field-engineering**:
+   **UserPromptSubmit** and **SessionEnd**. Then trust them.
 
-4. Type `/quit` and press **Return** to leave Codex.
+   The warning that hooks "can run outside the sandbox" applies to all hooks.
+   These two only write to a private file on your Mac. They make no network
+   calls; the plugin itself sends your messages to your personal memory space.
+
+   If you choose **3. Continue without trusting**, the plugin still works, but
+   it won't capture your updates. If Codex doesn't show this prompt, type
+   `/hooks` and press **Return** to open the same review.
+3. Type `/quit` and press **Return** to leave Codex.
 
 You only do this once. You are asked again only if a future version changes
 the hooks.
