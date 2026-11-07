@@ -279,6 +279,10 @@ def main(argv: list[str]) -> int:
     say("Redis Shared Memory + Playbook setup")
     path = config_path(args.config)
     existing = read_existing(path)
+    if existing and "IRIS_AGENT_MEMORY_URL" not in existing:
+        say(f"Your settings file {path} uses an older format. Its values are not reused;")
+        say("it is kept as a backup when the new settings are saved.")
+        existing = {}
     values, extractor_id = collect(existing)
 
     step(2, "Save your settings")
