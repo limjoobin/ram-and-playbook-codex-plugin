@@ -151,6 +151,9 @@ def config_path(argument: str | None) -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".config" / "redis-shared-memory" / "editor.env"
 
 
+EXTRACTOR_COMMENT = "# MemoryETL extractor used by scripts/setup_demo.py: "
+
+
 def read_existing(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     try:
@@ -159,13 +162,15 @@ def read_existing(path: Path) -> dict[str, str]:
         return values
     for line in text.splitlines():
         line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
+        if line.startswith(EXTRACTOR_COMMENT):
+            values["_EXTRACTOR_ID"] = line[len(EXTRACTOR_COMMENT):].strip()
+        elif line and not line.startswith("#") and "=" in line:
             key, _, value = line.partition("=")
             values[key.strip()] = value.strip()
     return values
 
 
-def write_settings(path: Path, values: dict[str, str]) -> Path | None:
+def write_settings(path: Path, values: dict[str, str], extractor_id: str = "") -> Path | None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(path.parent, 0o700)
     backup = None
@@ -177,6 +182,9 @@ def write_settings(path: Path, values: dict[str, str]) -> Path | None:
         "# Redis Shared Memory + Playbook settings, written by scripts/setup_demo.py.",
         "# Keep this file private. Never paste a key into a chat or commit this file.",
     ]
+    if extractor_id:
+        # A comment, because the plugin accepts only the settings it uses.
+        lines.append(f"{EXTRACTOR_COMMENT}{extractor_id}")
     lines += [f"{name}={value}" for name, value in values.items()]
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
@@ -294,7 +302,7 @@ def main(argv: list[str]) -> int:
         say(f"  {error}")
         say("  Nothing was saved. Run this command again and correct that value.")
         return 1
-    backup = write_settings(path, values)
+    backup = write_settings(path, values, extractor_id)
     config = load_credential_file(path)
     say(f"  Saved to {path} (only your user account can read it).")
     if backup:
