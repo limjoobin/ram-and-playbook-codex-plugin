@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 import sys
@@ -189,7 +190,10 @@ class ManagementTests(unittest.TestCase):
     def test_exact_current_state_lookup_is_server_filtered_and_evidence_bound(self):
         source = observation("memory", "state-a")
         ram = FakeRAM([projection("projection", "state-a", [source])], [source])
-        service = PluginService(CONFIG, ram, FakePlaybook(), FakeEditor())
+        # The expanded layout filters on state_id in RAM; the compact layout
+        # cannot (see test_memory_layout).
+        expanded = replace(CONFIG, memory_layout="expanded")
+        service = PluginService(expanded, ram, FakePlaybook(), FakeEditor())
 
         state = service.current_state_by_id("state-a")
 
