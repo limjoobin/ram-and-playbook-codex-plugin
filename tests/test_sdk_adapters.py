@@ -312,6 +312,28 @@ class RAMAdapterTests(unittest.TestCase):
         ConnectError.__module__ = "httpx._exceptions"
         self.assertEqual(public_error(ConnectError())["code"], "network_error")
 
+    def test_wrapped_sdk_errors_keep_their_public_codes(self):
+        class PermanentError(Exception):
+            pass
+
+        class ReadTimeout(Exception):
+            pass
+
+        ReadTimeout.__module__ = "httpx._exceptions"
+
+        def wrapped(inner):
+            outer = PermanentError("wrapped")
+            outer.__cause__ = inner
+            return outer
+
+        self.assertEqual(public_error(wrapped(StatusError(401)))["code"], "authentication_failed")
+        self.assertEqual(public_error(wrapped(StatusError(413)))["code"], "request_rejected")
+        problem = public_error(wrapped(StatusError(424, "/errors/database-out-of-memory")))
+        self.assertEqual(problem["dependency_type"], "database_out_of_memory")
+        self.assertEqual(public_error(wrapped(ReadTimeout()))["code"], "timeout")
+        self.assertEqual(public_error(wrapped(TimeoutError()))["code"], "timeout")
+        self.assertEqual(public_error(wrapped(ValueError()))["code"], "unexpected_error")
+
 
 def _resource(path: str, text: str) -> SimpleNamespace:
     return SimpleNamespace(

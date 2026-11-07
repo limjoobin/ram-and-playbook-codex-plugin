@@ -12,7 +12,7 @@ import base64
 import hashlib
 from typing import Any
 
-from .config import Config, PluginError, _is_transport_error
+from .config import Config, PluginError, _is_transport_error, error_chain, error_status
 
 
 ALLOWED_TOOLS = frozenset({"discover_entries", "load_skill", "fetch_resource"})
@@ -33,8 +33,8 @@ def _public(error: BaseException, missing: str = "playbook") -> PluginError:
     if isinstance(error, PluginError):
         return error
     # The SDK's retry layer re-raises as PermanentError(...) from the original.
-    chain = [item for item in (error, error.__cause__) if item is not None]
-    status = next((s for s in (getattr(i, "status_code", None) for i in chain) if s is not None), None)
+    chain = error_chain(error)
+    status = error_status(error)
     names = {type(item).__name__ for item in chain}
     if status in {401, 403}:
         return PluginError("playbook_authentication_failed", "Playbook rejected the configured credential.")

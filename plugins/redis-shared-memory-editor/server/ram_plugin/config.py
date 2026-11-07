@@ -165,18 +165,42 @@ def load_config(values: Mapping[str, str | None]) -> Config:
     )
 
 
+def error_chain(error: BaseException) -> list[BaseException]:
+    """The error and its explicit causes; SDK retry layers wrap the original."""
+
+    chain: list[BaseException] = []
+    item: BaseException | None = error
+    while item is not None and len(chain) < 4 and all(item is not seen for seen in chain):
+        chain.append(item)
+        item = item.__cause__
+    return chain
+
+
+def error_status(error: BaseException) -> int | None:
+    """The first HTTP status carried by the error or one of its causes."""
+
+    for item in error_chain(error):
+        for attribute in ("status_code", "status"):
+            value = getattr(item, attribute, None)
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value
+    return None
+
+
 def _error_modules(error: BaseException) -> set[str]:
-    return {type(item).__module__.split(".")[0] for item in (error, error.__cause__) if item}
+    return {type(item).__module__.split(".")[0] for item in error_chain(error)}
 
 
 def _is_transport_timeout(error: BaseException) -> bool:
-    return "httpx" in _error_modules(error) and "Timeout" in type(error).__name__
+    return "httpx" in _error_modules(error) and any("Timeout" in type(item).__name__ for item in error_chain(error))
 
 
 def _is_transport_error(error: BaseException) -> bool:
     """httpx transport failures and the SDK's no-response error, without importing httpx."""
 
-    return "httpx" in _error_modules(error) or type(error).__name__ == "NoResponseError"
+    return "httpx" in _error_modules(error) or any(
+        type(item).__name__ == "NoResponseError" for item in error_chain(error)
+    )
 
 
 def public_error(error: BaseException) -> dict[str, object]:
@@ -185,10 +209,17 @@ def public_error(error: BaseException) -> dict[str, object]:
     if isinstance(error, PluginError):
         return {"code": error.code, "message": str(error)}
 
-    status = getattr(error, "status_code", None) or getattr(error, "status", None)
+    chain = error_chain(error)
+    status = error_status(error)
     # redis-iris SDK errors carry the RFC 9457 problem in ``data``.
-    error_type = getattr(error, "error_type", None) or getattr(
-        getattr(error, "data", None), "type", None
+    error_type = next(
+        (
+            value
+            for item in chain
+            for value in (getattr(item, "error_type", None), getattr(getattr(item, "data", None), "type", None))
+            if value
+        ),
+        None,
     )
     if not isinstance(status, int) and _is_transport_timeout(error):
         status = 408
@@ -231,14 +262,14 @@ def public_error(error: BaseException) -> dict[str, object]:
             "code": "dependency_unavailable",
             "message": "RAM could not complete the request because a dependency is unavailable. Retry a read or contact the Redis service owner.",
         }
-    if status == 408 or isinstance(error, (TimeoutError, socket.timeout)):
+    if status == 408 or any(isinstance(item, (TimeoutError, socket.timeout)) for item in chain):
         return {
             "code": "timeout",
             "message": "RAM did not respond in time. Check connectivity and try a read before retrying a write.",
         }
     if isinstance(status, int) and status >= 500:
         return {"code": "service_unavailable", "message": "RAM is temporarily unavailable. Try again later."}
-    if isinstance(error, (URLError, ConnectionError)) or _is_transport_error(error):
+    if any(isinstance(item, (URLError, ConnectionError)) for item in chain) or _is_transport_error(error):
         return {
             "code": "network_error",
             "message": "Cannot reach RAM. Check the endpoint, internet connection, and VPN.",

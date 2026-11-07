@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Any, Mapping, Protocol
 
-from .config import Config, PluginError, SLUG, public_error
+from .config import Config, PluginError, SLUG, error_status, public_error
 from .management import LIFECYCLE_STATUSES, STATE_KINDS, _attributes
 
 
@@ -455,7 +455,7 @@ class PrivateEventOutbox:
                 try:
                     result = ram.add_session_event(**request, timeout_ms=timeout_ms)
                 except Exception as error:
-                    status = getattr(error, "status_code", None)
+                    status = error_status(error)  # the SDK may wrap the HTTP error
                     if status in {400, 413, 422}:
                         # RAM rejected this exact event; retrying cannot succeed.
                         self._set_aside(claimed, f"http_{status}")

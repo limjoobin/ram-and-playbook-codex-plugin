@@ -49,7 +49,9 @@ class ConflictRAM(FakePromotionRAM):
         self.stored = stored
 
     def add_session_event(self, **values):
-        raise StatusError(409)
+        wrapped = Exception("SDK wrapper")  # the SDK may re-raise from the HTTP error
+        wrapped.__cause__ = StatusError(409)
+        raise wrapped
 
     def get_session(self, session_id, timeout_ms=None):
         return {"sessionId": session_id, "events": self.stored.sessions.get(session_id, [])}
@@ -138,6 +140,14 @@ class OutboxTests(unittest.TestCase):
         self.assertTrue(self.outbox.blocked)
         self.assertEqual(len(self.queued()), 1)
         self.assertFalse((self.outbox.directory / "rejected").exists())
+
+    def test_wrapped_permanent_rejection_is_set_aside(self):
+        self.capture.process(prompt())
+        wrapped = Exception("SDK wrapper")
+        wrapped.__cause__ = StatusError(422)
+        self.assertEqual(self.outbox.drain(FailingRAM(wrapped), CONFIG), 0)
+        self.assertFalse(self.outbox.blocked)
+        self.assertEqual(len(list((self.outbox.directory / "rejected").iterdir())), 1)
 
     def test_events_from_another_configuration_are_left_for_their_owner(self):
         self.capture.process(prompt())
