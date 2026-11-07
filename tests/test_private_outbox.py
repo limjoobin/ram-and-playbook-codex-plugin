@@ -210,11 +210,13 @@ class HookProcessTests(unittest.TestCase):
                         "IRIS_AGENT_PLAYBOOKS_URL=https://playbook.example.invalid",
                         "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID=pb_" + "0" * 32,
                         "IRIS_AGENT_PLAYBOOKS_API_KEY=placeholder-value",
+                        f"RAM_CAPTURE_FOLDERS={Path(directory) / 'project'}",
                     ]
                 )
                 + "\n"
             )
             credential.chmod(0o600)
+            (Path(directory) / "project" / "src").mkdir(parents=True)
             script = ROOT / "plugins" / "redis-shared-memory-editor" / "hooks" / "capture.py"
             probe = (
                 "import runpy, sys\n"
@@ -232,19 +234,30 @@ class HookProcessTests(unittest.TestCase):
                 "REDIS_SHARED_MEMORY_CONFIG": str(credential),
                 "PLUGIN_DATA": str(Path(directory) / "data"),
             }
-            payload = {"hook_event_name": "UserPromptSubmit", "session_id": "s", "turn_id": "t", "prompt": "hello"}
-            process = subprocess.run(
-                [sys.executable, "-I", "-c", probe],
-                input=json.dumps(payload),
-                text=True,
-                capture_output=True,
-                env=env,
-                timeout=10,
-                check=True,
-            )
-            self.assertEqual(json.loads(process.stdout), {"continue": True})
-            self.assertEqual(process.stderr, "[]")
-            self.assertEqual(len(list((Path(directory) / "data" / "promotion" / "outbox").glob("*.json"))), 1)
+            outbox = Path(directory) / "data" / "promotion" / "outbox"
+
+            def run(cwd: str | None, session: str) -> None:
+                payload = {"hook_event_name": "UserPromptSubmit", "session_id": session, "turn_id": "t", "prompt": "hello"}
+                if cwd is not None:
+                    payload["cwd"] = cwd
+                process = subprocess.run(
+                    [sys.executable, "-I", "-c", probe],
+                    input=json.dumps(payload),
+                    text=True,
+                    capture_output=True,
+                    env=env,
+                    timeout=10,
+                    check=True,
+                )
+                self.assertEqual(json.loads(process.stdout), {"continue": True})
+                self.assertEqual(process.stderr, "[]")
+
+            # Plugins are installed account-wide: other projects record nothing.
+            run(str(Path(directory) / "elsewhere"), "other-project")
+            run(None, "no-folder")
+            self.assertFalse(outbox.exists() and list(outbox.glob("*.json")))
+            run(str(Path(directory) / "project" / "src"), "this-project")
+            self.assertEqual(len(list(outbox.glob("*.json"))), 1)
 
 
 if __name__ == "__main__":

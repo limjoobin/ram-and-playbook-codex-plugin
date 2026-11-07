@@ -105,6 +105,9 @@ Paths beginning with `server/` in the table are relative to
   private plugin runtime from the configured Python package index. Do not add
   other dependencies, lifecycle hooks, telemetry, or network destinations
   without explicit review. Hooks must never install.
+- Hooks must record nothing unless the session's `cwd` is inside
+  `RAM_CAPTURE_FOLDERS`; a missing `cwd` or setting records nothing. Plugins
+  install account-wide, so this is what keeps other projects' prompts out.
 - Keep hooks standard-library only and off the network. A hook records its
   event in the private ledger and queues the private RAM event in
   `PrivateEventOutbox`; only the MCP server process loads the SDK and delivers

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -447,6 +448,46 @@ class PromotionTests(unittest.TestCase):
             self.assertEqual(bob_ram.created[-1][0]["ownerId"], CONFIG.agenda_owner_id)
             self.assertNotEqual(self.ram.created[-1][0]["id"], bob_ram.created[-1][0]["id"])
 
+
+
+class CaptureScopeTests(unittest.TestCase):
+    def test_capture_runs_only_inside_configured_folders(self):
+        from dataclasses import replace as _replace
+        from ram_plugin.promotion import capture_allowed
+
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            (project / "src").mkdir(parents=True)
+            scoped = _replace(CONFIG, capture_folders=(os.path.realpath(project),))
+            self.assertTrue(capture_allowed(scoped, {"cwd": str(project)}))
+            self.assertTrue(capture_allowed(scoped, {"cwd": str(project / "src")}))
+            self.assertFalse(capture_allowed(scoped, {"cwd": str(Path(directory) / "project-other")}))
+            self.assertFalse(capture_allowed(scoped, {"cwd": directory}))
+            self.assertFalse(capture_allowed(scoped, {"cwd": "relative/project"}))
+            self.assertFalse(capture_allowed(scoped, {}))
+            self.assertFalse(capture_allowed(CONFIG, {"cwd": str(project)}))  # nothing configured
+
+    def test_capture_folders_must_be_absolute(self):
+        from ram_plugin.config import load_config
+
+        settings = {
+            "IRIS_AGENT_MEMORY_URL": "https://memory.example.test",
+            "IRIS_AGENT_MEMORY_STORE_ID": "st_example",
+            "IRIS_AGENT_MEMORY_API_KEY": "placeholder",
+            "RAM_NAMESPACE": "team-shared",
+            "RAM_PARTICIPANT": "alice",
+            "RAM_AGENDA_OWNER_ID": "ami-project-office",
+            "IRIS_AGENT_PLAYBOOKS_URL": "https://playbook.example.test",
+            "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID": "pb_" + "0" * 32,
+            "IRIS_AGENT_PLAYBOOKS_API_KEY": "placeholder",
+        }
+        self.assertEqual(load_config(settings).capture_folders, ())
+        with self.assertRaises(PluginError) as raised:
+            load_config({**settings, "RAM_CAPTURE_FOLDERS": "relative/folder"})
+        self.assertEqual(raised.exception.code, "configuration_invalid")
+        with tempfile.TemporaryDirectory() as directory:
+            folders = load_config({**settings, "RAM_CAPTURE_FOLDERS": f"{directory}:{directory}/b"}).capture_folders
+            self.assertEqual(folders, (os.path.realpath(directory), os.path.realpath(directory) + "/b"))
 
 if __name__ == "__main__":
     unittest.main()

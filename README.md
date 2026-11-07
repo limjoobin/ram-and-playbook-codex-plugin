@@ -314,9 +314,13 @@ Wherever a later step says `codex`, use that same long path in its place.
 
    ![The Personal tab of the plugin directory, with a plus button next to Redis Shared Memory + Playbook](docs/images/getting-started/local-05-chatgpt-plugin-directory.png)
 
-4. Run `python3 scripts/setup_demo.py` once more and press **Return** at each
-   prompt to keep your values. This time it also prepares the plugin's helper
-   program, so your first chat is not slow.
+4. Quit ChatGPT (**⌘ Q**). Run `python3 scripts/setup_demo.py` once more and
+   press **Return** at each prompt to keep your values. This time it also:
+   - limits the plugin to this project folder. ChatGPT installs plugins for
+     your whole account, so without this its tools and hooks would run in all
+     your other projects too. The project's own settings file
+     (`.codex/config.toml`) switches it back on here;
+   - prepares the plugin's helper program, so your first chat isn't slow.
 
 ### Step 12: Allow private capture
 
@@ -352,7 +356,10 @@ the hooks.
 ### Step 13: Check the connection
 
 1. Quit ChatGPT completely (**⌘ Q**) and open it again.
-2. Start a **new chat** and send:
+2. Start a **new chat in the project folder**, `ram-and-playbook-codex-plugin`.
+   The plugin is switched on only there. If ChatGPT asks whether to trust the
+   folder, choose to trust it; ChatGPT ignores the folder's settings until you
+   do. Send:
 
    > Check the Redis Shared Memory connection status.
 
@@ -513,6 +520,8 @@ Presenters should also read the
 | Setup: "Playbook: … not discovered" | The Skill is not published, or its alias is not `prepare-management-review-agenda`. Repeat Step 7. |
 | Setup: "memory type … is not registered" | The memory type is missing or misnamed. Check Step 4. |
 | The plugin is not on the **Personal** tab of **Browse directory** | Repeat Step 10, then quit (**⌘ Q**) and reopen ChatGPT. |
+| ChatGPT doesn't use the plugin, or says its tools aren't available | Start the chat in the project folder and trust that folder (Step 13). The plugin is switched off everywhere else. |
+| "The exact statement was not found in this user's private hook capture" | The chat isn't running in the project folder, so your message wasn't captured. Start a new chat there (Step 13) and send the update again. |
 | `configuration_missing` or `configuration_invalid` | Run the setup command again (Step 9). |
 | `authentication_failed` or `playbook_authentication_failed` | A key is wrong or expired. Create a new one and run the setup command again. |
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
@@ -538,7 +547,9 @@ For every error code and more detail, see the troubleshooting table in
 ## Privacy in one paragraph
 
 Your keys stay in a private file on your Mac that only your user account can
-read. What you type is saved only to your personal memory space. Nothing
+read. The plugin runs only in chats in the project folder. What you type there
+is saved only to your personal memory space, and nothing is captured from your
+other projects. Nothing
 reaches the shared team memory unless ChatGPT shows you the exact update and
 you confirm it. Your participant name labels your contributions but is not a
 login; access is controlled by your keys. Details are in

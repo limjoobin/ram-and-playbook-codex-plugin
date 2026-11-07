@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 import re
 import socket
 from typing import Mapping
@@ -32,6 +33,7 @@ SETTING_NAMES = (
     "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID",
     "IRIS_AGENT_PLAYBOOKS_API_KEY",
     "RAM_MEMORY_LAYOUT",
+    "RAM_CAPTURE_FOLDERS",
 )
 # Administrator-only credentials. The desktop MCP accepts these names in the
 # private file but never copies their values into its runtime Config.
@@ -42,7 +44,7 @@ ADMIN_SETTING_NAMES = (
     "IRIS_AGENT_MEMORY_SERVICE_URL",
     "IRIS_AGENT_MEMORY_SERVICE_TOKEN",
 )
-OPTIONAL_SETTING_NAMES = ("RAM_PERSONAL_NAMESPACE", "RAM_MEMORY_LAYOUT")
+OPTIONAL_SETTING_NAMES = ("RAM_PERSONAL_NAMESPACE", "RAM_MEMORY_LAYOUT", "RAM_CAPTURE_FOLDERS")
 REQUIRED_SETTING_NAMES = tuple(
     name for name in SETTING_NAMES if name not in OPTIONAL_SETTING_NAMES
 )
@@ -70,6 +72,9 @@ class Config:
     playbook_api_key: str
     # How management records are stored in RAM custom memory types; see layout.py.
     memory_layout: str = DEFAULT_LAYOUT
+    # Absolute folders whose sessions the private-capture hooks may record.
+    # Empty means the hooks record nothing, in every project.
+    capture_folders: tuple[str, ...] = ()
 
 
 def _validated_url(name: str, value: str) -> tuple[str, SplitResult]:
@@ -156,6 +161,18 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             f"RAM_MEMORY_LAYOUT must be one of: {', '.join(LAYOUTS)}.",
         )
 
+    capture_folders = []
+    for raw in (values.get("RAM_CAPTURE_FOLDERS") or "").split(os.pathsep):
+        folder = os.path.expanduser(raw.strip())
+        if not folder:
+            continue
+        if not os.path.isabs(folder):
+            raise PluginError(
+                "configuration_invalid",
+                "RAM_CAPTURE_FOLDERS must list absolute folder paths separated by ':'.",
+            )
+        capture_folders.append(os.path.realpath(folder))
+
     api_key = (values["IRIS_AGENT_MEMORY_API_KEY"] or "").strip()
     playbook_api_key = (values["IRIS_AGENT_PLAYBOOKS_API_KEY"] or "").strip()
     if api_key.startswith("__encrypted__:") or playbook_api_key.startswith("__encrypted__:"):
@@ -176,6 +193,7 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         playbook_id=playbook_id,
         playbook_api_key=playbook_api_key,
         memory_layout=memory_layout,
+        capture_folders=tuple(capture_folders),
     )
 
 

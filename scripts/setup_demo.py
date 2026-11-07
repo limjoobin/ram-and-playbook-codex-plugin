@@ -256,11 +256,56 @@ def collect(existing: dict[str, str]) -> tuple[dict[str, str], str]:
         "RAM_PARTICIPANT": participant,
         "RAM_AGENDA_OWNER_ID": existing.get("RAM_AGENDA_OWNER_ID", "ami-project-office"),
         "RAM_MEMORY_LAYOUT": existing.get("RAM_MEMORY_LAYOUT", "compact"),
+        # The private-capture hooks record only sessions in this project.
+        "RAM_CAPTURE_FOLDERS": existing.get("RAM_CAPTURE_FOLDERS", str(ROOT)),
         "IRIS_AGENT_PLAYBOOKS_URL": playbook_url,
         "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID": playbook_id,
         "IRIS_AGENT_PLAYBOOKS_API_KEY": playbook_key,
     }
     return values, extractor_id
+
+
+# Plugin scope ----------------------------------------------------------------
+
+PLUGIN_SELECTOR = "redis-shared-memory-editor@redis-field-engineering"
+
+
+def disable_account_wide(config_toml: Path) -> str:
+    """Turn the plugin off in the user's Codex config; the project turns it on.
+
+    The repository's .codex/config.toml enables the plugin, so it runs only in
+    this project (once the project is trusted). Returns "changed", "unchanged",
+    or "missing" when Codex has no user config yet.
+    """
+
+    try:
+        text = config_toml.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "missing"
+    header = f'[plugins."{PLUGIN_SELECTOR}"]'
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == header), None)
+    if start is None:
+        lines += ["", header, "enabled = false"]
+    else:
+        end = next(
+            (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+            len(lines),
+        )
+        found = [i for i in range(start + 1, end) if re.match(r"\s*enabled\s*=", lines[i])]
+        if found and re.match(r"\s*enabled\s*=\s*false\s*(#.*)?$", lines[found[0]]):
+            return "unchanged"
+        if found:
+            lines[found[0]] = "enabled = false"
+        else:
+            lines.insert(start + 1, "enabled = false")
+    backup = config_toml.with_name(f"{config_toml.name}.backup-{datetime.now():%Y%m%d-%H%M%S}")
+    backup.write_text(text, encoding="utf-8")
+    temporary = config_toml.with_name(f".{config_toml.name}.setup")
+    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.chmod(temporary, config_toml.stat().st_mode & 0o777)
+    os.replace(temporary, config_toml)
+    return "changed"
 
 
 # Service steps ---------------------------------------------------------------
@@ -376,6 +421,11 @@ def main(argv: list[str]) -> int:
 
     launcher = codex_home / "plugins" / "cache" / "redis-field-engineering" / "redis-shared-memory-editor" / VERSION / "server" / "launch.py"
     if launcher.is_file():
+        scope = disable_account_wide(codex_home / "config.toml")
+        if scope == "changed":
+            say("  ✓ The plugin now runs only in this project folder. Your previous Codex settings were backed up.")
+        elif scope == "unchanged":
+            say("  ✓ The plugin runs only in this project folder.")
         environment = dict(os.environ, PLUGIN_DATA=str(codex_home / "plugins" / "data" / PLUGIN_ID))
         result = subprocess.run([sys.executable, "-I", str(launcher), "--install"], env=environment)
         say("  ✓ Plugin runtime ready." if result.returncode == 0 else "  ✗ The plugin runtime could not be installed.")

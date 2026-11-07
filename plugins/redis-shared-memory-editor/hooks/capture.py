@@ -19,7 +19,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "server"))
 
 from ram_plugin.credentials import load_credential_file
-from ram_plugin.promotion import HookCapture, PrivateEventOutbox, PromotionLedger
+from ram_plugin.promotion import HookCapture, PrivateEventOutbox, PromotionLedger, capture_allowed
 
 
 def _config_path(environment: Mapping[str, str]) -> Path:
@@ -54,6 +54,8 @@ def handle(payload: Any, environment: Mapping[str, str] | None = None) -> dict[s
         return _safe_output(str(event_name), unavailable=True)
     try:
         config = load_credential_file(_config_path(values))
+        if not capture_allowed(config, payload):
+            return _safe_output(str(event_name))  # another project: record nothing
         ledger = PromotionLedger.from_environment(values)
         return HookCapture(config, None, ledger, outbox=PrivateEventOutbox(ledger)).process(payload)
     except Exception:

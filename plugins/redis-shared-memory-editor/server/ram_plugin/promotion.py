@@ -566,6 +566,24 @@ class OutboxDelivery(threading.Thread):
             self._halt.wait(wait)
 
 
+def capture_allowed(config: Config, payload: Mapping[str, Any]) -> bool:
+    """Whether a hook event comes from a session inside a configured folder.
+
+    Plugins are installed for the whole user account, so the hooks run in every
+    project. They record nothing unless the session's working directory is one
+    of RAM_CAPTURE_FOLDERS or inside one; a missing directory records nothing.
+    """
+
+    cwd = payload.get("cwd")
+    if not config.capture_folders or not isinstance(cwd, str) or not os.path.isabs(cwd):
+        return False
+    path = os.path.realpath(cwd)
+    return any(
+        path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+        for folder in config.capture_folders
+    )
+
+
 @dataclass
 class HookCapture:
     config: Config
@@ -836,7 +854,8 @@ class PromotionService:
         if source is None:
             raise PluginError(
                 "private_evidence_not_found",
-                "The exact statement was not found in this user's private hook capture. Use the complete prompt text.",
+                "The exact statement was not found in this user's private hook capture. Use the complete prompt text, "
+                "and make sure the chat runs in a folder listed in RAM_CAPTURE_FOLDERS, where capture is enabled.",
             )
         current_status = current_state.get("lifecycle_status")
         if current_status != expected_current_status:

@@ -164,6 +164,7 @@ The values have these roles:
 | `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID` | Shared | Playbook ID: `pb_` followed by 32 lowercase hex characters. |
 | `IRIS_AGENT_PLAYBOOKS_API_KEY` | Per user when supported | Runtime reader key that authenticates Playbook reads. |
 | `RAM_MEMORY_LAYOUT` | Shared, optional | How management records are stored in RAM custom memory types. `compact` (default) uses the one 9-field `organizational_state` type that the README's console steps create; `expanded` uses the original `organizational_state` and `organizational_state_projection` types. Every participant of a store must use the store's layout. |
+| `RAM_CAPTURE_FOLDERS` | Per user, optional | Absolute folders, separated by `:`, whose sessions the private-capture hooks may record. Empty or unset means the hooks record nothing anywhere. `scripts/setup_demo.py` sets it to the project folder. Plugins install account-wide, so this keeps prompts from other projects out of private memory even if the plugin is enabled elsewhere. |
 
 Environment administrators may also keep these optional names in the same file:
 `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY` (read/write/publish key used by
@@ -249,6 +250,14 @@ server start. `system_status` reports the queue depth as
 runtime directory the first time its requirements hash is used.
 
 ## 5. Verify one user, then the group
+
+ChatGPT installs plugins for the whole user account. To keep the plugin's
+tools and hooks out of other projects, `scripts/setup_demo.py` sets
+`enabled = false` for `redis-shared-memory-editor@redis-field-engineering` in
+`~/.codex/config.toml` (after backing it up), and the repository's
+`.codex/config.toml` sets `enabled = true`. Codex honours a project's settings
+only once that folder is trusted, and project enablement needs Codex 0.151.0
+or later for a local marketplace. Start chats in the project folder.
 
 Review the installed hooks before testing private capture. ChatGPT desktop
 shows **Review hooks** on the first message after installation, listing

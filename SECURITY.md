@@ -173,6 +173,12 @@ silently drift.
   installer, telemetry, or runtime download. Its reviewed command hooks are
   declared in `hooks/hooks.json` and must be trusted by the user or enterprise
   policy.
+- Plugins install for the whole user account, so the hooks would otherwise see
+  every prompt in every project. Two controls keep capture to this project:
+  `scripts/setup_demo.py` disables the plugin account-wide and the
+  repository's `.codex/config.toml` re-enables it for the trusted project
+  folder; and the hook itself records nothing unless the session's `cwd` is
+  inside `RAM_CAPTURE_FOLDERS` (unset means nothing is recorded anywhere).
 - Python starts in isolated mode (`-I`), so `PYTHONPATH` and user-site packages
   cannot inject code into the process.
 - Re-pinning a dependency, or adding a dependency, installer, executable,
