@@ -431,6 +431,34 @@ changed since.
 
 6. **Prepare an agenda** (this takes about two minutes)
 
+   This is where the Playbook comes in. ChatGPT doesn't decide on its own
+   what belongs on a management agenda. It follows the agenda Skill you
+   published in Step 7:
+
+   ```text
+   Your request ──► ChatGPT ──► plugin ──┬──► Agent Playbook
+                                         │      the published Skill
+                                         │      prepare-management-review-agenda,
+                                         │      every rule file checked unchanged
+                                         │
+                                         └──► Agent Memory
+                                                the current items and their sources
+                                                       │
+                                                       ▼
+                                   an agenda drafted by the Skill's rules,
+                                   every topic tied to its source
+   ```
+
+   The Skill's five rule files set:
+   - what the review is for and who attends;
+   - what earns a place on the agenda;
+   - the shape of each topic;
+   - which items count as current or settled;
+   - when to leave something out or flag it for a decision.
+
+   Change the rules in the Playbook, and every participant's next agenda
+   follows them. Nothing changes in the plugin or on anyone's Mac.
+
    > Prepare an evidence-backed management review agenda for the Real Reaction
    > project for 15 November 2026. Use at most eight management topics. Keep the
    > action register, completed work, confirmed decisions, conflicts, and agenda
@@ -444,14 +472,25 @@ changed since.
 
    ![The agenda's eight management topics with leads, requested outcomes, and timings](docs/images/getting-started/local-11-chatgpt-agenda-topics.png)
 
-7. **Ask about history**
+7. **See which rules it followed**
+
+   > Which Playbook Skill and version did you use for that agenda, and which
+   > rule files did you check?
+
+   Look for: `prepare-management-review-agenda`, the version shown in your
+   Playbook's **Registry** in the console (Step 7), and the Skill plus its five
+   rule files, each verified. The plugin checks every file against the
+   fingerprint recorded in the published Skill, and refuses to prepare the
+   agenda if one doesn't match.
+
+8. **Ask about history**
 
    > What is the entire history of the LCD discussion?
 
    Look for: the LCD and talk-back decisions, then the later decision that
    removed the LCD and the advanced chip.
 
-8. **Ask a precise question**
+9. **Ask a precise question**
 
    > Has Laura already published the meeting minutes?
 
