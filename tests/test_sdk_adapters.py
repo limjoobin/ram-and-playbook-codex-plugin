@@ -458,6 +458,33 @@ class PlaybookAdapterTests(unittest.TestCase):
             playbook.call("fetch_resource", {"uri": loaded["content"]["resources"][0]["uri"]})
         self.assertEqual(resource.exception.code, "playbook_resource_not_found")
 
+    def test_wrapped_transport_and_status_errors_keep_their_meaning(self):
+        class PermanentError(Exception):
+            pass
+
+        class ConnectError(Exception):
+            pass
+
+        ConnectError.__module__ = "httpx._exceptions"
+        sdk = FakePlaybookSDK()
+        playbook = PlaybookClient(CONFIG, client=sdk)
+        for inner, code in (
+            (ConnectError(), "playbook_unavailable"),
+            (TimeoutError(), "playbook_unavailable"),
+            (StatusError(401), "playbook_authentication_failed"),
+            (StatusError(404), "playbook_not_found"),
+        ):
+            wrapped = PermanentError("wrapped")
+            wrapped.__cause__ = inner
+            sdk.health_error = wrapped
+            with self.assertRaises(PluginError) as raised:
+                playbook.inventory()
+            self.assertEqual(raised.exception.code, code, type(inner).__name__)
+        sdk.health_error = ValueError("unexpected shape")
+        with self.assertRaises(PluginError) as contract:
+            playbook.inventory()
+        self.assertEqual(contract.exception.code, "playbook_contract_error")
+
 
 if __name__ == "__main__":
     unittest.main()

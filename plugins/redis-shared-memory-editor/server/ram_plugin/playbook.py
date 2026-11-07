@@ -12,7 +12,7 @@ import base64
 import hashlib
 from typing import Any
 
-from .config import Config, PluginError
+from .config import Config, PluginError, _is_transport_error
 
 
 ALLOWED_TOOLS = frozenset({"discover_entries", "load_skill", "fetch_resource"})
@@ -32,21 +32,23 @@ _MISSING = {"discover_entries": "playbook", "load_skill": "entry", "fetch_resour
 def _public(error: BaseException, missing: str = "playbook") -> PluginError:
     if isinstance(error, PluginError):
         return error
-    status = getattr(error, "status_code", None)
-    name = type(error).__name__
+    # The SDK's retry layer re-raises as PermanentError(...) from the original.
+    chain = [item for item in (error, error.__cause__) if item is not None]
+    status = next((s for s in (getattr(i, "status_code", None) for i in chain) if s is not None), None)
+    names = {type(item).__name__ for item in chain}
     if status in {401, 403}:
         return PluginError("playbook_authentication_failed", "Playbook rejected the configured credential.")
     if status in {408, 429} or (isinstance(status, int) and status >= 500):
         return PluginError("playbook_unavailable", "Playbook is temporarily unavailable.")
-    if name == "EntryNotFound":
+    if "EntryNotFound" in names:
         return PluginError(*_NOT_FOUND["entry"])
     if status == 404:
         return PluginError(*_NOT_FOUND[missing])
     if isinstance(status, int):
         return PluginError("playbook_request_rejected", "Playbook rejected the read request.")
-    if name == "ResourceTooLarge":
+    if "ResourceTooLarge" in names:
         return PluginError("playbook_resource_too_large", "The Playbook resource exceeds the read limit.")
-    if "httpx" in type(error).__module__ or name in {"NoResponseError", "TimeoutError", "ConnectionError"}:
+    if _is_transport_error(error) or any(isinstance(item, (TimeoutError, ConnectionError)) for item in chain):
         return PluginError("playbook_unavailable", "Playbook is temporarily unavailable.")
     return PluginError("playbook_contract_error", "Playbook returned an incompatible response.")
 
