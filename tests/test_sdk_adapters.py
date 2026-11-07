@@ -215,7 +215,8 @@ class RAMAdapterTests(unittest.TestCase):
                 "owner_id": "ami-project-office",
                 "memory_type": "organizational_state",
                 "topics": ["organizational-state"],
-                "attributes": {"schema_version": "v3"},
+                # The default compact layout; see test_memory_layout for both layouts.
+                "attributes": {"schema_version": "v3", "record_kind": "observation", "details": {}},
                 "namespace_id": "ns_new-team",
             },
         )

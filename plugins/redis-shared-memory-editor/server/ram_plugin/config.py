@@ -10,6 +10,8 @@ from typing import Mapping
 from urllib.error import URLError
 from urllib.parse import SplitResult, urlsplit
 
+from .layout import DEFAULT_LAYOUT, LAYOUTS
+
 
 VERSION = "0.13.0"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
@@ -29,6 +31,7 @@ SETTING_NAMES = (
     "IRIS_AGENT_PLAYBOOKS_URL",
     "IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID",
     "IRIS_AGENT_PLAYBOOKS_API_KEY",
+    "RAM_MEMORY_LAYOUT",
 )
 # Administrator-only credentials. The desktop MCP accepts these names in the
 # private file but never copies their values into its runtime Config.
@@ -39,8 +42,9 @@ ADMIN_SETTING_NAMES = (
     "IRIS_AGENT_MEMORY_SERVICE_URL",
     "IRIS_AGENT_MEMORY_SERVICE_TOKEN",
 )
+OPTIONAL_SETTING_NAMES = ("RAM_PERSONAL_NAMESPACE", "RAM_MEMORY_LAYOUT")
 REQUIRED_SETTING_NAMES = tuple(
-    name for name in SETTING_NAMES if name != "RAM_PERSONAL_NAMESPACE"
+    name for name in SETTING_NAMES if name not in OPTIONAL_SETTING_NAMES
 )
 
 
@@ -64,6 +68,8 @@ class Config:
     playbook_url: str
     playbook_id: str
     playbook_api_key: str
+    # How management records are stored in RAM custom memory types; see layout.py.
+    memory_layout: str = DEFAULT_LAYOUT
 
 
 def _validated_url(name: str, value: str) -> tuple[str, SplitResult]:
@@ -143,6 +149,13 @@ def load_config(values: Mapping[str, str | None]) -> Config:
             "RAM_PERSONAL_NAMESPACE must differ from the shared RAM_NAMESPACE.",
         )
 
+    memory_layout = (values.get("RAM_MEMORY_LAYOUT") or DEFAULT_LAYOUT).strip().lower()
+    if memory_layout not in LAYOUTS:
+        raise PluginError(
+            "configuration_invalid",
+            f"RAM_MEMORY_LAYOUT must be one of: {', '.join(LAYOUTS)}.",
+        )
+
     api_key = (values["IRIS_AGENT_MEMORY_API_KEY"] or "").strip()
     playbook_api_key = (values["IRIS_AGENT_PLAYBOOKS_API_KEY"] or "").strip()
     if api_key.startswith("__encrypted__:") or playbook_api_key.startswith("__encrypted__:"):
@@ -162,6 +175,7 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         playbook_url=playbook_url,
         playbook_id=playbook_id,
         playbook_api_key=playbook_api_key,
+        memory_layout=memory_layout,
     )
 
 

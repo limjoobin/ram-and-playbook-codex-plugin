@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "contractId": "management-agenda-organizational-state-compact-v1",
+  "layout": "compact",
+  "storesLogicalTypes": {
+    "organizational_state": {
+      "contract": "management-agenda-organizational-state-v3",
+      "detailsFields": [
+        "state_id",
+        "evidence_role",
+        "subject",
+        "project_step_id",
+        "related_entity_ids",
+        "observed_at",
+        "event_sequence",
+        "source_offset_ms",
+        "effective_at",
+        "due_at",
+        "resolved_at",
+        "requested_decision",
+        "impact",
+        "supersedes_state_ids",
+        "relations",
+        "source_artifact_id",
+        "source_revision",
+        "evidence_locator"
+      ]
+    },
+    "organizational_state_projection": {
+      "contract": "management-agenda-organizational-state-projection-v1",
+      "detailsFields": [
+        "state_id",
+        "subject",
+        "project_step_id",
+        "related_entity_ids",
+        "valid_at",
+        "event_sequence",
+        "source_offset_ms",
+        "due_at",
+        "resolved_at",
+        "requested_decision",
+        "impact",
+        "supporting_memory_ids",
+        "conflicting_memory_ids",
+        "observation_count",
+        "current_memory_id",
+        "resolution_policy_id"
+      ]
+    }
+  },
+  "customMemoryType": {
+    "name": "organizational_state",
+    "description": "Organizational-state observations and current-state projections for management review.",
+    "fields": [
+      {
+        "name": "schema_version",
+        "type": "str",
+        "description": "Record contract version, such as organizational-state-v3."
+      },
+      {
+        "name": "state_kind",
+        "type": "str",
+        "description": "One of: action_item, decision, risk, issue, dependency, approval, conflict."
+      },
+      {
+        "name": "lifecycle_status",
+        "type": "str",
+        "description": "Lifecycle state, such as open, in_progress, decided, or completed."
+      },
+      {
+        "name": "project_id",
+        "type": "str",
+        "description": "Canonical project ID, such as project-ami-es2002."
+      },
+      {
+        "name": "meeting_id",
+        "type": "str",
+        "description": "Canonical meeting ID, or empty."
+      },
+      {
+        "name": "accountable_entity_id",
+        "type": "str",
+        "description": "Canonical ID of the accountable person, or empty."
+      },
+      {
+        "name": "conflict_status",
+        "type": "str",
+        "description": "Projections only: conflict state. Empty on observations."
+      },
+      {
+        "name": "record_kind",
+        "type": "str",
+        "description": "observation for extracted or promoted evidence; projection for current state."
+      },
+      {
+        "name": "details",
+        "type": "object",
+        "description": "Every other attribute as one JSON object, with the exact keys listed in the extraction prompt."
+      }
+    ]
+  },
+  "sessionExtraction": "disabled",
+  "customTypeBudget": {
+    "used": 1,
+    "reserved": 2,
+    "maximumPerStore": 3
+  }
+}

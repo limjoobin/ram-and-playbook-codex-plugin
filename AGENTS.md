@@ -41,6 +41,7 @@ relevant source and tests.
 | `plugins/redis-shared-memory-editor/server/main.py` | Isolated local entry point |
 | `server/ram_plugin/mcp_server.py` | MCP protocol, tool contracts, validation, and response envelope |
 | `server/ram_plugin/ram.py` | RAM operations through the redis-iris SDK, namespace mapping, write verification |
+| `server/ram_plugin/layout.py` | Compact (default) and expanded storage layouts for management records; standard library only |
 | `server/ram_plugin/management.py` | Organizational-state scope, reconciliation, and service façade |
 | `server/ram_plugin/playbook.py` | Allowlisted redis-iris SDK client for Playbooks REST reads |
 | `server/ram_plugin/agenda.py` | Runtime Skill verification and evidence-bound agenda preparation |
@@ -62,6 +63,8 @@ relevant source and tests.
 | `admin_bootstrap/` | Explicit repository-only plan/apply/verify harness |
 | `context-models/management-agenda/` | Versioned schemas, prompts, policy, Playbook, projector, and corpus |
 | `scripts/admin_bootstrap.py` | Administrator CLI; never called by plugin install or startup |
+| `scripts/setup_demo.py` | Guided customer setup: settings file, service checks, demo documents, current state |
+| `scripts/package_skill.py` | Builds the digest-verified Skill ZIP for the Redis Cloud console upload |
 | `DEMO_ENVIRONMENT_SETUP.md` | End-to-end administrator and participant handoff sequence |
 | `docs/admin-bootstrap.md` | Bootstrap modes, upgrade rules, and live acceptance gate |
 

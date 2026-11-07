@@ -147,8 +147,8 @@ class FakeAdapter:
                 "projectionCount": len(projections),
             },
             "retrievalCases": [
-                {"caseId": "final-lcd-removal", "passed": self.passed},
-                {"caseId": "kickoff-product-scope", "passed": self.passed},
+                {"caseId": case_id, "passed": self.passed}
+                for case_id in bundle.verification_case_ids()
             ],
         }
 
@@ -172,7 +172,7 @@ class AdminBootstrapTests(unittest.TestCase):
             "corpus", "projectionPolicy", "projectionImplementation",
         })
         corpus = json.loads((BUNDLE_ROOT / "corpus/manifest.json").read_text())
-        self.assertEqual(corpus["artifactCount"], 2)
+        self.assertEqual(corpus["artifactCount"], 3)
 
     def test_bundle_digest_covers_verification_expectations(self) -> None:
         copied = Path(self.temporary.name) / "bundle"

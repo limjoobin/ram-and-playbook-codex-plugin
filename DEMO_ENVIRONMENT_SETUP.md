@@ -16,7 +16,7 @@ The repository contains the complete versioned context-model contract:
 - the `organizational_state` observation schema and extraction prompt;
 - the `organizational_state_projection` schema and deterministic projector;
 - the canonical management-agenda Playbook Skill and its resources;
-- a two-document AMI ES2002 smoke corpus; and
+- a three-document ES2002 smoke corpus (two AMI artifacts and one synthetic action log); and
 - a credential-free context check, bounded MemoryETL submission,
   reconciliation, and evaluation commands.
 
@@ -28,8 +28,9 @@ MemoryETL corpus submission is a separate thin adapter so transport changes do
 not alter the context schemas, prompt, policy, or projector.
 
 Do not tell a tester that cloning this repository recreates the prepared
-15-artifact environment. The checked-in bundle contains only kickoff minutes
-and the final report so that bootstrap smoke tests remain fast.
+15-artifact environment. The checked-in bundle contains only the kickoff
+minutes, the final report, and one synthetic action log, so that bootstrap
+smoke tests remain fast.
 
 ## Ownership boundary
 
@@ -151,7 +152,20 @@ The desktop plugin installation is not a service deployment mechanism.
 
 ## 4. Declare the context model
 
-Create these exact RAM custom memory types in the fresh test store:
+The default **compact** layout (`RAM_MEMORY_LAYOUT=compact`) needs one custom
+memory type with nine fields,
+[`organizational-state-compact.json`](context-models/management-agenda/v1/memory-types/organizational-state-compact.json),
+and one document extractor using
+[`extraction-prompt-compact.txt`](context-models/management-agenda/v1/extraction-prompt-compact.txt).
+Both are entered in the Redis Cloud console; the README's Steps 4 and 5 walk
+through it with screenshots. Redis Cloud does not yet offer a customer API for
+custom memory types (MOD-18619, MOD-18732), which is why the compact layout is
+small enough to enter by hand.
+
+The **expanded** layout (`RAM_MEMORY_LAYOUT=expanded`) keeps the original two
+types below. Use it for stores created with them or managed through a
+self-managed control plane. Create these exact RAM custom memory types in the
+fresh test store:
 
 1. [`organizational_state`](context-models/management-agenda/v1/memory-types/organizational-state.json)
    is the immutable observation ledger. Enable RAM extraction and use the
@@ -192,6 +206,12 @@ publication. Give plugin users a read-only reader key. Do not overwrite a publis
 version with different content; publish a new version and update the checked-in manifest and runtime
 attestation together.
 
+On Redis Cloud the simplest path is the console: `python3 scripts/package_skill.py`
+builds the Skill ZIP from the checked-in files after verifying every digest and
+prints the alias, intents, and attributes for **Upload Skill**; then publish the
+version (README Step 7). Give runtime users a read-only key created through
+**Customize in the full page** (MOD-20988).
+
 The current bootstrap adapter cannot publish to a live Playbook. The bundled
 `iris` CLI can: export `IRIS_AGENT_PLAYBOOKS_URL`,
 `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`, and `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`.
@@ -216,10 +236,17 @@ manifest.
 
 The checked-in
 [`corpus/manifest.json`](context-models/management-agenda/v1/corpus/manifest.json)
-declares two immutable source artifacts:
+declares three immutable source artifacts:
 
-- `ami-es2002-minutes-kickoff`; and
-- `ami-es2002-final-report`.
+- `ami-es2002-minutes-kickoff`;
+- `ami-es2002-final-report`; and
+- `demo-es2002-functional-design-actions`, a short synthetic action log (not
+  part of the AMI corpus) that gives each demo participant an owned open action
+  for the guided tour.
+
+`python3 scripts/setup_demo.py` submits whichever of these are not yet loaded
+and then builds the current state, so the commands below are only needed for a
+scripted or repeated administrator run.
 
 Preview the credential-free ingestion plan with the document extractor created
 from the checked-in extraction prompt:

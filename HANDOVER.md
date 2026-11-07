@@ -10,7 +10,7 @@ The repository is authoritative for:
 - the two RAM custom-memory contracts;
 - canonical entities and source-envelope fields;
 - the document extraction prompt;
-- the two-document AMI smoke corpus and deterministic expected extraction;
+- the three-document smoke corpus (two AMI artifacts plus one synthetic action log) and deterministic expected extraction;
 - relationship and lifecycle policy;
 - the one canonical projector/reconciliation job;
 - the Playbook Skill and all linked resources;
@@ -68,10 +68,13 @@ acceptance check.
 
    This preserves the store, namespaces, custom-memory types, and document
    extractors while deleting all long-term memories and private sessions.
-3. In RAM, register the two exact JSON contracts under
-   `context-models/management-agenda/v1/memory-types/`. Configure a document
-   extractor for `organizational_state` with `extraction-prompt.txt`. Keep
-   extraction disabled for `organizational_state_projection`.
+3. In RAM, register the memory types for the store's layout. The default
+   compact layout uses the one nine-field `organizational-state-compact.json`
+   type and a document extractor with `extraction-prompt-compact.txt`, entered
+   in the Redis Cloud console (README Steps 4–5). The expanded layout
+   (`RAM_MEMORY_LAYOUT=expanded`) uses the two original contracts with
+   `extraction-prompt.txt`, keeping extraction disabled for
+   `organizational_state_projection`.
 4. Publish the one entry described by `playbook/manifest.json`, including
    `SKILL.md` and every declared reference. Use the manifest's entry key,
    intents, attributes, version, and digests.
@@ -142,6 +145,6 @@ Keep these with the environment handoff, without secrets or source text:
 - plugin version, reviewed hooks, and `system_status`; and
 - one evidence-backed agenda and one promoted completion test.
 
-The two-document bundle is a fast smoke environment, not a recreation of the
+The three-document bundle is a fast smoke environment, not a recreation of the
 prepared 15-artifact research store. That distinction is intentional and must
 remain visible in any handover claim.

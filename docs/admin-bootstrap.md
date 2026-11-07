@@ -14,7 +14,7 @@ runs this harness.
 The first bundle is `context-models/management-agenda/v1`. It contains the two
 memory-type schemas, entity registry, extraction prompt, projection policy,
 the single authoritative projector ported from the management-agenda
-consumer, the Playbook Skill and resources, and a two-document AMI smoke
+consumer, the Playbook Skill and resources, and a three-document ES2002 smoke
 corpus. The smoke corpus is intentionally the smallest source-grounded slice;
 the 15-document research corpus remains a later compatible bundle revision
 after a live administrator adapter is approved.

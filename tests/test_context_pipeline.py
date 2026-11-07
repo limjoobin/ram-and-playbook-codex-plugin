@@ -62,9 +62,9 @@ class ContextPipelineTests(unittest.TestCase):
 
         self.assertTrue(result["passed"])
         self.assertEqual(result["counts"], {
-            "artifactCount": 2,
-            "expectedObservationCount": 3,
-            "projectionCount": 2,
+            "artifactCount": 3,
+            "expectedObservationCount": 4,
+            "projectionCount": 3,
         })
         self.assertTrue(result["checks"]["latestSourceStateWins"])
 
@@ -84,7 +84,7 @@ class ContextPipelineTests(unittest.TestCase):
     def test_expected_observations_preserve_the_source_envelope(self):
         records = expected_observations(self.bundle)
 
-        self.assertEqual(len(records), 3)
+        self.assertEqual(len(records), 4)
         self.assertTrue(
             all(record["attributes"]["relations"] == {"edges": []} for record in records)
         )
@@ -102,8 +102,8 @@ class ContextPipelineTests(unittest.TestCase):
         )
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["artifactCount"], 2)
-        self.assertEqual(len(ram.submissions), 2)
+        self.assertEqual(result["artifactCount"], 3)
+        self.assertEqual(len(ram.submissions), 3)
         self.assertTrue(
             all(item["idempotency_key"] for item in ram.submissions)
         )
@@ -179,7 +179,7 @@ class ContextPipelineTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(
             [artifact["outputCount"] for artifact in result["artifacts"]],
-            [1, 1],
+            [1, 1, 1],
         )
 
     def test_validation_cli_is_offline_and_machine_readable(self):
@@ -194,7 +194,7 @@ class ContextPipelineTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         payload = json.loads(process.stdout)
         self.assertTrue(payload["passed"])
-        self.assertEqual(payload["counts"]["artifactCount"], 2)
+        self.assertEqual(payload["counts"]["artifactCount"], 3)
 
 
 if __name__ == "__main__":

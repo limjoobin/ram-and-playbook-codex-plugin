@@ -136,6 +136,38 @@ def expected_observations(bundle: Bundle) -> list[dict[str, Any]]:
     return records
 
 
+def verify_compact_layout(bundle: Bundle) -> None:
+    """Check the one-type compact contract and prompt against the expanded contracts."""
+
+    root = bundle.root
+    compact = _object(root / "memory-types" / "organizational-state-compact.json")
+    expanded = {
+        "organizational_state": _object(root / "memory-types" / "organizational-state.json"),
+        "organizational_state_projection": _object(
+            root / "memory-types" / "organizational-state-projection.json"
+        ),
+    }
+    fields = {field["name"]: field["type"] for field in compact["customMemoryType"]["fields"]}
+    if fields.get("details") != "object" or fields.get("record_kind") != "str":
+        raise BundleError("compact memory type must declare record_kind and an object details field")
+    top_level = set(fields) - {"details", "record_kind"}
+    prompt = (root / "extraction-prompt-compact.txt").read_text(encoding="utf-8")
+    shared = (root / "extraction-prompt.txt").read_text(encoding="utf-8")
+    marker = "Return only JSON with this exact envelope"
+    if prompt.split(marker)[0] != shared.split(marker)[0]:
+        raise BundleError("compact extraction prompt must keep the shared extraction instructions")
+    for name, contract in expanded.items():
+        logical = {field["name"]: field["type"] for field in contract["customMemoryType"]["fields"]}
+        stored = compact["storesLogicalTypes"][name]
+        if set(stored["detailsFields"]) != set(logical) - top_level or stored["contract"] != contract["contractId"]:
+            raise BundleError(f"compact layout does not cover every {name} attribute")
+        if any(logical[key] != fields[key] for key in top_level & set(logical)):
+            raise BundleError(f"compact top-level field types differ from {name}")
+    observation_details = compact["storesLogicalTypes"]["organizational_state"]["detailsFields"]
+    if any(f'"{key}"' not in prompt for key in observation_details):
+        raise BundleError("compact extraction prompt does not show every details attribute")
+
+
 def verify_context_pipeline(bundle: Bundle) -> dict[str, Any]:
     """Exercise corpus rendering, extraction contracts, and the real projector offline."""
 
@@ -172,6 +204,7 @@ def verify_context_pipeline(bundle: Bundle) -> dict[str, Any]:
         if attributes.get("relations") != {"edges": []}:
             raise BundleError("document extraction must not invent cross-state relations")
 
+    verify_compact_layout(bundle)
     projections = bundle.projector()(observations, bundle.projection_policy())
     by_state = {item.attributes["state_id"]: item for item in projections}
     source_ids = {
@@ -200,6 +233,7 @@ def verify_context_pipeline(bundle: Bundle) -> dict[str, Any]:
         "bundleValidated": True,
         "sourceEnvelopesRendered": len(documents) == manifest["artifactCount"],
         "customMemoryContract": bool(observations),
+        "compactLayoutContract": True,
         "documentRelationsRemainEmpty": True,
         "latestSourceStateWins": latest_state_wins,
         "representativeCases": all(item["passed"] for item in case_results),

@@ -1,11 +1,17 @@
 {
   "schemaVersion": 1,
-  "dataset": "AMI ES2002 bootstrap smoke subset",
-  "corpusVersion": "ami-es2002-bootstrap-smoke-v2",
-  "artifactCount": 2,
+  "dataset": "AMI ES2002 bootstrap smoke subset plus one synthetic action log",
+  "corpusVersion": "ami-es2002-bootstrap-smoke-v3",
+  "artifactCount": 3,
   "transcriptCount": 0,
   "expectedObservationsPath": "corpus/expected-observations.jsonl",
-  "excludedModalities": ["audio", "video", "image", "whiteboard", "pen"],
+  "excludedModalities": [
+    "audio",
+    "video",
+    "image",
+    "whiteboard",
+    "pen"
+  ],
   "artifacts": [
     {
       "path": "corpus/documents/final-report.md",
@@ -40,6 +46,23 @@
       "mediaType": "text/markdown",
       "contentSha256": "ccf5982a0257eb1178a9e8c008c9b13c77d585b44fcf63a703ab8a31177d01e5",
       "byteCount": 1384
+    },
+    {
+      "path": "corpus/documents/functional-design-actions.md",
+      "documentId": "demo-es2002-functional-design-actions",
+      "revision": "demo-v1",
+      "projectId": "project-ami-es2002",
+      "effectiveDate": "2004-12-13",
+      "observedAt": "2004-12-13T00:00:00Z",
+      "eventSequence": 2,
+      "meetingId": "meeting-ami-es2002b-functional-design",
+      "projectStepId": "project-step-ami-es2002-functional-design",
+      "artifactKind": "action-log",
+      "synthetic": true,
+      "provenance": "Synthetic demo content for the guided tour; not part of the AMI Meeting Corpus.",
+      "mediaType": "text/markdown",
+      "contentSha256": "f801fb0c35aa4867ae4e86433d93d6cc3a0e667ce7d0b191bb6c0c17d4034d11",
+      "byteCount": 1338
     }
   ]
 }

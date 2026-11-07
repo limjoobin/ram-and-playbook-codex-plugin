@@ -9,6 +9,7 @@ from typing import Any, Protocol
 import uuid
 
 from .config import Config, PluginError, VERSION, public_error
+from .layout import decode_record, encode_filter, encode_record
 
 
 class RAMOperations(Protocol):
@@ -201,9 +202,10 @@ class RAMClient:
         namespace_id = record.pop("namespaceId", None)
         if isinstance(namespace_id, str) and namespace_id:
             record["namespace"] = self.namespace_name(namespace_id)
-        return record
+        return decode_record(record)
 
     def _sdk_record(self, memory: dict[str, Any]) -> dict[str, Any]:
+        memory = encode_record(memory, self.config.memory_layout)
         record: dict[str, Any] = {"memory_id": memory["id"], "text": memory["text"]}
         for camel, snake in _RECORD_FIELDS:
             value = memory.get(camel)
@@ -224,7 +226,10 @@ class RAMClient:
             translated["limit"] = request["limit"]
         if request.get("pageToken"):
             translated["cursor"] = request["pageToken"]
-        source = request.get("filter") or {}
+        try:
+            source = encode_filter(request.get("filter") or {}, self.config.memory_layout)
+        except ValueError as error:
+            raise PluginError("ram_contract_error", "This search filters on an attribute the configured memory layout cannot filter on.") from error
         filters: dict[str, Any] = {}
         for camel, snake in _FILTER_FIELDS:
             if camel in source:

@@ -103,7 +103,11 @@ codex plugin marketplace add "$PWD"
 
 ## 2. Create the private configuration
 
-Create the file outside the repository and plugin cache:
+The easiest way is the guided command in a repository checkout,
+`python3 scripts/setup_demo.py` (see the README's Step 9). It asks for each
+value, hides keys as you type, and writes this file with the right
+permissions. To create the file by hand instead, keep it outside the
+repository and plugin cache:
 
 ```sh
 mkdir -p "$HOME/.config/redis-shared-memory"
@@ -159,6 +163,7 @@ The values have these roles:
 | `IRIS_AGENT_PLAYBOOKS_URL` | Shared | Playbooks data-plane base URL only, for example `https://your-playbook-endpoint.redis.io`. Do not include an `/iris/data/v1/agent-playbooks/...` path; the SDK appends it. Loopback `http` is accepted for local development only. |
 | `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID` | Shared | Playbook ID: `pb_` followed by 32 lowercase hex characters. |
 | `IRIS_AGENT_PLAYBOOKS_API_KEY` | Per user when supported | Runtime reader key that authenticates Playbook reads. |
+| `RAM_MEMORY_LAYOUT` | Shared, optional | How management records are stored in RAM custom memory types. `compact` (default) uses the one 9-field `organizational_state` type that the README's console steps create; `expanded` uses the original `organizational_state` and `organizational_state_projection` types. Every participant of a store must use the store's layout. |
 
 Environment administrators may also keep these optional names in the same file:
 `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY` (read/write/publish key used by
