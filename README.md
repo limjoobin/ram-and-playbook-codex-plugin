@@ -382,6 +382,12 @@ for this tour. Send these prompts in order in a **new chat**. If ChatGPT does
 not use the plugin on its own, add "use the Redis Shared Memory plugin" to your
 message.
 
+**The meetings took place in December 2004**, so most answers cite 2004
+dates. Updates you publish are dated today. ChatGPT may point out that the
+records are old and suggest checking whether they still apply. That's
+expected: it reports what the evidence says and doesn't assume nothing has
+changed since.
+
 1. **Recall decisions**
 
    > What are the final decisions regarding color for the Real Reaction project?
@@ -430,7 +436,13 @@ message.
    > action register, completed work, confirmed decisions, conflicts, and agenda
    > topics separate.
 
-   ![An example management review agenda](docs/images/getting-started/local-10-chatgpt-agenda.png)
+   Look for: the trend-watching research under completed work, the other
+   three actions still open with no invented due dates, and topics that
+   each cite their sources.
+
+   ![The agenda's action register: Andrew's research completed, three actions open](docs/images/getting-started/local-10-chatgpt-agenda.png)
+
+   ![The agenda's eight management topics with leads, requested outcomes, and timings](docs/images/getting-started/local-11-chatgpt-agenda-topics.png)
 
 7. **Ask about history**
 
@@ -443,7 +455,8 @@ message.
 
    > Has Laura already published the meeting minutes?
 
-   Look for: Laura's exact minutes action and its current status.
+   Look for: Laura's minutes action, still open because nobody has published a
+   completion for it.
 
 Presenters should also read the
 [full demo runbook](docs/management-agenda-demo-runbook.md).
