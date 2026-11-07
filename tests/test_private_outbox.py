@@ -41,6 +41,20 @@ class FailingRAM(FakePromotionRAM):
         raise self.error
 
 
+class ConflictRAM(FakePromotionRAM):
+    """RAM that already holds the event under this key, so a redelivery returns 409."""
+
+    def __init__(self, stored: FakePromotionRAM) -> None:
+        super().__init__()
+        self.stored = stored
+
+    def add_session_event(self, **values):
+        raise StatusError(409)
+
+    def get_session(self, session_id, timeout_ms=None):
+        return {"sessionId": session_id, "events": self.stored.sessions.get(session_id, [])}
+
+
 class OutboxTests(unittest.TestCase):
     def setUp(self) -> None:
         self.directory = tempfile.TemporaryDirectory()
@@ -95,6 +109,35 @@ class OutboxTests(unittest.TestCase):
         self.assertEqual(len(list((self.outbox.directory / "rejected").iterdir())), 1)
         kinds = [event["kind"] for event in self.ledger.events()]
         self.assertIn("ram_private_event_rejected", kinds)
+
+    def test_duplicate_hook_delivery_never_changes_the_queued_body(self):
+        self.capture.process(prompt())
+        first = self.queued()[0].read_text()
+        self.capture.process(prompt())
+        self.assertEqual(self.queued()[0].read_text(), first)
+        claimed = self.queued()[0]
+        os.replace(claimed, claimed.with_name(f"{claimed.name}.inflight-{os.getpid()}"))
+        self.capture.process(prompt())  # an attempt is in flight under this key
+        self.assertEqual(self.queued(), [])
+
+    def test_conflict_resolves_to_the_event_ram_already_stored(self):
+        self.capture.process(prompt())
+        request = json.loads(self.queued()[0].read_text())["request"]
+        stored = FakePromotionRAM()
+        earlier = stored.add_session_event(**{**request, "created_at": "2026-01-01T00:00:00Z"})
+        self.assertEqual(self.outbox.drain(ConflictRAM(stored), CONFIG), 1)
+        self.assertFalse(self.outbox.blocked)
+        self.assertEqual(self.queued(), [])
+        self.assertFalse((self.outbox.directory / "rejected").exists())
+        recorded = [e["payload"]["ram_event_id"] for e in self.ledger.events() if e["kind"] == "ram_private_event"]
+        self.assertEqual(recorded, [earlier["event"]["eventId"]])
+
+    def test_unresolved_conflict_stays_queued_for_retry(self):
+        self.capture.process(prompt())
+        self.assertEqual(self.outbox.drain(ConflictRAM(FakePromotionRAM()), CONFIG), 0)
+        self.assertTrue(self.outbox.blocked)
+        self.assertEqual(len(self.queued()), 1)
+        self.assertFalse((self.outbox.directory / "rejected").exists())
 
     def test_events_from_another_configuration_are_left_for_their_owner(self):
         self.capture.process(prompt())

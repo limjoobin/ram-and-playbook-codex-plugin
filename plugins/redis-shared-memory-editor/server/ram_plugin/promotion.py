@@ -386,8 +386,14 @@ class PrivateEventOutbox:
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
-            # A duplicate hook delivery replaces the same file: one event per key.
-            os.replace(temporary, self.directory / f"{name}.json")
+            # First write wins: a duplicate hook delivery must not change the body
+            # queued (or in flight) under this idempotency key.
+            if not any(self.directory.glob(f"{name}.json.inflight-*")):
+                try:
+                    os.link(temporary, self.directory / f"{name}.json")
+                except FileExistsError:
+                    pass
+            temporary.unlink()
         except OSError as error:
             try:
                 temporary.unlink()
@@ -450,13 +456,17 @@ class PrivateEventOutbox:
                     result = ram.add_session_event(**request, timeout_ms=timeout_ms)
                 except Exception as error:
                     status = getattr(error, "status_code", None)
-                    if status in {400, 409, 413, 422}:
+                    if status in {400, 413, 422}:
                         # RAM rejected this exact event; retrying cannot succeed.
                         self._set_aside(claimed, f"http_{status}")
                         continue
-                    os.replace(claimed, path)  # transient: retry later with the same key
-                    self.blocked = True
-                    break
+                    stored = self._stored_event(ram, request, timeout_ms) if status == 409 else None
+                    if stored is None:
+                        # Transient, or a 409 we cannot yet resolve: retry later with the same key.
+                        os.replace(claimed, path)
+                        self.blocked = True
+                        break
+                    result = {"event": stored}  # RAM already holds this event under the key
                 ram_event_id = _ram_event_id(result)
                 if ram_event_id:
                     self.ledger.append(
@@ -467,6 +477,31 @@ class PrivateEventOutbox:
                 claimed.unlink(missing_ok=True)
                 delivered += 1
         return delivered
+
+    @staticmethod
+    def _stored_event(ram: Any, request: Mapping[str, Any], timeout_ms: int) -> dict[str, Any] | None:
+        """Find the event RAM already stored for this key after a 409 conflict.
+
+        Role, text, and metadata are deterministic for one hook payload; only
+        the capture time can differ between redeliveries.
+        """
+
+        try:
+            session = ram.get_session(request["session_id"], timeout_ms=timeout_ms)
+        except Exception:
+            return None
+        for event in session.get("events") or []:
+            if not isinstance(event, dict):
+                continue
+            texts = [part.get("text") for part in event.get("content") or [] if isinstance(part, dict)]
+            if (
+                str(event.get("role", "")).upper() == str(request["role"]).upper()
+                and texts == [request["text"]]
+                and event.get("metadata") == request["metadata"]
+                and event.get("actorId", event.get("actor_id")) == request["actor_id"]
+            ):
+                return event
+        return None
 
     def _set_aside(self, claimed: Path, reason: str) -> None:
         """Move a permanently rejected event out of the queue for operator review."""
