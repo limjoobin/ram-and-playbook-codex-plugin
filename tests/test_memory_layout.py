@@ -102,7 +102,13 @@ class StoreSDK:
                 for name, value in clause.get("attributes", {}).items()
             )
 
-        return {"items": [self._wire(item) for item in self.records.values() if matches(item)]}
+        found = [self._wire(item) for item in self.records.values() if matches(item)]
+        start = int(kwargs["request"].get("cursor") or 0)
+        end = start + int(kwargs["request"].get("limit") or 100)
+        page = {"items": found[start:end]}
+        if end < len(found):
+            page["nextCursor"] = str(end)
+        return page
 
     def get_long_term_memory(self, **kwargs):
         return self._wire(self.records[kwargs["memory_id"]])
@@ -212,6 +218,23 @@ class StoreRoundTripTests(unittest.TestCase):
         self.assertTrue(all(state["state_kind"] == "decision" for state in current["states"]))
         history = service.ram_search_state(project_id="project-ami-es2002", view="history")
         self.assertEqual(len(history["observations"]), len(_observations()))
+
+    def test_compact_store_resolves_one_state_by_id_across_pages(self):
+        for layout in ("compact", "expanded"):
+            sdk, _, _ = self._run(layout)
+            config = replace(CONFIG, memory_layout=layout)
+            service = PluginService(config, RAMClient(config, client=sdk), playbook=None, editor=None)
+            states = service.ram_search_state(limit=100)["states"]
+            target = states[-1]["state_id"]
+            original = sdk.search_long_term_memory
+            # Serve one record per page so the match is not on the first page.
+            sdk.search_long_term_memory = lambda **kw: original(**{**kw, "request": {**kw["request"], "limit": 1}})
+            state = service.current_state_by_id(target)
+            sdk.search_long_term_memory = original
+            self.assertEqual(state["state_id"], target, layout)
+            with self.assertRaises(PluginError) as missing:
+                service.current_state_by_id("project-ami-es2002-no-such-state")
+            self.assertEqual(missing.exception.code, "state_not_found")
 
     def test_compact_search_on_a_details_attribute_is_a_contract_error(self):
         ram = RAMClient(CONFIG, client=StoreSDK())

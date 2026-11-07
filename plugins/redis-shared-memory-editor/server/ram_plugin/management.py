@@ -9,6 +9,9 @@ from typing import Any
 from .config import Config, PluginError, VERSION
 from .playbook import ALLOWED_TOOLS, PlaybookClient
 from .ram import RAMClient, _field, _items
+from .layout import COMPACT
+
+_MAX_STATE_PAGES = 50
 
 
 OBSERVATION_TYPE = "organizational_state"
@@ -554,20 +557,36 @@ class PluginService:
 
         if not isinstance(state_id, str) or not state_id:
             raise PluginError("invalid_input", "state_id is required.")
+        # The compact layout keeps state_id inside details, which RAM cannot
+        # filter on, so read the in-scope projections page by page and match
+        # the identifier here.
+        compact = self.config.memory_layout == COMPACT
         request = self._state_request(
             None,
-            {"state_id": state_id},
-            2,
+            {} if compact else {"state_id": state_id},
+            100 if compact else 2,
             None,
             PROJECTION_TYPE,
             PROJECTION_SCHEMA,
         )
-        records = [
-            record
-            for record in _items(self.ram.search(request))
-            if _projection_scope_matches(record, self.config)
-            and _attributes(record).get("state_id") == state_id
-        ]
+        records: list[dict[str, Any]] = []
+        for _ in range(_MAX_STATE_PAGES):
+            page = self.ram.search(request)
+            records.extend(
+                record
+                for record in _items(page)
+                if _projection_scope_matches(record, self.config)
+                and _attributes(record).get("state_id") == state_id
+            )
+            token = page.get("nextPageToken") if compact else None
+            if not token:
+                break
+            request = {**request, "pageToken": token}
+        else:
+            raise PluginError(
+                "ram_contract_error",
+                "Too many current projections to find one state in the compact memory layout.",
+            )
         if not records:
             raise PluginError(
                 "state_not_found",
