@@ -214,8 +214,17 @@ class ReconciliationJob:
         for offset in range(0, len(changed), WRITE_BATCH_SIZE):
             batch = changed[offset : offset + WRITE_BATCH_SIZE]
             response = self.ram.create(batch)
-            if response.get("errors"):
-                raise ReconciliationError("RAM rejected one or more derived projections")
+            pending = {str(payload["id"]): payload for payload in batch}
+            for error in response.get("errors") or []:
+                memory_id = str(error.get("memoryId") or error.get("memory_id") or "")
+                # Bulk create never overwrites; a changed projection that
+                # already exists is replaced in place under the same ID.
+                if error.get("status") != 409 or memory_id not in pending:
+                    raise ReconciliationError("RAM rejected one or more derived projections")
+                try:
+                    self.ram.upsert(pending[memory_id])
+                except Exception as upsert_error:  # noqa: BLE001 - report a stable message
+                    raise ReconciliationError("RAM rejected an updated derived projection") from upsert_error
         for payload in changed:
             self._verify(payload)
         return {**result, "status": "applied", "applied": True}

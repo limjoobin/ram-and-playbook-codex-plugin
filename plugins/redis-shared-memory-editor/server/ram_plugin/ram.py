@@ -274,6 +274,13 @@ class RAMClient:
             self.sdk.bulk_create_long_term_memories(memories=records, timeout_ms=self.timeout_ms)
         )
 
+    def upsert(self, memory: dict[str, Any]) -> dict[str, Any]:
+        """Create or fully replace one record, attributes included."""
+
+        return _dump(
+            self.sdk.upsert_long_term_memory(**self._sdk_record(memory), timeout_ms=self.timeout_ms)
+        )
+
     def update(self, memory_id: str, changes: dict[str, Any]) -> dict[str, Any]:
         arguments: dict[str, Any] = {}
         for camel, snake in (("text", "text"), *_RECORD_FIELDS):

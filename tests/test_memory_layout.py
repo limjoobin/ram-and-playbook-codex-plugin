@@ -69,10 +69,20 @@ class StoreSDK:
         return {"namespace": next(n for n in self.namespaces if n["namespaceId"] == kwargs["namespace_id"])}
 
     def bulk_create_long_term_memories(self, **kwargs):
+        created, errors = [], []
         for item in kwargs["memories"]:
+            if item["memory_id"] in self.records:  # RAM never overwrites on create
+                errors.append({"memoryId": item["memory_id"], "status": 409})
+                continue
             # RAM stores the JSON it was given; a round trip must not depend on object identity.
             self.records[item["memory_id"]] = json.loads(json.dumps(item))
-        return {"created": [item["memory_id"] for item in kwargs["memories"]], "errors": []}
+            created.append(item["memory_id"])
+        return {"created": created, "errors": errors}
+
+    def upsert_long_term_memory(self, **kwargs):
+        kwargs.pop("timeout_ms", None)
+        self.records[kwargs["memory_id"]] = json.loads(json.dumps(kwargs))
+        return self._wire(self.records[kwargs["memory_id"]])
 
     @staticmethod
     def _wire(item: dict) -> dict:
@@ -208,6 +218,20 @@ class StoreRoundTripTests(unittest.TestCase):
             else:
                 self.assertEqual(types, {"organizational_state", "organizational_state_projection"})
         self.assertEqual(results["compact"], results["expanded"])
+
+    def test_a_changed_projection_replaces_the_stored_one(self):
+        for layout in ("compact", "expanded"):
+            sdk, _, _ = self._run(layout)
+            config = replace(CONFIG, memory_layout=layout)
+            stale = next(
+                item for item in sdk.records.values()
+                if str(item["memory_id"]).startswith("projection-")
+            )
+            stale["text"] = "stale projection text"
+            job = ReconciliationJob(config, RAMClient(config, client=sdk), BUNDLE)
+            self.assertEqual(job.run(apply=True)["status"], "applied", layout)
+            self.assertNotEqual(sdk.records[stale["memory_id"]]["text"], "stale projection text")
+            self.assertEqual(job.run(apply=True)["status"], "no_changes", layout)
 
     def test_compact_store_serves_current_state_and_history(self):
         sdk, _, _ = self._run("compact")
