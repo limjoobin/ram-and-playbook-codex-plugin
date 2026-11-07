@@ -210,10 +210,12 @@ changing the tool model.
 ## 3. Install the plugin in ChatGPT desktop
 
 1. Restart ChatGPT desktop after adding the marketplace.
-2. Open the Plugins directory.
-3. Choose **Redis Field Engineering**.
-4. Install **Redis Shared Memory + Playbook**.
-5. Start a new chat.
+2. Open **Settings** → **Plugins** and select **Browse directory**. (The
+   **Marketplace** tab only lists catalogs; it cannot install.)
+3. On the **Personal** tab, under **Redis Field Engineering**, select **+** next
+   to **Redis Shared Memory + Playbook**. Alternatively run
+   `codex plugin add redis-shared-memory-editor@redis-field-engineering`.
+4. Start a new chat.
 
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
 a fact, `editor_update` replaces an existing fact by exact memory ID, and
@@ -405,7 +407,8 @@ checkout alone does not update an already installed copy.
 
 ## Remove
 
-Uninstall **Redis Shared Memory + Playbook** in the Plugins directory, then remove
+Uninstall the plugin with
+`codex plugin remove redis-shared-memory-editor@redis-field-engineering`, then remove
 the marketplace if it is no longer needed:
 
 ```sh

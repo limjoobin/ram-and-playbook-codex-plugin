@@ -302,13 +302,17 @@ Wherever a later step says `codex`, use that same long path in its place.
 ### Step 11: Install the plugin in ChatGPT
 
 1. Quit ChatGPT completely: click its window and press **⌘ Q**. Open it again.
-2. Open the **Plugins** directory and choose **Redis Field Engineering**.
+2. Open **Settings** and choose **Plugins** under **Integrations**. The
+   **Marketplace** tab lists **Redis Field Engineering**, the plugin list you
+   added in Step 10. You can't install from this tab, and its **Upgrade**
+   button stays greyed out. Select **Browse directory** at the top right.
 
-   ![The ChatGPT Plugins directory showing Redis Field Engineering](docs/images/getting-started/local-04-chatgpt-plugins-directory.png)
+   ![ChatGPT Settings, Plugins, showing Redis Field Engineering on the Marketplace tab and the Browse directory button](docs/images/getting-started/local-04-chatgpt-plugin-settings.png)
 
-3. Choose **Redis Shared Memory + Playbook** and select **Install**.
+3. Choose the **Personal** tab. Under **Redis Field Engineering**, select
+   **+** next to **Redis Shared Memory + Playbook**.
 
-   ![The Redis Shared Memory + Playbook plugin page with its Install button](docs/images/getting-started/local-05-chatgpt-plugin-install.png)
+   ![The Personal tab of the plugin directory, with a plus button next to Redis Shared Memory + Playbook](docs/images/getting-started/local-05-chatgpt-plugin-directory.png)
 
 4. Run `python3 scripts/setup_demo.py` once more and press **Return** at each
    prompt to keep your values. This time it also prepares the plugin's helper
@@ -445,7 +449,7 @@ Presenters should also read the
 | Setup: "Agent Memory: RAM rejected the API key" | The Agent Memory key is wrong or expired. Create a new one (Step 6) and run the setup command again. |
 | Setup: "Playbook: … not discovered" | The Skill is not published, or its alias is not `prepare-management-review-agenda`. Repeat Step 7. |
 | Setup: "memory type … is not registered" | The memory type is missing or misnamed. Check Step 4. |
-| The plugin is not in the Plugins directory | Repeat Step 10, then quit (**⌘ Q**) and reopen ChatGPT. |
+| The plugin is not on the **Personal** tab of **Browse directory** | Repeat Step 10, then quit (**⌘ Q**) and reopen ChatGPT. |
 | `configuration_missing` or `configuration_invalid` | Run the setup command again (Step 9). |
 | `authentication_failed` or `playbook_authentication_failed` | A key is wrong or expired. Create a new one and run the setup command again. |
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
@@ -462,8 +466,9 @@ For every error code and more detail, see the troubleshooting table in
   `codex plugin remove redis-shared-memory-editor@redis-field-engineering` and
   `codex plugin add redis-shared-memory-editor@redis-field-engineering`. Quit
   and reopen ChatGPT.
-- **Remove:** uninstall **Redis Shared Memory + Playbook** in the Plugins
-  directory, then run
+- **Remove:** run
+  `codex plugin remove redis-shared-memory-editor@redis-field-engineering`,
+  then
   `codex plugin marketplace remove redis-field-engineering`. Your settings file
   stays on your Mac until you delete it.
 
