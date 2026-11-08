@@ -257,7 +257,9 @@ tools and hooks out of other projects, `scripts/setup_demo.py` sets
 `~/.codex/config.toml` (after backing it up), and the repository's
 `.codex/config.toml` sets `enabled = true`. Codex honours a project's settings
 only once that folder is trusted, and project enablement needs Codex 0.151.0
-or later for a local marketplace. Start chats in the project folder.
+or later for a local marketplace. In ChatGPT desktop, create a project for
+the folder (**Choose project** → **New project**, then add the folder under
+**Source folders**) and start chats in that project.
 
 Review the installed hooks before testing private capture. ChatGPT desktop
 shows **Review hooks** on the first message after installation, listing

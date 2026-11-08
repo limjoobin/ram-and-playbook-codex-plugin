@@ -356,16 +356,27 @@ the hooks.
 ### Step 13: Check the connection
 
 1. Quit ChatGPT completely (**⌘ Q**) and open it again.
-2. Start a **new chat in the project folder**, `ram-and-playbook-codex-plugin`.
-   The plugin is switched on only there. If ChatGPT asks whether to trust the
+2. Create a ChatGPT project for the project folder. The plugin is switched on
+   only in chats there.
+   1. Above the message box, click **Choose project**, then **New project**.
+
+      ![The Choose project button above the ChatGPT message box](docs/images/getting-started/local-07-chatgpt-choose-project.png)
+
+   2. Name it, for example `Real Reaction demo`. Under **Source folders**,
+      click **Add** and choose the `ram-and-playbook-codex-plugin` folder.
+      Click **Create project**.
+
+      ![The Create project dialog with a name field and Source folders](docs/images/getting-started/local-07b-chatgpt-create-project.png)
+
+3. Start a new chat in that project. If ChatGPT asks whether to trust the
    folder, choose to trust it; ChatGPT ignores the folder's settings until you
    do. Send:
 
    > Check the Redis Shared Memory connection status.
 
-3. If ChatGPT shows **Review hooks**, allow both hooks as described in
+4. If ChatGPT shows **Review hooks**, allow both hooks as described in
    Step 12.
-4. ChatGPT may ask permission before using the plugin. Allow it.
+5. ChatGPT may ask permission before using the plugin. Allow it.
 
    ![ChatGPT asking permission to use a Redis Shared Memory tool](docs/images/getting-started/local-08-chatgpt-tool-approval.png)
 
@@ -385,7 +396,8 @@ You are set up. 🎉
 The demo data is the fictional **Real Reaction** team designing a TV remote
 control, from the [AMI Meeting Corpus](https://groups.inf.ed.ac.uk/ami/corpus/)
 kick-off minutes and final report, plus one short synthetic action log written
-for this tour. Send these prompts in order in a **new chat**. If ChatGPT does
+for this tour. Send these prompts in order in a **new chat in the project you
+created in Step 13**. If ChatGPT does
 not use the plugin on its own, add "use the Redis Shared Memory plugin" to your
 message.
 
@@ -520,8 +532,8 @@ Presenters should also read the
 | Setup: "Playbook: … not discovered" | The Skill is not published, or its alias is not `prepare-management-review-agenda`. Repeat Step 7. |
 | Setup: "memory type … is not registered" | The memory type is missing or misnamed. Check Step 4. |
 | The plugin is not on the **Personal** tab of **Browse directory** | Repeat Step 10, then quit (**⌘ Q**) and reopen ChatGPT. |
-| ChatGPT doesn't use the plugin, or says its tools aren't available | Start the chat in the project folder and trust that folder (Step 13). The plugin is switched off everywhere else. |
-| "The exact statement was not found in this user's private hook capture" | The chat isn't running in the project folder, so your message wasn't captured. Start a new chat there (Step 13) and send the update again. |
+| ChatGPT doesn't use the plugin, or says its tools aren't available | Start the chat in the project you created in Step 13, and trust its folder if asked. The plugin is switched off everywhere else. |
+| "The exact statement was not found in this user's private hook capture" | The chat isn't in the project you created in Step 13, so your message wasn't captured. Start a new chat in that project and send the update again. |
 | `configuration_missing` or `configuration_invalid` | Run the setup command again (Step 9). |
 | `authentication_failed` or `playbook_authentication_failed` | A key is wrong or expired. Create a new one and run the setup command again. |
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
