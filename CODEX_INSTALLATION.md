@@ -78,6 +78,13 @@ every approved laptop. A loopback `http://127.0.0.1` or `http://localhost`
 endpoint is accepted only for local development and cannot provide a shared
 team service across laptops. Customer rollout endpoints should use HTTPS.
 
+In a repository checkout, `python3 scripts/setup_demo.py` does steps 1 to 4
+and the project scoping in step 5 in one run: it writes the configuration, adds
+the checkout as the marketplace, installs or refreshes the plugin, limits it to
+the project folder, offers to trust the folder, and installs the runtime. Quit
+ChatGPT desktop first. `--remove` uninstalls the plugin and marketplace again.
+The steps below are the manual equivalent.
+
 ## 1. Add the marketplace
 
 The current development ref is:
@@ -221,12 +228,25 @@ changing the tool model.
 
 ## 3. Install the plugin in ChatGPT desktop
 
+Run `codex plugin add redis-shared-memory-editor@redis-field-engineering`
+with ChatGPT desktop closed, then open it. Running the same command again
+refreshes the installed copy after an update. If `codex` is not on your
+`PATH`, use the copy inside the app,
+`/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex`.
+
+To install from the app instead:
+
 1. Restart ChatGPT desktop after adding the marketplace.
 2. Open **Settings** → **Plugins** and select **Browse directory**. (The
    **Marketplace** tab only lists catalogs; it cannot install.)
+
+   ![ChatGPT Settings, Plugins, with the Browse directory button](docs/images/getting-started/local-04-chatgpt-plugin-settings.png)
+
 3. On the **Personal** tab, under **Redis Field Engineering**, select **+** next
-   to **Redis Shared Memory + Playbook**. Alternatively run
-   `codex plugin add redis-shared-memory-editor@redis-field-engineering`.
+   to **Redis Shared Memory + Playbook**.
+
+   ![The Personal tab of the plugin directory](docs/images/getting-started/local-05-chatgpt-plugin-directory.png)
+
 4. Start a new chat.
 
 Keep normal approval prompts enabled for write tools. `editor_publish` creates
@@ -267,7 +287,8 @@ tools and hooks out of other projects, `scripts/setup_demo.py` sets
 `enabled = false` for `redis-shared-memory-editor@redis-field-engineering` in
 `~/.codex/config.toml` (after backing it up), and the repository's
 `.codex/config.toml` sets `enabled = true`. Codex honours a project's settings
-only once that folder is trusted, and project enablement needs Codex 0.151.0
+only once that folder is trusted (setup offers to record
+`trust_level = "trusted"` for the folder in `~/.codex/config.toml`), and project enablement needs Codex 0.151.0
 or later for a local marketplace. In ChatGPT desktop, create a project for
 the folder (**Choose project** → **New project**, then add the folder under
 **Source folders**) and start chats in that project.

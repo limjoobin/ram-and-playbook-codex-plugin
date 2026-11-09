@@ -11,9 +11,12 @@ It asks for the values the console shows, typing keys hidden, and then:
 1. writes ~/.config/redis-shared-memory/editor.env (mode 0600), saving a copy of
    any existing file first;
 2. checks that Agent Memory and the published Playbook Skill are reachable;
-3. loads the demo documents through the MemoryETL extractor and builds the
-   current state; and
-4. pre-installs the plugin runtime if the plugin is already installed.
+3. loads the demo documents through the MemoryETL extractor, moves them into
+   the project's shared namespace, and builds the current state; and
+4. installs (or updates) the plugin in ChatGPT, limits it to this folder,
+   offers to trust the folder, and prepares the plugin's helper program.
+
+Quit ChatGPT before running it. ``--remove`` uninstalls the plugin again.
 
 It never prints a key. Run it again at any time: existing values are offered as
 defaults and documents that are already loaded are skipped.
@@ -270,44 +273,150 @@ def collect(existing: dict[str, str]) -> tuple[dict[str, str], str]:
 # Plugin scope ----------------------------------------------------------------
 
 PLUGIN_SELECTOR = "redis-shared-memory-editor@redis-field-engineering"
+MARKETPLACE = "redis-field-engineering"
+# ChatGPT ships its own codex; prefer it so the plugin is managed by the same version.
+BUNDLED_CODEX = Path("/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex")
+
+
+def _set_in_table(config_toml: Path, section: str, name: str, key: str, value: object) -> str:
+    """Set ``[section."name"] key = value`` in a Codex config.toml, safely.
+
+    Returns "changed", "unchanged", "missing" (no file yet), or "manual" when
+    the file cannot be edited without risking a malformed or duplicate table.
+    """
+
+    import json
+    import tomllib
+
+    try:
+        text = config_toml.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return "missing"
+    try:
+        current = tomllib.loads(text).get(section, {}).get(name)
+    except tomllib.TOMLDecodeError:
+        return "manual"
+    if isinstance(current, dict) and current.get(key) == value:
+        return "unchanged"
+    header = f"[{section}.{json.dumps(name)}]"
+    literal = json.dumps(value)
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == header), None)
+    if start is None:
+        if current is not None:
+            return "manual"  # the table exists but is spelled differently
+        lines += ["", header, f"{key} = {literal}"]
+    else:
+        end = next(
+            (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+            len(lines),
+        )
+        found = [i for i in range(start + 1, end) if re.match(rf"\s*{re.escape(key)}\s*=", lines[i])]
+        if found:
+            lines[found[0]] = f"{key} = {literal}"
+        else:
+            lines.insert(start + 1, f"{key} = {literal}")
+    updated = "\n".join(lines) + "\n"
+    try:
+        if tomllib.loads(updated).get(section, {}).get(name, {}).get(key) != value:
+            return "manual"
+    except tomllib.TOMLDecodeError:
+        return "manual"
+    backup = config_toml.with_name(f"{config_toml.name}.backup-{datetime.now():%Y%m%d-%H%M%S}")
+    backup.write_text(text, encoding="utf-8")
+    os.chmod(backup, config_toml.stat().st_mode & 0o777)
+    temporary = config_toml.with_name(f".{config_toml.name}.setup")
+    temporary.write_text(updated, encoding="utf-8")
+    os.chmod(temporary, config_toml.stat().st_mode & 0o777)
+    os.replace(temporary, config_toml)
+    return "changed"
 
 
 def disable_account_wide(config_toml: Path) -> str:
     """Turn the plugin off in the user's Codex config; the project turns it on.
 
     The repository's .codex/config.toml enables the plugin, so it runs only in
-    this project (once the project is trusted). Returns "changed", "unchanged",
-    or "missing" when Codex has no user config yet.
+    this project (once the project is trusted).
     """
 
+    return _set_in_table(config_toml, "plugins", PLUGIN_SELECTOR, "enabled", False)
+
+
+def trust_folder(config_toml: Path, folder: Path) -> str:
+    """Mark the project folder trusted, so Codex reads its .codex/config.toml."""
+
+    return _set_in_table(config_toml, "projects", str(folder), "trust_level", "trusted")
+
+
+def folder_trusted(config_toml: Path, folder: Path) -> bool:
+    import tomllib
+
     try:
-        text = config_toml.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return "missing"
-    header = f'[plugins."{PLUGIN_SELECTOR}"]'
-    lines = text.splitlines()
-    start = next((i for i, line in enumerate(lines) if line.strip() == header), None)
-    if start is None:
-        lines += ["", header, "enabled = false"]
-    else:
-        end = next(
-            (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
-            len(lines),
-        )
-        found = [i for i in range(start + 1, end) if re.match(r"\s*enabled\s*=", lines[i])]
-        if found and re.match(r"\s*enabled\s*=\s*false\s*(#.*)?$", lines[found[0]]):
-            return "unchanged"
-        if found:
-            lines[found[0]] = "enabled = false"
-        else:
-            lines.insert(start + 1, "enabled = false")
-    backup = config_toml.with_name(f"{config_toml.name}.backup-{datetime.now():%Y%m%d-%H%M%S}")
-    backup.write_text(text, encoding="utf-8")
-    temporary = config_toml.with_name(f".{config_toml.name}.setup")
-    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.chmod(temporary, config_toml.stat().st_mode & 0o777)
-    os.replace(temporary, config_toml)
-    return "changed"
+        data = tomllib.loads(config_toml.read_text(encoding="utf-8"))
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        return False
+    return data.get("projects", {}).get(str(folder), {}).get("trust_level") == "trusted"
+
+
+def find_codex() -> str | None:
+    import shutil
+
+    if BUNDLED_CODEX.is_file():
+        return str(BUNDLED_CODEX)
+    return shutil.which("codex")
+
+
+def chatgpt_running() -> bool:
+    try:
+        return subprocess.run(["pgrep", "-x", "ChatGPT"], capture_output=True).returncode == 0
+    except OSError:
+        return False
+
+
+def confirm(question: str, default: bool = True) -> bool:
+    answer = input(f"  {question} [{'Y/n' if default else 'y/N'}]: ").strip().lower()
+    return default if not answer else answer.startswith("y")
+
+
+def install_plugin(codex: str, run=subprocess.run, ask_switch=confirm) -> tuple[bool, str]:
+    """Add this folder as the plugin list and install (or refresh) the plugin.
+
+    Installing again refreshes ChatGPT's cached copy, so this also updates it.
+    """
+
+    def codex_run(*arguments: str):
+        return run([codex, *arguments], capture_output=True, text=True)
+
+    added = codex_run("plugin", "marketplace", "add", str(ROOT))
+    if added.returncode != 0 and "different source" in f"{added.stdout}{added.stderr}":
+        say("  ChatGPT's plugin list points at another copy of this project.")
+        if not ask_switch("Point it at this folder instead?"):
+            return False, "The plugin list still points at the other copy. Run setup from that folder instead."
+        codex_run("plugin", "remove", PLUGIN_SELECTOR)
+        codex_run("plugin", "marketplace", "remove", MARKETPLACE)
+        added = codex_run("plugin", "marketplace", "add", str(ROOT))
+    if added.returncode != 0:
+        return False, "Codex could not add this folder as a plugin list."
+    installed = codex_run("plugin", "add", PLUGIN_SELECTOR)
+    if installed.returncode != 0:
+        return False, "Codex could not install the plugin."
+    return True, "installed"
+
+
+def remove_plugin(codex: str, run=subprocess.run) -> bool:
+    removed = run([codex, "plugin", "remove", PLUGIN_SELECTOR], capture_output=True, text=True)
+    listed = run([codex, "plugin", "marketplace", "remove", MARKETPLACE], capture_output=True, text=True)
+    return removed.returncode == 0 or listed.returncode == 0
+
+
+def wait_for_chatgpt_to_quit() -> None:
+    for _ in range(3):
+        if not chatgpt_running():
+            return
+        say("ChatGPT is open. Setup installs the plugin into it, so quit ChatGPT now:")
+        input("click its window, press ⌘ Q, then press Return here. ")
+    if chatgpt_running():
+        say("ChatGPT is still open. Setup continues; quit and reopen ChatGPT when it finishes.")
 
 
 # Service steps ---------------------------------------------------------------
@@ -317,7 +426,10 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--config", help="Settings file to write (default: ~/.config/redis-shared-memory/editor.env)")
     parser.add_argument("--skip-load", action="store_true", help="Do not load the demo documents")
+    parser.add_argument("--remove", action="store_true", help="Remove the plugin from ChatGPT and stop")
     args = parser.parse_args(argv)
+    if args.remove:
+        return remove(args.config)
     ensure_environment(argv)
 
     sys.path[:0] = [str(ROOT), str(SERVER)]
@@ -332,6 +444,7 @@ def main(argv: list[str]) -> int:
     from reconciliation.job import ReconciliationError, ReconciliationJob, adopt_unnamespaced, move_into_namespace
 
     say("Redis Shared Memory + Playbook setup")
+    wait_for_chatgpt_to_quit()
     path = config_path(args.config)
     existing = read_existing(path)
     if existing and "IRIS_AGENT_MEMORY_URL" not in existing:
@@ -436,26 +549,68 @@ def main(argv: list[str]) -> int:
             return 1
         say(f"  ✓ Current state built: {applied['projection_count']} items from {applied['observation_count']} observations.")
 
-    step(5, "Prepare the plugin")
+    step(5, "Install the plugin in ChatGPT")
     codex_home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
+    codex_config = codex_home / "config.toml"
     from ram_plugin.config import VERSION
 
-    launcher = codex_home / "plugins" / "cache" / "redis-field-engineering" / "redis-shared-memory-editor" / VERSION / "server" / "launch.py"
-    if launcher.is_file():
-        scope = disable_account_wide(codex_home / "config.toml")
-        if scope == "changed":
-            say("  ✓ The plugin now runs only in this project folder. Your previous Codex settings were backed up.")
-        elif scope == "unchanged":
-            say("  ✓ The plugin runs only in this project folder.")
-        environment = dict(os.environ, PLUGIN_DATA=str(codex_home / "plugins" / "data" / PLUGIN_ID))
-        result = subprocess.run([sys.executable, "-I", str(launcher), "--install"], env=environment)
-        say("  ✓ Plugin runtime ready." if result.returncode == 0 else "  ✗ The plugin runtime could not be installed.")
+    codex = find_codex()
+    if codex is None:
+        say("  ✗ ChatGPT's codex program was not found. Install the ChatGPT desktop app, then run this again.")
+        return 1
+    installed, problem = install_plugin(codex)
+    if not installed:
+        say(f"  ✗ {problem}")
+        return 1
+    say(f"  ✓ Plugin {VERSION} installed.")
+
+    # Plugins install for the whole account. Switch it off there; the project's
+    # own .codex/config.toml switches it back on in this folder.
+    scope = disable_account_wide(codex_config)
+    if scope in {"changed", "unchanged"}:
+        say("  ✓ It runs only in this project folder. Your other projects don't see it.")
     else:
-        say("  The plugin is not installed in ChatGPT yet. Install it (README Step 11), then run this again")
-        say("  or simply start a chat; the plugin prepares itself on first use.")
+        say(f"  ✗ Could not limit the plugin to this folder; check {codex_config}.")
+        return 1
+
+    if folder_trusted(codex_config, ROOT):
+        say("  ✓ This folder is trusted, so its settings switch the plugin on here.")
+    else:
+        say("  ChatGPT reads this folder's settings, which switch the plugin on here,")
+        say("  only once you trust the folder. Trusting it lets ChatGPT use this project's")
+        say("  .codex settings when you work in this folder.")
+        if confirm("Trust this folder now?"):
+            outcome = trust_folder(codex_config, ROOT)
+            if outcome in {"changed", "unchanged"}:
+                say("  ✓ Folder trusted.")
+            else:
+                say("  ✗ Could not record that; trust the folder when ChatGPT asks.")
+        else:
+            say("  Not trusted. When you open the project in ChatGPT, choose to trust it.")
+
+    launcher = codex_home / "plugins" / "cache" / MARKETPLACE / "redis-shared-memory-editor" / VERSION / "server" / "launch.py"
+    environment = dict(os.environ, PLUGIN_DATA=str(codex_home / "plugins" / "data" / PLUGIN_ID))
+    result = subprocess.run([sys.executable, "-I", str(launcher), "--install"], env=environment)
+    if result.returncode != 0:
+        say("  ✗ The plugin's helper program could not be prepared. It will retry on first use.")
+    else:
+        say("  ✓ Plugin helper program ready.")
 
     say()
-    say("Setup complete. Quit ChatGPT (⌘Q), open it again, and start a new chat.")
+    say("Setup complete. Open ChatGPT and continue with Step 10 of the README.")
+    say("If ChatGPT shows Review hooks, allow the two Redis Shared Memory hooks.")
+    return 0
+
+
+def remove(argv_config: str | None) -> int:
+    say("Remove the Redis Shared Memory + Playbook plugin")
+    wait_for_chatgpt_to_quit()
+    codex = find_codex()
+    if codex is None or not remove_plugin(codex):
+        say("  ✗ Codex could not remove the plugin. It may already be removed.")
+        return 1
+    say("  ✓ Plugin and plugin list removed from ChatGPT.")
+    say(f"  Your settings file {config_path(argv_config)} and the records in Agent Memory are kept.")
     return 0
 
 

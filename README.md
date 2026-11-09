@@ -251,11 +251,17 @@ The plugin only reads from the Playbook, so give it a read-only key.
 
 ### Step 9: Run the setup command
 
-Paste this into Terminal from the project folder:
+This one command connects your Mac to the services and installs the plugin in
+ChatGPT.
 
-```sh
-python3 scripts/setup_demo.py
-```
+1. Quit ChatGPT completely: click its window and press **⌘ Q**. Setup changes
+   ChatGPT's plugin settings, and ChatGPT reads them when it starts. If
+   ChatGPT is still open, setup reminds you.
+2. Paste this into Terminal from the project folder:
+
+   ```sh
+   python3 scripts/setup_demo.py
+   ```
 
 It asks for each value in turn. Keys are not shown as you type.
 
@@ -270,94 +276,32 @@ It asks for each value in turn. Keys are not shown as you type.
 | Playbook API key | Your password manager (Step 8) |
 | Your participant name | Pick `andrew`, `craig`, `david`, or `laura`; each has demo work assigned |
 
-The command then saves your settings to a private file only your user account
-can read, checks both services, loads the three demo documents, and builds the
-current state. Loading the documents takes a few minutes. It finishes with
-**Setup complete**.
+The command then:
+
+- saves your settings to a private file only your user account can read;
+- checks both services;
+- loads the three demo documents into the project's shared space and builds
+  the team's current view. This takes a few minutes;
+- installs the plugin in ChatGPT;
+- limits the plugin to this project folder. ChatGPT installs plugins for your
+  whole account, so without this its tools and hooks would run in all your
+  other projects too. The project's own settings file (`.codex/config.toml`)
+  switches it back on here;
+- asks **Trust this folder now?** Press **Return** for yes. ChatGPT only reads
+  the project's settings file, the one that switches the plugin on, in a
+  folder you trust; and
+- prepares the plugin's helper program, so your first chat isn't slow.
+
+It finishes with **Setup complete**.
 
 ![Terminal showing the setup command finishing with Setup complete](docs/images/getting-started/local-02-terminal-setup-complete.png)
 
 You can run the command again at any time. It offers your saved values as
-defaults and skips documents that are already loaded.
+defaults, skips documents that are already loaded, and refreshes the plugin.
 
-### Step 10: Add the plugin to ChatGPT's plugin list
+### Step 10: Open the project in ChatGPT
 
-Paste this into Terminal from the project folder:
-
-```sh
-codex plugin marketplace add "$PWD" && codex plugin marketplace list
-```
-
-The list should include **redis-field-engineering**.
-
-![Terminal showing redis-field-engineering in the marketplace list](docs/images/getting-started/local-03-terminal-marketplace-added.png)
-
-**If you see "command not found: codex":** use the copy of `codex` that ships
-inside the ChatGPT app instead:
-
-```sh
-"/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex" plugin marketplace add "$PWD"
-```
-
-Wherever a later step says `codex`, use that same long path in its place.
-
-### Step 11: Install the plugin in ChatGPT
-
-1. Quit ChatGPT completely: click its window and press **⌘ Q**. Open it again.
-2. Open **Settings** and choose **Plugins** under **Integrations**. The
-   **Marketplace** tab lists **Redis Field Engineering**, the plugin list you
-   added in Step 10. You can't install from this tab, and its **Upgrade**
-   button stays greyed out. Select **Browse directory** at the top right.
-
-   ![ChatGPT Settings, Plugins, showing Redis Field Engineering on the Marketplace tab and the Browse directory button](docs/images/getting-started/local-04-chatgpt-plugin-settings.png)
-
-3. Choose the **Personal** tab. Under **Redis Field Engineering**, select
-   **+** next to **Redis Shared Memory + Playbook**.
-
-   ![The Personal tab of the plugin directory, with a plus button next to Redis Shared Memory + Playbook](docs/images/getting-started/local-05-chatgpt-plugin-directory.png)
-
-4. Quit ChatGPT (**⌘ Q**). Run `python3 scripts/setup_demo.py` once more and
-   press **Return** at each prompt to keep your values. This time it also:
-   - limits the plugin to this project folder. ChatGPT installs plugins for
-     your whole account, so without this its tools and hooks would run in all
-     your other projects too. The project's own settings file
-     (`.codex/config.toml`) switches it back on here;
-   - prepares the plugin's helper program, so your first chat isn't slow.
-
-### Step 12: Allow private capture
-
-The plugin includes two small "hooks". When you send ChatGPT a message, a hook
-keeps a private copy, and the plugin saves it to **your own personal memory
-space** so the assistant
-can turn a reported update into a proposal for you to review. Hooks never
-share anything with your team, and ChatGPT will not run them until you approve
-them.
-
-You don't need to do anything yet. The first time you send a message after
-installing the plugin, which happens in Step 13, ChatGPT shows **Review hooks**
-with the plugin's two hooks:
-
-- **Capturing private memory intent** runs when you send a message.
-- **Recording private session end** runs when a chat ends.
-
-![ChatGPT's Review hooks dialog with Allow all and Allow selected](docs/images/getting-started/local-06-chatgpt-review-hooks.png)
-
-1. To see what a hook runs, open it with the arrow on the right. Both run
-   `capture.py` from the Redis Shared Memory + Playbook plugin. They only write
-   to a private file on your Mac and make no network calls. The plugin itself
-   sends your messages to your personal memory space.
-2. Select **Allow all**. If the dialog also lists hooks from other plugins,
-   tick only these two and select **Allow selected**.
-
-If you choose **Not now**, the plugin still works, but it won't capture your
-updates. You can allow the hooks later in ChatGPT's settings.
-
-You only do this once. You are asked again only if a future version changes
-the hooks.
-
-### Step 13: Check the connection
-
-1. Quit ChatGPT completely (**⌘ Q**) and open it again.
+1. Open ChatGPT.
 2. Create a ChatGPT project for the project folder. The plugin is switched on
    only in chats there.
    1. Above the message box, click **Choose project**, then **New project**.
@@ -371,14 +315,38 @@ the hooks.
       ![The Create project dialog with a name field and Source folders](docs/images/getting-started/local-07b-chatgpt-create-project.png)
 
 3. Start a new chat in that project. If ChatGPT asks whether to trust the
-   folder, choose to trust it; ChatGPT ignores the folder's settings until you
-   do. Send:
+   folder, choose to trust it. Send:
 
    > Check the Redis Shared Memory connection status.
 
-4. If ChatGPT shows **Review hooks**, allow both hooks as described in
-   Step 12.
-5. ChatGPT may ask permission before using the plugin. Allow it.
+### Step 11: Allow private capture and check the connection
+
+The plugin includes two small "hooks". When you send ChatGPT a message, a hook
+keeps a private copy, and the plugin saves it to **your own personal memory
+space** so the assistant
+can turn a reported update into a proposal for you to review. Hooks never
+share anything with your team, and ChatGPT will not run them until you approve
+them.
+
+After your first message, ChatGPT shows **Review hooks** with the plugin's two
+hooks:
+
+- **Capturing private memory intent** runs when you send a message.
+- **Recording private session end** runs when a chat ends.
+
+![ChatGPT's Review hooks dialog with Allow all and Allow selected](docs/images/getting-started/local-06-chatgpt-review-hooks.png)
+
+1. To see what a hook runs, open it with the arrow on the right. Both run
+   `capture.py` from the Redis Shared Memory + Playbook plugin. They only write
+   to a private file on your Mac and make no network calls. The plugin itself
+   sends your messages to your personal memory space.
+2. Select **Allow all**. If the dialog also lists hooks from other plugins,
+   tick only these two and select **Allow selected**.
+
+   If you choose **Not now**, the plugin still works, but it won't capture
+   your updates. You can allow the hooks later in ChatGPT's settings. You are
+   asked again only if a future version changes the hooks.
+3. ChatGPT may ask permission before using the plugin. Allow it.
 
    ![ChatGPT asking permission to use a Redis Shared Memory tool](docs/images/getting-started/local-08-chatgpt-tool-approval.png)
 
@@ -399,7 +367,7 @@ The demo data is the fictional **Real Reaction** team designing a TV remote
 control, from the [AMI Meeting Corpus](https://groups.inf.ed.ac.uk/ami/corpus/)
 kick-off minutes and final report, plus one short synthetic action log written
 for this tour. Send these prompts in order in a **new chat in the project you
-created in Step 13**. If ChatGPT does
+created in Step 10**. If ChatGPT does
 not use the plugin on its own, add "use the Redis Shared Memory plugin" to your
 message.
 
@@ -519,19 +487,19 @@ Presenters should also read the
 | What you see | What to do |
 | --- | --- |
 | Python is `TOO OLD` | Install Python from python.org (Step 1), then reopen Terminal. |
-| `command not found: codex` | Use the long path shown in Step 10. |
+| Setup: "ChatGPT's codex program was not found" | Install the ChatGPT desktop app in **Applications**, then run the setup command again. |
 | The setup command says a value does not look right | Copy it again from the console. The command repairs extra spaces, quotes, and pasted paths, and asks again. |
 | Setup: "Agent Memory: RAM rejected the API key" | The Agent Memory key is wrong or expired. Create a new one (Step 6) and run the setup command again. |
 | Setup: "Playbook: … not discovered" | The Skill is not published, or its alias is not `prepare-management-review-agenda`. Repeat Step 7. |
 | Setup: "memory type … is not registered" | The memory type is missing or misnamed. Check Step 4. |
-| The plugin is not on the **Personal** tab of **Browse directory** | Repeat Step 10, then quit (**⌘ Q**) and reopen ChatGPT. |
-| ChatGPT doesn't use the plugin, or says its tools aren't available | Start the chat in the project you created in Step 13, and trust its folder if asked. The plugin is switched off everywhere else. |
-| "The exact statement was not found in this user's private hook capture" | The chat isn't in the project you created in Step 13, so your message wasn't captured. Start a new chat in that project and send the update again. |
+| Setup: "ChatGPT's plugin list points at another copy of this project" | You downloaded the project twice. Answer **y** to use this folder, or run setup from the other folder. |
+| ChatGPT doesn't use the plugin, or says its tools aren't available | Start the chat in the project you created in Step 10, and trust its folder if asked. If ChatGPT was open while setup ran, quit (**⌘ Q**) and reopen it. The plugin is switched off everywhere else. |
+| "The exact statement was not found in this user's private hook capture" | The chat isn't in the project you created in Step 10, so your message wasn't captured. Start a new chat in that project and send the update again. |
 | `configuration_missing` or `configuration_invalid` | Run the setup command again (Step 9). |
 | `authentication_failed` or `playbook_authentication_failed` | A key is wrong or expired. Create a new one and run the setup command again. |
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
-| The first chat is very slow or times out | Run the setup command again (Step 11, item 4). |
-| Your updates are not being captured | Allow the plugin's two hooks in ChatGPT's settings (Step 12), then quit and reopen ChatGPT. |
+| The first chat is very slow or times out | Run the setup command again (Step 9); it prepares the plugin's helper program. |
+| Your updates are not being captured | Allow the plugin's two hooks in ChatGPT's settings (Step 11), then quit and reopen ChatGPT. |
 | ChatGPT says the update was saved but the current view will update later | Paste `.venv/bin/python scripts/reconcile_management_state.py --apply` into Terminal from the project folder. Do not publish the update again. |
 
 For every error code and more detail, see the troubleshooting table in
@@ -539,15 +507,18 @@ For every error code and more detail, see the troubleshooting table in
 
 ## Updating or removing the plugin
 
-- **Update:** in the project folder, run `git pull`, then
-  `codex plugin remove redis-shared-memory-editor@redis-field-engineering` and
-  `codex plugin add redis-shared-memory-editor@redis-field-engineering`. Quit
-  and reopen ChatGPT.
-- **Remove:** run
-  `codex plugin remove redis-shared-memory-editor@redis-field-engineering`,
-  then
-  `codex plugin marketplace remove redis-field-engineering`. Your settings file
-  stays on your Mac until you delete it.
+- **Update:** quit ChatGPT (**⌘ Q**), then paste this into Terminal from the
+  project folder and press **Return** at each question to keep your values:
+
+  ```sh
+  git pull && python3 scripts/setup_demo.py
+  ```
+
+  Open ChatGPT again. If the new version changed the hooks, ChatGPT shows
+  **Review hooks** again; allow them as in Step 11.
+- **Remove:** quit ChatGPT, then run `python3 scripts/setup_demo.py --remove`.
+  Your settings file stays on your Mac until you delete it, and nothing is
+  deleted from Agent Memory.
 
 ## Privacy in one paragraph
 
