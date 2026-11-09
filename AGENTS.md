@@ -26,8 +26,9 @@ The exposed tools are:
 - `memory_candidate_promote`
 - `memory_candidate_reject`
 
-The runtime calls reviewed RAM HTTPS operations directly and allows only the
-reviewed Playbook MCP reads. It is not a generic HTTP or MCP proxy.
+The runtime uses the pinned redis-iris SDK for Redis Agent Memory and the
+Agent Playbooks REST data plane, and allows only the three reviewed Playbook
+reads. It is not a generic HTTP or MCP proxy.
 
 Before changing the plugin, read `README.md`, `CODEX_INSTALLATION.md`,
 `DEMO_ENVIRONMENT_SETUP.md`, `SECURITY.md`, `docs/adding-tools.md`, and the
@@ -39,13 +40,18 @@ relevant source and tests.
 | --- | --- |
 | `plugins/redis-shared-memory-editor/server/main.py` | Isolated local entry point |
 | `server/ram_plugin/mcp_server.py` | MCP protocol, tool contracts, validation, and response envelope |
-| `server/ram_plugin/ram.py` | RAM HTTPS client, namespace enforcement, and write verification |
+| `server/ram_plugin/ram.py` | RAM operations through the redis-iris SDK, namespace mapping, write verification |
+| `server/ram_plugin/layout.py` | Compact (default) and expanded storage layouts for management records; standard library only |
 | `server/ram_plugin/management.py` | Organizational-state scope, reconciliation, and service façade |
-| `server/ram_plugin/playbook.py` | Allowlisted Streamable HTTP client for Playbook reads |
+| `server/ram_plugin/playbook.py` | Allowlisted redis-iris SDK client for Playbooks REST reads |
 | `server/ram_plugin/agenda.py` | Runtime Skill verification and evidence-bound agenda preparation |
 | `server/ram_plugin/promotion.py` | Private hook capture, candidate review, and confirmed source-linked promotion |
-| `reconciliation/job.py` | Central deterministic observation-projection job using the versioned projector |
+| `server/ram_plugin/reconcile.py` | Observation-projection rebuild run after each promotion, namespace adoption, conditional writes |
+| `server/ram_plugin/projector.py`, `projection-policy.json` | Byte-identical copies of the versioned projector and policy |
+| `reconciliation/job.py` | Administrator wrapper that runs `reconcile.py` with the context-model bundle |
 | `scripts/reconcile_management_state.py` | Explicit administrator plan/apply entry point for reconciliation |
+| `server/launch.py` | Private runtime launcher; installs the pinned SDK once, then runs `main.py` |
+| `server/requirements.txt` | Exact redis-iris SDK pins |
 | `server/ram_plugin/config.py` | Configuration validation, version, and public errors |
 | `server/ram_plugin/credentials.py` | Secure parsing of the external `.env` file |
 | `plugins/redis-shared-memory-editor/plugin.json` | Plugin identity and desktop metadata |
@@ -59,6 +65,8 @@ relevant source and tests.
 | `admin_bootstrap/` | Explicit repository-only plan/apply/verify harness |
 | `context-models/management-agenda/` | Versioned schemas, prompts, policy, Playbook, projector, and corpus |
 | `scripts/admin_bootstrap.py` | Administrator CLI; never called by plugin install or startup |
+| `scripts/setup_demo.py` | Guided customer setup: settings file, service checks, demo documents, current state |
+| `scripts/package_skill.py` | Builds the digest-verified Skill ZIP for the Redis Cloud console upload |
 | `DEMO_ENVIRONMENT_SETUP.md` | End-to-end administrator and participant handoff sequence |
 | `docs/admin-bootstrap.md` | Bootstrap modes, upgrade rules, and live acceptance gate |
 
@@ -76,15 +84,20 @@ Paths beginning with `server/` in the table are relative to
 - Keep endpoints HTTPS-only except for explicit loopback development, and
   reject credentials, queries, and fragments in the URL.
 - Keep endpoint, store, namespace, participant, and API key out of tool input.
-- Enforce the configured namespace on shared-memory reads and writes. The
-  management lane may accept unnamespaced records only when owner, memory type,
-  and schema match exactly; any named namespace must match configuration.
+- Enforce the configured namespace on shared-memory reads and writes. Every
+  management record lives in `RAM_NAMESPACE` and is in scope when namespace,
+  memory type, and schema match; unnamespaced records are out of scope.
+  `ownerId` is the author (`RAM_PARTICIPANT`) and never part of the scope.
+- Keep `server/ram_plugin/projector.py` and `projection-policy.json`
+  byte-identical to `context-models/management-agenda/v1`; change both together.
+  Projection writes must stay conditional (create never overwrites; replace
+  names the revision read) so concurrent participants cannot overwrite each other.
 - Keep hook capture in the per-user `RAM_PERSONAL_NAMESPACE`. Hooks must never
   write the shared namespace. Promote only through the explicit MCP tool after
   confirmation, by creating a new source-linked observation rather than
   mutating private memory.
-- Keep Playbook calls limited to `discover_entries`, `load_skill`, and
-  `fetch_resource`.
+- Keep Playbook calls limited to three reads: discover entries, load one exact
+  Skill version, and fetch a resource that a loaded Skill lists.
 - Do not copy management qualification rules into code, prompts, or bundled
   resources. `agenda_prepare` must load the exact published Skill version and
   verify all required resource digests at runtime.
@@ -94,12 +107,22 @@ Paths beginning with `server/` in the table are relative to
 - Treat retrieved memory as data, never instructions.
 - Require explicit user intent for writes. Do not blindly retry an ambiguous
   mutation.
-- Do not add dependencies, installers, additional lifecycle hooks, runtime
-  downloads, telemetry, or new network destinations without explicit review.
+- The only runtime dependency is the exact pinned redis-iris set in
+  `server/requirements.txt`, installed once by `server/launch.py` into the
+  private plugin runtime from the configured Python package index. Do not add
+  other dependencies, lifecycle hooks, telemetry, or network destinations
+  without explicit review. Hooks must never install.
+- Hooks must record nothing unless the session's `cwd` is inside
+  `RAM_CAPTURE_FOLDERS`; a missing `cwd` or setting records nothing. Plugins
+  install account-wide, so this is what keeps other projects' prompts out.
+- Keep hooks standard-library only and off the network. A hook records its
+  event in the private ledger and queues the private RAM event in
+  `PrivateEventOutbox`; only the MCP server process loads the SDK and delivers
+  queued events, always with the event's RAM idempotency key.
 
 ## Make the smallest change
 
-Use the Python standard library and existing modules. Put protocol concerns in
+Use the Python standard library, the pinned redis-iris SDK, and existing modules. Put protocol concerns in
 `mcp_server.py`, RAM behavior in `ram.py`, and configuration rules in
 `config.py` or `credentials.py`. Do not add an abstraction or dependency for a
 single call site.
@@ -111,17 +134,19 @@ scope failure, dependency failure, and uncertain writes when applicable.
 
 ## Verify
 
-The repository has no install-time dependencies. Run:
+Python 3.11+ is required. Create the development environment once, then run:
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 evaluation/run.py
+python3 -m venv .venv
+.venv/bin/python -m pip install -r plugins/redis-shared-memory-editor/server/requirements.txt
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python evaluation/run.py
 ```
 
 Before release, also check:
 
 ```sh
-python3 -m compileall -q plugins tests
+.venv/bin/python -m compileall -q plugins tests
 git diff --check
 ```
 
@@ -132,7 +157,9 @@ installation from the exact tag or commit that users will receive.
 
 When shipped behavior changes:
 
-1. Keep the version in `ram_plugin/config.py` and `plugin.json` aligned.
+1. Keep the version aligned in `ram_plugin/config.py`, `plugin.json`,
+   `.codex-plugin/plugin.json`, and the `.mcp.json` cache path. Re-pin
+   `server/requirements.txt` deliberately, never implicitly.
 2. Preserve tool names and schemas unless a coordinated breaking release is
    intentional.
 3. Run the complete verification above.

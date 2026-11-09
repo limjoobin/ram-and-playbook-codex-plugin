@@ -50,8 +50,10 @@ def main(argv: list[str] | None = None) -> int:
     from admin_bootstrap.bundle import Bundle, BundleError
     from admin_bootstrap.context_pipeline import ingestion_documents
     from admin_bootstrap.memory_etl import MemoryETLError, ingest_documents
+    from ram_plugin.config import error_chain, error_status
     from ram_plugin.credentials import load_credential_file
-    from ram_plugin.ram import RAMClient, RAMHTTPError
+    from ram_plugin.ram import RAMClient
+    from reconciliation.job import ReconciliationError, move_into_namespace
 
     try:
         bundle = Bundle.load(ROOT / "context-models" / "management-agenda" / "v1")
@@ -67,37 +69,53 @@ def main(argv: list[str] | None = None) -> int:
             }
         else:
             config = load_credential_file(args.config)
+            ram = RAMClient(config)
             result = ingest_documents(
-                RAMClient(config),
+                ram,
                 documents,
-                owner_id=config.agenda_owner_id,
+                owner_id=config.participant,
                 extractor_id=args.extractor_id,
                 timeout_seconds=args.timeout_seconds,
                 poll_seconds=args.poll_seconds,
                 rehydration_id=args.rehydration_id,
             )
-    except (BundleError, MemoryETLError) as error:
+            # MemoryETL places output by the extractor's settings; every
+            # management record belongs in the shared namespace.
+            created = [memory_id for item in result["artifacts"] for memory_id in item.get("memoryIds", [])]
+            result["movedToNamespace"] = len(move_into_namespace(config, ram, created))
+    except (BundleError, MemoryETLError, ReconciliationError) as error:
         result = {"ok": False, "status": "failed", "message": str(error)}
-    except RAMHTTPError as error:
-        problem = f" ({error.error_type})" if error.error_type else ""
-        if error.status_code == 409:
+    except Exception as error:
+        # The SDK can wrap the HTTP error; read the status and type through the cause chain.
+        status = error_status(error)
+        error_type = next(
+            (
+                value
+                for item in error_chain(error)
+                if isinstance(value := getattr(getattr(item, "data", None), "type", None), str) and value
+            ),
+            None,
+        )
+        problem = f" ({error_type})" if isinstance(error_type, str) and error_type else ""
+        if status == 409:
             message = (
                 "RAM rejected the MemoryETL request as a conflict"
                 f"{problem}. The idempotency key or immutable document revision is "
                 "already reserved in this store."
             )
-        else:
+            result = {"ok": False, "status": "failed", "message": message}
+        elif isinstance(status, int):
             message = (
                 f"RAM rejected the MemoryETL request with HTTP status "
-                f"{error.status_code}{problem}."
+                f"{status}{problem}."
             )
-        result = {"ok": False, "status": "failed", "message": message}
-    except Exception:
-        result = {
-            "ok": False,
-            "status": "failed",
-            "message": "Corpus ingestion failed. Check the private configuration, extractor, and RAM availability before retrying.",
-        }
+            result = {"ok": False, "status": "failed", "message": message}
+        else:
+            result = {
+                "ok": False,
+                "status": "failed",
+                "message": "Corpus ingestion failed. Check the private configuration, extractor, and RAM availability before retrying.",
+            }
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if result.get("ok") else 1
 

@@ -21,7 +21,15 @@ from ram_plugin.promotion import (  # noqa: E402
     PromotionLedger,
     PromotionService,
 )
-from ram_plugin.ram import RAMHTTPError  # noqa: E402
+
+
+class RAMHTTPError(Exception):
+    """Stand-in for a redis-iris SDK HTTP error, which exposes status_code."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+
 from reconciliation.job import ReconciliationJob  # noqa: E402
 
 
@@ -33,7 +41,8 @@ CONFIG = Config(
     participant="andrew",
     api_key="secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="secret",
 )
 
@@ -96,6 +105,7 @@ class FakeRAM:
     def __init__(self, records: list[dict]) -> None:
         self.records = {str(item["id"]): item for item in records}
         self.created: list[list[dict]] = []
+        self.upserted: list[dict] = []
         self.sessions: dict[str, list[dict]] = {}
         self.idempotent_events: dict[str, dict] = {}
 
@@ -107,7 +117,7 @@ class FakeRAM:
             item
             for item in self.records.values()
             if item.get("memoryType") == memory_type
-            and item.get("ownerId") == CONFIG.agenda_owner_id
+            and item.get("namespace") == filters["namespace"]["eq"]
             and item.get("attributes", {}).get("schema_version") == schema
         ]
         return {"items": items}
@@ -117,6 +127,12 @@ class FakeRAM:
         self.created.append(batch)
         self.records.update({str(item["id"]): item for item in batch})
         return {"created": [item["id"] for item in batch], "errors": []}
+
+    def upsert(self, memory, expected_revision=None):
+        item = dict(memory)
+        self.upserted.append(item)
+        self.records[str(item["id"])] = item
+        return item
 
     def get(self, memory_id):
         if memory_id not in self.records:
@@ -140,7 +156,7 @@ class FakeRAM:
         self.idempotent_events[key] = result
         return result
 
-    def get_session(self, session_id, timeout_ms=None):
+    def get_session(self, session_id, timeout_ms=None, include_summarised=False):
         return {"events": list(self.sessions.get(session_id, []))}
 
 
@@ -207,8 +223,9 @@ class ReconciliationTests(unittest.TestCase):
 
         applied = job.run(apply=True, wait_for_candidate=candidate_id)
         self.assertEqual(applied["status"], "applied")
-        self.assertEqual(len(ram.created), 1)
-        self.assertEqual(ram.created[0][0]["attributes"]["lifecycle_status"], "completed")
+        self.assertEqual(ram.created, [])  # the projection exists, so it is replaced
+        self.assertEqual(ram.upserted[0]["attributes"]["lifecycle_status"], "completed")
+        self.assertEqual(ram.upserted[0]["ownerId"], prior["ownerId"])  # replacing keeps the owner
 
     def test_confirmed_fulfills_relation_completes_action_projection(self):
         action_id = "project-ami-es2002-action-decide-target-audience"
@@ -714,9 +731,10 @@ class ReconciliationTests(unittest.TestCase):
                 hook_result["hookSpecificOutput"]["additionalContext"],
             )
 
+            job = ReconciliationJob(CONFIG, ram, self.bundle)
             facade = PromotionFacade(
                 CurrentStateBase(),
-                PromotionService(CONFIG, ram, ledger),
+                PromotionService(CONFIG, ram, ledger, refresh=job.refresh_after_promotion),
             )
             proposed = call_tool(
                 "memory_state_update_propose",
@@ -750,6 +768,8 @@ class ReconciliationTests(unittest.TestCase):
                 lambda: facade,
             )
             self.assertFalse(promoted["isError"])
+            # Publishing updates the team's current view at once.
+            self.assertEqual(promoted["structuredContent"]["projection_status"], "current")
             extracted_id = promoted["structuredContent"]["observation_memory_id"]
             extracted_attributes = ram.records[extracted_id]["attributes"]
 
@@ -769,17 +789,15 @@ class ReconciliationTests(unittest.TestCase):
         self.assertEqual(extracted_attributes["observed_at"], capture_time)
         self.assertEqual(extracted_attributes["resolved_at"], completion_time)
 
-        job = ReconciliationJob(CONFIG, ram, self.bundle)
-        applied = job.run(apply=True, wait_for_candidate=candidate_id)
-        self.assertEqual(applied["status"], "applied")
-        self.assertTrue(applied["candidate_visible"])
         current = ram.records[prior["id"]]["attributes"]
         self.assertEqual(current["lifecycle_status"], "completed")
         self.assertEqual(current["current_memory_id"], extracted_id)
 
         repeated = job.run(apply=True, wait_for_candidate=candidate_id)
         self.assertEqual(repeated["status"], "no_changes")
-        self.assertEqual(len(ram.created), 2)
+        self.assertTrue(repeated["candidate_visible"])
+        self.assertEqual(len(ram.created), 1)  # only the observation
+        self.assertEqual(len(ram.upserted), 1)  # the replaced projection
 
     def test_no_new_observation_leaves_open_projection_unchanged(self):
         opened = observation("observation-open", "open", "creates", "2026-01-01T00:00:00Z")

@@ -65,7 +65,7 @@ Add tests to `tests/test_plugin.py` for:
 - timeout or ambiguous persistence for every mutation.
 
 If a change affects state retrieval, evidence traversal, Playbook attestation,
-or agenda output, run `python3 evaluation/run.py`. Add or change a fixed case
+or agenda output, run `.venv/bin/python evaluation/run.py`. Add or change a fixed case
 only for a reviewed product-contract change; do not lower a threshold to hide
 a regression. Regenerate `evaluation/results.json` with `--write` and inspect
 the diff.
@@ -79,11 +79,13 @@ projection's supporting observation IDs. Do not reintroduce model-selected
 Run:
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 evaluation/run.py
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python evaluation/run.py
 ```
 
-The runtime must continue to work with Python 3.10+ and no third-party package.
+The runtime must continue to work on Python 3.11+ with only the pinned
+redis-iris set in `server/requirements.txt`. Run these commands from the
+development virtual environment described in `AGENTS.md`.
 
 ## 5. Update user-facing files
 

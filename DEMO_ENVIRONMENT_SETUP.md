@@ -16,7 +16,7 @@ The repository contains the complete versioned context-model contract:
 - the `organizational_state` observation schema and extraction prompt;
 - the `organizational_state_projection` schema and deterministic projector;
 - the canonical management-agenda Playbook Skill and its resources;
-- a two-document AMI ES2002 smoke corpus; and
+- a three-document ES2002 smoke corpus (two AMI artifacts and one synthetic action log); and
 - a credential-free context check, bounded MemoryETL submission,
   reconciliation, and evaluation commands.
 
@@ -28,8 +28,9 @@ MemoryETL corpus submission is a separate thin adapter so transport changes do
 not alter the context schemas, prompt, policy, or projector.
 
 Do not tell a tester that cloning this repository recreates the prepared
-15-artifact environment. The checked-in bundle contains only kickoff minutes
-and the final report so that bootstrap smoke tests remain fast.
+15-artifact environment. The checked-in bundle contains only the kickoff
+minutes, the final report, and one synthetic action log, so that bootstrap
+smoke tests remain fast.
 
 ## Ownership boundary
 
@@ -52,16 +53,24 @@ Before changing a service, record these values outside the repository:
 - the approved Git release tag or commit SHA;
 - RAM data-plane endpoint, store ID, shared namespace, and an administrator
   credential for the approved service operations;
-- the management owner lane, normally `ami-project-office`;
 - a configured RAM model/embedding provider and running MemoryETL worker;
-- Playbook service endpoint, Playbook ID, publisher credential, and a separate
-  runtime reader credential when supported; and
-- one central host that can run Python 3.10+ and the reconciliation command.
+- Playbooks data-plane base URL, playbook ID (`pb_` plus 32 lowercase hex), a
+  read/write/publish content key, and a separate runtime reader key; and
+- one central host that can run Python 3.11+, the pinned redis-iris SDK, and
+  the reconciliation command.
+
+Administrator commands need the SDK. Create the development environment once
+(Python 3.11+; `.venv/` is gitignored):
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r plugins/redis-shared-memory-editor/server/requirements.txt
+```
 
 Prove the checked-in context pipeline before connecting to either service:
 
 ```sh
-python3 scripts/validate_context_pipeline.py
+.venv/bin/python scripts/validate_context_pipeline.py
 ```
 
 Do not continue unless every check passes. This is the portable handover gate
@@ -75,14 +84,15 @@ For a repeatable smoke test on an existing non-production store whose schemas
 and extractor already match this bundle, use the checked-in reset command:
 
 ```sh
-python3 scripts/reset_demo_ram.py
-python3 scripts/reset_demo_ram.py --apply --confirm-empty-store
+.venv/bin/python scripts/reset_demo_ram.py
+.venv/bin/python scripts/reset_demo_ram.py --apply --confirm-empty-store
 ```
 
 Review the first command's target hash and counts. The applied command deletes
 all long-term memories and private sessions from the exact store in
-`editor.env`, verifies both lanes are empty, and preserves declarations and
-extractors. It does not reset Playbook or modify credentials.
+`editor.env`, enumerating unnamespaced records and every visible namespace
+(RAM namespaces are first-class resources), verifies both lanes are empty, and
+preserves declarations and extractors. It does not reset Playbook or modify credentials.
 
 Shared endpoints must use HTTPS. Loopback HTTP is acceptable only when every
 component is on the same development machine.
@@ -103,7 +113,7 @@ Require an empty `git status` and record the commit. Inspect the desired state
 without writing to RAM or Playbook:
 
 ```sh
-python3 scripts/admin_bootstrap.py plan
+.venv/bin/python scripts/admin_bootstrap.py plan
 ```
 
 Review every target hash, component version, digest, and blocker. The command
@@ -111,35 +121,50 @@ uses `~/.config/redis-shared-memory/editor.env` for its safe read-only service
 preflight; create that file with an environment-specific runtime reader key as
 described in [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md#2-create-the-private-configuration).
 For this test prototype, an administrator who is also a participant may keep
-`RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and `OPENAI_API_KEY` in the
-same `0600` file. Ordinary participants leave them blank. The desktop MCP
+the optional administrator names (`IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`,
+`IRIS_AGENT_PLAYBOOKS_SERVICE_URL`, `IRIS_AGENT_PLAYBOOKS_SERVICE_TOKEN`,
+`IRIS_AGENT_MEMORY_SERVICE_URL`, and `IRIS_AGENT_MEMORY_SERVICE_TOKEN`) in the
+same `0600` file. Ordinary participants leave them unset. The desktop MCP
 drops those values from its runtime configuration, and the current read-only
-bootstrap adapter does not consume them yet.
+bootstrap adapter does not consume them.
 
 ## 3. Provision RAM and Playbook
 
 Provision RAM and Playbook separately using the supported deployment method
 for those services. RAM may be local or cloud-hosted; the plugin only requires
 a reachable RAM data-plane endpoint with the expected API contract. Playbook
-must expose its readable MCP endpoint.
+must expose its readable data-plane REST endpoint (base URL only in
+`IRIS_AGENT_PLAYBOOKS_URL`, with the playbook ID in
+`IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`).
 
 Before continuing, verify:
 
 - RAM and Playbook are reachable from the central host and tester laptops;
 - RAM has its model provider and asynchronous MemoryETL processing available;
-- the shared namespace and management owner lane are agreed; and
-- the Playbook publisher credential is held only by the administrator.
+- the shared namespace is agreed (every management record lives there); and
+- the Playbooks content (publish) key is held only by the administrator.
 
 Managed Redis Agent Memory provisions its model and embedding provider with
-the service, so it normally does not require `OPENAI_API_KEY` in this local
-file. A local/dev RAM deployment may use it when its documented setup requires
-a client-supplied provider key.
+the service, so no model-provider key belongs in this local file.
 
 The desktop plugin installation is not a service deployment mechanism.
 
 ## 4. Declare the context model
 
-Create these exact RAM custom memory types in the fresh test store:
+The default **compact** layout (`RAM_MEMORY_LAYOUT=compact`) needs one custom
+memory type with nine fields,
+[`organizational-state-compact.json`](context-models/management-agenda/v1/memory-types/organizational-state-compact.json),
+and one document extractor using
+[`extraction-prompt-compact.txt`](context-models/management-agenda/v1/extraction-prompt-compact.txt).
+Both are entered in the Redis Cloud console; the README's Steps 4 and 5 walk
+through it with screenshots. Redis Cloud does not yet offer a customer API for
+custom memory types (MOD-18619, MOD-18732), which is why the compact layout is
+small enough to enter by hand.
+
+The **expanded** layout (`RAM_MEMORY_LAYOUT=expanded`) keeps the original two
+types below. Use it for stores created with them or managed through a
+self-managed control plane. Create these exact RAM custom memory types in the
+fresh test store:
 
 1. [`organizational_state`](context-models/management-agenda/v1/memory-types/organizational-state.json)
    is the immutable observation ledger. Enable RAM extraction and use the
@@ -158,7 +183,13 @@ separately reviewed migration. Reinstalling the plugin cannot upgrade a RAM
 schema.
 
 The repository does not currently automate these declarations against a live
-service. Apply them through the approved RAM administrator interface, then
+service. The SDK exposes them on the Agent Memory control plane
+(`redis_agent_memory.controlplane.AgentMemoryService.create_memory_type` and
+`create_extractor`), which needs `IRIS_AGENT_MEMORY_SERVICE_URL` and
+`IRIS_AGENT_MEMORY_SERVICE_TOKEN`; the `iris` CLI has no memory-type command.
+An undeclared store rejects writes with `memory type "organizational_state" is
+not registered on this store`. Apply the declarations through the control plane
+or the approved RAM administrator interface, then
 read them back and compare every field, required attribute, controlled value,
 schema version, and extraction setting with the checked-in JSON.
 
@@ -169,37 +200,65 @@ Publish the entry declared in
 with its exact linked resources and digests. The environment should contain
 one canonical `prepare-management-review-agenda` Skill for this PoC.
 
-Use the publisher credential only for publication. Give plugin users a
-read-only Playbook key. Do not overwrite a published version with different
-content; publish a new version and update the checked-in manifest and runtime
+Use the content key (`IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`) only for
+publication. Give plugin users a read-only reader key. Do not overwrite a published
+version with different content; publish a new version and update the checked-in manifest and runtime
 attestation together.
 
-The current bootstrap adapter cannot publish to a live Playbook. Use the
-approved Playbook publication workflow, then confirm that discovery returns
-the expected entry key and version and that every resource digest matches the
+On Redis Cloud the simplest path is the console: `python3 scripts/package_skill.py`
+builds the Skill ZIP from the checked-in files after verifying every digest and
+prints the alias, intents, and attributes for **Upload Skill**; then publish the
+version (README Step 7). Give runtime users a read-only key created through
+**Customize in the full page** (MOD-20988).
+
+The current bootstrap adapter cannot publish to a live Playbook. The bundled
+`iris` CLI can: export `IRIS_AGENT_PLAYBOOKS_URL`,
+`IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`, and `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`.
+The SDK requires the Skill folder name to equal the manifest name, so stage it
+first:
+
+```sh
+mkdir -p /tmp/skills/prepare-management-review-agenda
+cp -R context-models/management-agenda/v1/playbook/SKILL.md \
+  context-models/management-agenda/v1/playbook/references \
+  /tmp/skills/prepare-management-review-agenda/
+.venv/bin/iris agent-playbooks skills validate /tmp/skills/prepare-management-review-agenda
+```
+
+Validation has been verified offline. Then use `plan`, `sync`, or `publish` on
+the staged directory; see `.venv/bin/iris agent-playbooks skills --help` for
+exact options. Live publication has not yet been verified in 0.13.0. After publishing,
+confirm that discovery returns the expected entry key and version and that every resource digest matches the
 manifest.
 
 ## 6. Ingest the MemoryETL smoke corpus
 
 The checked-in
 [`corpus/manifest.json`](context-models/management-agenda/v1/corpus/manifest.json)
-declares two immutable source artifacts:
+declares three immutable source artifacts:
 
-- `ami-es2002-minutes-kickoff`; and
-- `ami-es2002-final-report`.
+- `ami-es2002-minutes-kickoff`;
+- `ami-es2002-final-report`; and
+- `demo-es2002-functional-design-actions`, a short synthetic action log (not
+  part of the AMI corpus) that gives each demo participant an owned open action
+  for the guided tour.
+
+`python3 scripts/setup_demo.py` submits whichever of these are not yet loaded
+and then builds the current state, so the commands below are only needed for a
+scripted or repeated administrator run.
 
 Preview the credential-free ingestion plan with the document extractor created
 from the checked-in extraction prompt:
 
 ```sh
-python3 scripts/ingest_context_corpus.py \
+.venv/bin/python scripts/ingest_context_corpus.py \
   --extractor-id YOUR_DOCUMENT_EXTRACTOR_ID
 ```
 
 After reviewing the target configuration, submit and wait for both revisions:
 
 ```sh
-python3 scripts/ingest_context_corpus.py \
+.venv/bin/python scripts/ingest_context_corpus.py \
   --extractor-id YOUR_DOCUMENT_EXTRACTOR_ID \
   --apply
 ```
@@ -232,37 +291,31 @@ an administrator must additionally
 obtain the approved normalized corpus and a reviewed ingestion adapter; those
 13 artifacts are not checked into this repository.
 
-## 7. Build current state and start reconciliation
+## 7. Build current state
 
 Run a read-only projection plan first:
 
 ```sh
-python3 scripts/reconcile_management_state.py
+.venv/bin/python scripts/reconcile_management_state.py
 ```
 
-Review the target scope and proposed changes, then apply:
+Review the target scope and proposed changes, including any management
+records that have no namespace, then apply:
 
 ```sh
-python3 scripts/reconcile_management_state.py --apply
+.venv/bin/python scripts/reconcile_management_state.py --apply
 ```
 
-The command reads immutable observations, applies the checked-in relationship
-and lifecycle policy, and upserts only changed projections by deterministic
-ID. Repeated runs are idempotent.
+The command moves any unnamespaced management records into the shared
+namespace, reads the observations, applies the checked-in relationship and
+lifecycle policy, and writes only changed projections by deterministic ID.
+Repeated runs are idempotent.
 
-For the current PoC, run the same command centrally every five minutes:
-
-```sh
-python3 scripts/reconcile_management_state.py --apply --quiet-no-changes
-```
-
-Install that schedule once on the central host, not through every user's
-plugin. Keep its checkout clean and detached at the same approved release used
-by participants. The repository currently documents the macOS LaunchAgent
-contract but does not ship an installer; follow
-[docs/management-reconciliation.md](docs/management-reconciliation.md) and the
-host's approved operations process. Confirm the job's last exit status is zero
-after pinning or updating the release.
+No scheduler is needed. The installed plugin rebuilds the current view itself
+after every confirmed promotion, with the same code. Run this command again
+after ingesting documents outside `scripts/setup_demo.py`, or when a promotion
+reports `pending_reconciliation`. See
+[docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 ## 8. Install one participant and accept the environment
 
@@ -284,7 +337,7 @@ Require all of the following before inviting more users:
    draft agenda.
 7. A confirmed private-to-shared completion creates one immutable shared
    observation, and the next reconciliation run updates its projection.
-8. `python3 evaluation/run.py` passes in the pinned checkout.
+8. `.venv/bin/python evaluation/run.py` passes in the pinned checkout.
 
 Do not use fixed memory or lifecycle counts as an acceptance criterion. Counts
 change when legitimate observations are added; evidence traversal, schema
@@ -302,7 +355,7 @@ Record, without secrets or document contents:
 - reconciliation host, pinned commit, schedule, and last successful run; and
 - the participant acceptance result.
 
-`python3 scripts/admin_bootstrap.py verify` becomes the final read-only
+`.venv/bin/python scripts/admin_bootstrap.py verify` becomes the final read-only
 attestation command only after a reviewed live administrator adapter can read
 all required service state. Until then, use the explicit readbacks and human
 acceptance above and retain the adapter's `unsupported_mutation` blockers as a
@@ -313,6 +366,5 @@ visible handover limitation.
 A future live bootstrap adapter may automate the administrator stages only if
 every mutation has an exact pre-check, deterministic idempotency key, bounded
 asynchronous wait, post-write readback, sanitized attestation, and a safe
-answer for ambiguous writes. It must also provide reviewed scheduler
-install/status/uninstall operations. Do not add those capabilities by routing
+answer for ambiguous writes. Do not add those capabilities by routing
 arbitrary HTTP or MCP calls through the desktop plugin.

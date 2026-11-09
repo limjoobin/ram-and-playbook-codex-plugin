@@ -1,0 +1,6 @@
+# Enables the Redis Shared Memory + Playbook plugin for this project only.
+# scripts/setup_demo.py turns it off account-wide, so it does not run (and its
+# private-capture hooks do not record prompts) in your other projects. Codex
+# reads this file only after you trust the project folder.
+[plugins."redis-shared-memory-editor@redis-field-engineering"]
+enabled = true

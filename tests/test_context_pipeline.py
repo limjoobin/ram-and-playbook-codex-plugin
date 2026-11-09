@@ -62,9 +62,9 @@ class ContextPipelineTests(unittest.TestCase):
 
         self.assertTrue(result["passed"])
         self.assertEqual(result["counts"], {
-            "artifactCount": 2,
-            "expectedObservationCount": 3,
-            "projectionCount": 2,
+            "artifactCount": 3,
+            "expectedObservationCount": 4,
+            "projectionCount": 3,
         })
         self.assertTrue(result["checks"]["latestSourceStateWins"])
 
@@ -84,7 +84,7 @@ class ContextPipelineTests(unittest.TestCase):
     def test_expected_observations_preserve_the_source_envelope(self):
         records = expected_observations(self.bundle)
 
-        self.assertEqual(len(records), 3)
+        self.assertEqual(len(records), 4)
         self.assertTrue(
             all(record["attributes"]["relations"] == {"edges": []} for record in records)
         )
@@ -102,12 +102,28 @@ class ContextPipelineTests(unittest.TestCase):
         )
 
         self.assertTrue(result["ok"])
-        self.assertEqual(result["artifactCount"], 2)
-        self.assertEqual(len(ram.submissions), 2)
+        self.assertEqual(result["artifactCount"], 3)
+        self.assertEqual(len(ram.submissions), 3)
         self.assertTrue(
             all(item["idempotency_key"] for item in ram.submissions)
         )
         self.assertIn("reconcile_management_state.py --apply", result["nextStep"])
+        # Output IDs are kept so setup can move them into the shared namespace.
+        self.assertEqual(result["artifacts"][0]["memoryIds"], ["memory-ingestion-1"])
+
+    def test_output_ids_are_read_from_strings_as_the_sdk_returns_them(self):
+        result = ingest_documents(
+            CurrentContractMemoryETL(),
+            ingestion_documents(self.bundle),
+            owner_id="andrew",
+            extractor_id="organizational-state-documents",
+            poll_seconds=0.01,
+            sleep=lambda _: None,
+        )
+        self.assertEqual(
+            [item["memoryIds"] for item in result["artifacts"]],
+            [["memory-ingestion-1"], ["memory-ingestion-2"], ["memory-ingestion-3"]],
+        )
 
     def test_rehydration_id_scopes_idempotency_without_changing_documents(self):
         documents = ingestion_documents(self.bundle)
@@ -179,7 +195,7 @@ class ContextPipelineTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(
             [artifact["outputCount"] for artifact in result["artifacts"]],
-            [1, 1],
+            [1, 1, 1],
         )
 
     def test_validation_cli_is_offline_and_machine_readable(self):
@@ -194,7 +210,7 @@ class ContextPipelineTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         payload = json.loads(process.stdout)
         self.assertTrue(payload["passed"])
-        self.assertEqual(payload["counts"]["artifactCount"], 2)
+        self.assertEqual(payload["counts"]["artifactCount"], 3)
 
 
 if __name__ == "__main__":

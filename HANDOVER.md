@@ -10,7 +10,7 @@ The repository is authoritative for:
 - the two RAM custom-memory contracts;
 - canonical entities and source-envelope fields;
 - the document extraction prompt;
-- the two-document AMI smoke corpus and deterministic expected extraction;
+- the three-document smoke corpus (two AMI artifacts plus one synthetic action log) and deterministic expected extraction;
 - relationship and lifecycle policy;
 - the one canonical projector/reconciliation job;
 - the Playbook Skill and all linked resources;
@@ -40,17 +40,20 @@ acceptance requires all of the following:
   observation. Heading-based ordering is only a policy fallback when the
   envelope sequence is unknown.
 
-Run `python3 -m unittest tests.test_projector_reusability -v` as the focused
+Run `.venv/bin/python -m unittest tests.test_projector_reusability -v` as the focused
 acceptance check.
 
 ## Clean setup order
 
-1. Clone the approved commit or tag and run:
+1. Clone the approved commit or tag, create the development environment
+   (Python 3.11+, `.venv/` is gitignored), and run:
 
    ```sh
-   python3 scripts/validate_context_pipeline.py
-   python3 -m unittest discover -s tests -v
-   python3 evaluation/run.py
+   python3 -m venv .venv
+   .venv/bin/python -m pip install -r plugins/redis-shared-memory-editor/server/requirements.txt
+   .venv/bin/python scripts/validate_context_pipeline.py
+   .venv/bin/python -m unittest discover -s tests -v
+   .venv/bin/python evaluation/run.py
    ```
 
 2. Provision RAM and Playbook using the supported instructions for the
@@ -59,27 +62,31 @@ acceptance check.
    empty only its entries:
 
    ```sh
-   python3 scripts/reset_demo_ram.py
-   python3 scripts/reset_demo_ram.py --apply --confirm-empty-store
+   .venv/bin/python scripts/reset_demo_ram.py
+   .venv/bin/python scripts/reset_demo_ram.py --apply --confirm-empty-store
    ```
 
    This preserves the store, namespaces, custom-memory types, and document
    extractors while deleting all long-term memories and private sessions.
-3. In RAM, register the two exact JSON contracts under
-   `context-models/management-agenda/v1/memory-types/`. Configure a document
-   extractor for `organizational_state` with `extraction-prompt.txt`. Keep
-   extraction disabled for `organizational_state_projection`.
+3. In RAM, register the memory types for the store's layout. The default
+   compact layout uses the one nine-field `organizational-state-compact.json`
+   type and a document extractor with `extraction-prompt-compact.txt`, entered
+   in the Redis Cloud console (README Steps 4–5). The expanded layout
+   (`RAM_MEMORY_LAYOUT=expanded`) uses the two original contracts with
+   `extraction-prompt.txt`, keeping extraction disabled for
+   `organizational_state_projection`.
 4. Publish the one entry described by `playbook/manifest.json`, including
    `SKILL.md` and every declared reference. Use the manifest's entry key,
    intents, attributes, version, and digests.
 5. Store endpoints, scopes, participant identity, and keys in the ignored
    `~/.config/redis-shared-memory/editor.env` described by
-   [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md).
+   [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md) (0.13.0 names:
+   `IRIS_AGENT_MEMORY_*` and `IRIS_AGENT_PLAYBOOKS_*`).
 6. Preview and ingest the smoke corpus:
 
    ```sh
-   python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
-   python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
+   .venv/bin/python scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
+   .venv/bin/python scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
      --rehydration-id RESET-YYYYMMDD-A
    ```
 
@@ -92,13 +99,14 @@ acceptance check.
 7. Build current state and prove idempotency:
 
    ```sh
-   python3 scripts/reconcile_management_state.py
-   python3 scripts/reconcile_management_state.py --apply
-   python3 scripts/reconcile_management_state.py --apply
+   .venv/bin/python scripts/reconcile_management_state.py
+   .venv/bin/python scripts/reconcile_management_state.py --apply
+   .venv/bin/python scripts/reconcile_management_state.py --apply
    ```
 
    The second applied run must report no changes.
-8. Install the plugin and personally review/trust `UserPromptSubmit` and
+8. Install the plugin, run `launch.py --install` to pre-install the pinned
+   runtime, and personally review/trust `UserPromptSubmit` and
    `SessionEnd` as described by `CODEX_INSTALLATION.md`.
 9. Run the human flow in `docs/management-agenda-demo-runbook.md`, including a
    confirmed completion promotion followed by reconciliation.
@@ -108,11 +116,16 @@ acceptance check.
 The context model must not change merely because a service API changes. The
 replaceable seams are deliberately small:
 
-- RAM MemoryETL HTTP shape: `RAMClient.create_document_ingestion`,
-  `get_document_ingestion`, and `list_document_ingestion_outputs`;
-- RAM administrator declarations: the deployed release's supported control
-  plane or console;
-- Playbook publication: the deployed release's supported publisher surface.
+- the redis-iris SDK adapters: `RAMClient` in `ram.py` (including
+  `create_document_ingestion`, `get_document_ingestion`, and
+  `list_document_ingestion_outputs`) and `PlaybookClient` in `playbook.py`,
+  plus the exact pins in `server/requirements.txt`;
+- RAM administrator declarations: the SDK's Agent Memory control plane
+  (`create_memory_type`, `create_extractor`), not yet automated here;
+- Playbook publication: `iris agent-playbooks skills ...` with the content key
+  and a staged Skill folder named after the manifest (see
+  [DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md)); not yet verified
+  live in 0.13.0.
 
 After a Redis service release, update only the affected seam and its fake
 contract tests unless the actual memory semantics changed. Do not silently
@@ -132,6 +145,6 @@ Keep these with the environment handoff, without secrets or source text:
 - plugin version, reviewed hooks, and `system_status`; and
 - one evidence-backed agenda and one promoted completion test.
 
-The two-document bundle is a fast smoke environment, not a recreation of the
+The three-document bundle is a fast smoke environment, not a recreation of the
 prepared 15-artifact research store. That distinction is intentional and must
 remain visible in any handover claim.

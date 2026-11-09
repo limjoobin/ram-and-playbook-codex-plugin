@@ -6,7 +6,15 @@ The plugin has one local Python MCP. It does not introduce a second service or
 a second organizational-state reconciler.
 
 The active `UserPromptSubmit` and `SessionEnd` hooks append bounded events to
-`RAM_PERSONAL_NAMESPACE`. `PostToolUse` and `Stop` are intentionally
+`RAM_PERSONAL_NAMESPACE`. A hook is a short-lived standard-library process: it
+records the event in the private local ledger, queues the exact RAM session
+event in the private outbox (`promotion/outbox/` under the plugin data
+directory), and returns without loading the SDK or opening a connection. The
+long-running MCP server delivers queued events with each event's RAM
+idempotency key, records the returned RAM event ID in the ledger, and delivers
+any backlog before the promotion tools read provenance. A candidate's private
+event IDs are resolved when it is read, so delivery after capture is safe.
+`PostToolUse` and `Stop` are intentionally
 unregistered for the current reduced-capture experiment. RAM owns session
 memory and any configured personal long-term-memory extraction. A local
 append-only ledger retains private capture metadata and any earlier review
@@ -28,16 +36,19 @@ the promotion call. Older candidates retain the explicit-observation input for
 compatibility.
 
 Promotion creates the reviewed immutable `organizational-state-v3` record
-directly in `RAM_NAMESPACE`, under `RAM_AGENDA_OWNER_ID`, with a deterministic
+directly in `RAM_NAMESPACE`, owned by `RAM_PARTICIPANT`, with a deterministic
 memory ID and private candidate/event references retained as provenance. The
-write is read back by exact ID before success is returned. MemoryETL is not
+write is read back by exact ID before success is returned. The plugin then
+waits up to 20 seconds for the observation to become searchable and rebuilds
+the current view, returning `projection_status: current`, or
+`pending_reconciliation` with a `projection_error` code if it could not. MemoryETL is not
 used for this already-structured, human-confirmed update. The private source is
 referenced, not moved, updated, or deleted.
 
 The promoted record is also a first-class evidence source. Because it has no
 document source traversal, callers use `ram_get_evidence` with its exact
 `memory_id` and omit `source_id`. The service returns it only when the record
-matches the configured owner, namespace, memory type, schema, and confirmed
+matches the configured namespace, memory type, schema, and confirmed
 candidate provenance. Agenda output can therefore cite the completion report
 instead of falling back to the earlier assignment evidence.
 
@@ -52,12 +63,13 @@ invent them. The central projector may independently derive a narrow exact
 - The RAM session worker and its model provider must be running.
 - The store must enable the intended personal-memory extraction for private
   sessions.
-- `RAM_AGENDA_OWNER_ID` must remain the management-state owner lane used by the
-  existing projection/reconciliation implementation.
+- Every participant uses the same `RAM_NAMESPACE`. `RAM_AGENDA_OWNER_ID` only
+  identifies records from versions before 0.14.0 that have no namespace, so
+  they can be moved in; a retried promotion from such a version still matches.
 - A confirmed promotion is immediately available through
-  `ram_search_state(view="history")`. The shared central projector—not this
-  plugin—must process that observation before it appears in `current` or
-  `conflicts`. This preserves one reconciliation implementation.
+  `ram_search_state(view="history")`, and through `current` and `conflicts`
+  once the plugin's rebuild reports `projection_status: current`. The plugin
+  runs the same reconciliation code as the administrator job.
 
 ## Identity and isolation
 

@@ -14,7 +14,7 @@ runs this harness.
 The first bundle is `context-models/management-agenda/v1`. It contains the two
 memory-type schemas, entity registry, extraction prompt, projection policy,
 the single authoritative projector ported from the management-agenda
-consumer, the Playbook Skill and resources, and a two-document AMI smoke
+consumer, the Playbook Skill and resources, and a three-document ES2002 smoke
 corpus. The smoke corpus is intentionally the smallest source-grounded slice;
 the 15-document research corpus remains a later compatible bundle revision
 after a live administrator adapter is approved.
@@ -25,10 +25,18 @@ Use the existing private plugin configuration at
 `~/.config/redis-shared-memory/editor.env`. Do not add credentials, endpoints,
 or customer content to the bundle.
 
+These commands import the redis-iris SDK. Run them from the repository
+development environment (Python 3.11+):
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r plugins/redis-shared-memory-editor/server/requirements.txt
+```
+
 Read-only plan:
 
 ```sh
-python3 scripts/admin_bootstrap.py plan
+.venv/bin/python scripts/admin_bootstrap.py plan
 ```
 
 The plan reports safe target hashes plus every current and desired component
@@ -37,7 +45,7 @@ version and digest. It does not write an attestation or change either service.
 Explicit administrator apply:
 
 ```sh
-python3 scripts/admin_bootstrap.py apply --confirm-admin
+.venv/bin/python scripts/admin_bootstrap.py apply --confirm-admin
 ```
 
 `apply` is the only mutating mode. It always inspects first and will stop on a
@@ -50,7 +58,7 @@ to select another local path.
 Read-only verification:
 
 ```sh
-python3 scripts/admin_bootstrap.py verify
+.venv/bin/python scripts/admin_bootstrap.py verify
 ```
 
 Verification recomputes bundle digests, checks the service state, runs the
@@ -68,8 +76,8 @@ surface for the deployed release rather than a guessed control-plane contract.
 MemoryETL smoke-corpus submission is available as a separate, explicit command:
 
 ```sh
-python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
-python3 scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
+.venv/bin/python scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID
+.venv/bin/python scripts/ingest_context_corpus.py --extractor-id EXTRACTOR_ID --apply \
   --rehydration-id RESET-YYYYMMDD-A
 ```
 
@@ -80,9 +88,9 @@ deleted, so the ordinary deterministic request key and immutable source
 revision cannot recreate deleted outputs. The rehydration ID deterministically
 creates a matching new revision in both the request and source envelope.
 
-Its three RAM HTTP operations are isolated in `RAMClient`; a service API change
-can update that seam and its fake tests without changing the versioned context
-bundle. Run `python3 scripts/validate_context_pipeline.py` first to prove the
+Its three RAM ingestion operations are isolated in `RAMClient`, the redis-iris
+SDK adapter; a service or SDK change can update that seam and its fake tests without changing the versioned context
+bundle. Run `.venv/bin/python scripts/validate_context_pipeline.py` first to prove the
 service-independent schemas, envelopes, expected extraction contract, and
 projector.
 

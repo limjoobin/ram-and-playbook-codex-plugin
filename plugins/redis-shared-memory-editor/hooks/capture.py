@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Thin Codex hook adapter for private RAM capture and lifecycle-update guidance."""
+"""Thin Codex hook adapter for private RAM capture and lifecycle-update guidance.
+
+Standard library only: the hook never loads the redis-iris SDK or touches the
+network. It records the event in the private local ledger and queues the
+private RAM session event; the running MCP server delivers it.
+"""
 
 from __future__ import annotations
 
@@ -14,8 +19,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "server"))
 
 from ram_plugin.credentials import load_credential_file
-from ram_plugin.promotion import HookCapture, PromotionLedger
-from ram_plugin.ram import RAMClient
+from ram_plugin.promotion import HookCapture, PrivateEventOutbox, PromotionLedger, capture_allowed
 
 
 def _config_path(environment: Mapping[str, str]) -> Path:
@@ -50,11 +54,10 @@ def handle(payload: Any, environment: Mapping[str, str] | None = None) -> dict[s
         return _safe_output(str(event_name), unavailable=True)
     try:
         config = load_credential_file(_config_path(values))
+        if not capture_allowed(config, payload):
+            return _safe_output(str(event_name))  # another project: record nothing
         ledger = PromotionLedger.from_environment(values)
-        timeout_ms = 800 if event_name == "SessionEnd" else 2_500
-        return HookCapture(config, RAMClient(config, timeout_ms=timeout_ms), ledger, timeout_ms).process(
-            payload
-        )
+        return HookCapture(config, None, ledger, outbox=PrivateEventOutbox(ledger)).process(payload)
     except Exception:
         return _safe_output(str(event_name), unavailable=True)
 

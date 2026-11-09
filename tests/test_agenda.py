@@ -24,7 +24,8 @@ CONFIG = Config(
     participant="alice",
     api_key="ram-secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="playbook-secret",
 )
 
@@ -50,6 +51,7 @@ def record(
         "id": memory_id,
         "text": f"Current state for {state_id}",
         "ownerId": "ami-project-office",
+        "namespace": "shared-namespace",
         "memoryType": "organizational_state",
         "sources": [{"sourceId": f"source-{memory_id}"}] if sources else [],
         "attributes": {
@@ -88,6 +90,7 @@ def projection_record(records):
         "id": f"projection-{attributes['state_id']}",
         "text": attributes["subject"],
         "ownerId": "ami-project-office",
+        "namespace": "shared-namespace",
         "memoryType": "organizational_state_projection",
         "attributes": {
             "schema_version": "organizational-state-projection-v1",

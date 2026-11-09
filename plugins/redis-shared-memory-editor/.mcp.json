@@ -5,7 +5,7 @@
       "command": "/bin/sh",
       "args": [
         "-c",
-        "codex_root=\"${CODEX_HOME:-$HOME/.codex}\"; plugin_cache_root=\"$codex_root/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.12.7\"; export PLUGIN_DATA=\"$codex_root/plugins/data/redis-shared-memory-editor-redis-field-engineering\"; exec python3 -I \"$plugin_cache_root/server/main.py\""
+        "codex_root=\"${CODEX_HOME:-$HOME/.codex}\"; plugin_cache_root=\"$codex_root/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.14.0\"; export PLUGIN_DATA=\"$codex_root/plugins/data/redis-shared-memory-editor-redis-field-engineering\"; exec python3 -I \"$plugin_cache_root/server/launch.py\""
       ]
     }
   }

@@ -23,7 +23,8 @@ CONFIG = Config(
     participant="user",
     api_key="secret",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.example.test/v1/playbooks/shared/mcp",
+    playbook_url="https://playbook.example.test",
+    playbook_id="pb_0123456789abcdef0123456789abcdef",
     playbook_api_key="secret",
 )
 
@@ -31,11 +32,24 @@ CONFIG = Config(
 class FakeRAM:
     def __init__(self) -> None:
         self.memories = {f"memory-{index}" for index in range(205)}
+        # Spread records across unnamespaced and two first-class namespaces.
+        self.scope = {
+            memory: ("ns-a", "ns-b", None)[index % 3]
+            for index, memory in enumerate(sorted(self.memories))
+        }
         self.sessions = {"session-a", "session-b"}
         self.deleted_batches: list[list[str]] = []
 
+    def namespace_ids(self):
+        return ["ns-a", "ns-b"]
+
     def search(self, request, timeout_ms=None):
-        values = sorted(self.memories)
+        scope_filter = request["filter"]
+        if scope_filter.get("unnamespaced") is True:
+            wanted = None
+        else:
+            wanted = scope_filter["namespaceId"]["eq"]
+        values = sorted(memory for memory in self.memories if self.scope[memory] == wanted)
         offset = int(request.get("pageToken", "0"))
         page = values[offset : offset + 100]
         result = {"items": [{"id": value} for value in page]}

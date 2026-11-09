@@ -45,7 +45,8 @@ CONFIG = Config(
     participant="evaluation-user",
     api_key="not-a-real-key",
     agenda_owner_id="ami-project-office",
-    playbook_mcp_url="https://playbook.evaluation.invalid/v1/playbooks/evaluation/mcp",
+    playbook_url="https://playbook.evaluation.invalid",
+    playbook_id="pb_00000000000000000000000000000000",
     playbook_api_key="not-a-real-key",
 )
 
@@ -59,7 +60,7 @@ def _record(case: dict[str, Any], role: str = "creates") -> dict[str, Any]:
         "text": case["subject"],
         "ownerId": "ami-project-office",
         "memoryType": "organizational_state",
-        "namespace": None,
+        "namespace": "evaluation-namespace",
         "sources": [{"sourceId": f"source-{case_id}-{suffix}"}],
         "attributes": {
             "schema_version": "organizational-state-v2",
@@ -103,7 +104,7 @@ class EvaluationRAM:
                 "text": case["subject"],
                 "ownerId": "ami-project-office",
                 "memoryType": "organizational_state_projection",
-                "namespace": None,
+                "namespace": "evaluation-namespace",
                 "attributes": {
                     "schema_version": "organizational-state-projection-v1",
                     "state_id": f"state-{case['id']}",

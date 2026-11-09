@@ -42,8 +42,8 @@ An administrator must hydrate the shared environment before the demo.
 ## Preflight
 
 Use a fresh chat after installing or updating the plugin. Confirm that the
-installed plugin and the central scheduler are pinned to the same reviewed Git
-commit.
+installed plugin and any administrator checkout are pinned to the same
+reviewed Git commit.
 
 Ask:
 
@@ -51,9 +51,9 @@ Ask:
 
 Expected:
 
-- plugin version `0.12.6` or the currently approved successor;
+- plugin version `0.14.0` or the currently approved successor;
 - RAM and Playbook both available;
-- namespace `sboai-test` for the prepared PoC environment;
+- the namespace configured for the prepared environment;
 - role `editor`; and
 - the intended participant, such as `andrew`.
 
@@ -126,15 +126,16 @@ Expected flow:
 5. The human explicitly confirms.
 6. `memory_candidate_promote` writes and reads back one deterministic,
    immutable shared observation.
-7. The central scheduler runs the canonical projector. Current state changes
-   on that reconciliation pass.
+7. The plugin runs the canonical projector straight away and reports
+   `projection_status: current`. Current state has changed.
 
 The `SessionEnd` hook records a private session-end marker. It does not infer a
 completion or publish shared state by itself.
 
-If history shows the completion while current state remains open, wait for the
-five-minute scheduler or have the administrator run the central reconciliation
-command. Do not promote the same candidate again.
+If the promotion reports `pending_reconciliation`, or history shows the
+completion while current state remains open, run
+`scripts/reconcile_management_state.py --apply` once. Do not promote the same
+candidate again.
 
 Verify the confirmed observation with `ram_get_evidence` using its exact
 `memory_id` and no `source_id`. It should expose the lifecycle, owner,
@@ -216,7 +217,7 @@ End the demo with three observations:
 | --- | --- |
 | Plugin still shows an older version | Refresh the installed plugin, restart ChatGPT desktop, and use a fresh chat. |
 | Hook does not run | Verify the installed plugin exposes active `UserPromptSubmit` and `SessionEnd` hooks and that they are trusted. An `@` mention alone does not enable hooks. |
-| Completion is visible in history but not current state | Wait for the central scheduler or run the administrator reconciliation command once. Do not promote again. |
+| Completion is visible in history but not current state | Run `scripts/reconcile_management_state.py --apply` once. Do not promote again. |
 | Agenda call rejects the request immediately | Keep `max_items` between 1 and 20. |
 | Agenda takes a long time | Wait for the single call; avoid launching compensating broad searches unless the call actually fails. |
 | Agenda reports stale open work | Present it as projection state and inspect later artifacts or request an explicit human completion. Do not silently rewrite RAM in the answer layer. |
@@ -225,6 +226,6 @@ End the demo with three observations:
 ## Post-demo record
 
 Record the plugin version, Git commit, participant, namespace, Playbook
-version, promoted candidate and observation IDs, scheduler result, and any
+version, promoted candidate and observation IDs, projection status, and any
 agenda caveats. Do not record credentials, raw private prompts beyond the
 approved demo statement, or unnecessary document content.

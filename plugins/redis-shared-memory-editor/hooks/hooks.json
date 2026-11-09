@@ -20,7 +20,8 @@
           {
             "type": "command",
             "command": "python3 -I ${PLUGIN_ROOT}/hooks/capture.py",
-            "timeout": 3
+            "timeout": 3,
+            "statusMessage": "Recording private session end"
           }
         ]
       }

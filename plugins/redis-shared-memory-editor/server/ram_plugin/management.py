@@ -9,6 +9,10 @@ from typing import Any
 from .config import Config, PluginError, VERSION
 from .playbook import ALLOWED_TOOLS, PlaybookClient
 from .ram import RAMClient, _field, _items
+from .layout import COMPACT
+from .reconcile import in_lane
+
+_MAX_STATE_PAGES = 50
 
 
 OBSERVATION_TYPE = "organizational_state"
@@ -223,31 +227,11 @@ def _sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _scope_matches(record: dict[str, Any], config: Config) -> bool:
-    attributes = _attributes(record)
-    namespace = record.get("namespace")
-    namespace_matches = namespace in {None, ""} or (
-        isinstance(namespace, str) and namespace.casefold() == config.namespace.casefold()
-    )
-    return (
-        _field(record, "ownerId", "owner_id") == config.agenda_owner_id
-        and _field(record, "memoryType", "memory_type") == OBSERVATION_TYPE
-        and attributes.get("schema_version") in OBSERVATION_SCHEMAS
-        and namespace_matches
-    )
+    return in_lane(record, config, OBSERVATION_TYPE, OBSERVATION_SCHEMAS)
 
 
 def _projection_scope_matches(record: dict[str, Any], config: Config) -> bool:
-    attributes = _attributes(record)
-    namespace = record.get("namespace")
-    namespace_matches = namespace in {None, ""} or (
-        isinstance(namespace, str) and namespace.casefold() == config.namespace.casefold()
-    )
-    return (
-        _field(record, "ownerId", "owner_id") == config.agenda_owner_id
-        and _field(record, "memoryType", "memory_type") == PROJECTION_TYPE
-        and attributes.get("schema_version") == PROJECTION_SCHEMA
-        and namespace_matches
-    )
+    return in_lane(record, config, PROJECTION_TYPE, (PROJECTION_SCHEMA,))
 
 
 def _observation(record: dict[str, Any]) -> dict[str, Any]:
@@ -404,7 +388,9 @@ class PluginService:
 
         playbook_status: dict[str, Any] = {
             "status": "available",
-            "endpoint_sha256": hashlib.sha256(self.config.playbook_mcp_url.encode()).hexdigest(),
+            "endpoint_sha256": hashlib.sha256(
+                f"{self.config.playbook_url}/{self.config.playbook_id}".encode()
+            ).hexdigest(),
             "credential_configured": bool(self.config.playbook_api_key),
             "required_read_tools": sorted(ALLOWED_TOOLS),
         }
@@ -442,7 +428,7 @@ class PluginService:
         schema_version: str,
     ) -> dict[str, Any]:
         filters: dict[str, Any] = {
-            "ownerId": {"eq": self.config.agenda_owner_id},
+            "namespace": {"eq": self.config.namespace},
             "memoryType": {"eq": memory_type},
             "attributes": {
                 "schema_version": {"string": schema_version},
@@ -501,7 +487,7 @@ class PluginService:
                 "view": view,
                 "schema_version": OBSERVATION_SCHEMA,
                 "supported_schema_versions": sorted(OBSERVATION_SCHEMAS),
-                "owner_id": self.config.agenda_owner_id,
+                "namespace": self.config.namespace,
                 "applied_filters": history_attributes,
                 "observations": observations[:limit],
                 "has_more": len(observations) > limit,
@@ -536,7 +522,7 @@ class PluginService:
             "ok": True,
             "view": view,
             "schema_version": PROJECTION_SCHEMA,
-            "owner_id": self.config.agenda_owner_id,
+            "namespace": self.config.namespace,
             "applied_filters": projection_attributes,
             "states": states,
             "has_more": len(scoped) > limit,
@@ -552,20 +538,36 @@ class PluginService:
 
         if not isinstance(state_id, str) or not state_id:
             raise PluginError("invalid_input", "state_id is required.")
+        # The compact layout keeps state_id inside details, which RAM cannot
+        # filter on, so read the in-scope projections page by page and match
+        # the identifier here.
+        compact = self.config.memory_layout == COMPACT
         request = self._state_request(
             None,
-            {"state_id": state_id},
-            2,
+            {} if compact else {"state_id": state_id},
+            100 if compact else 2,
             None,
             PROJECTION_TYPE,
             PROJECTION_SCHEMA,
         )
-        records = [
-            record
-            for record in _items(self.ram.search(request))
-            if _projection_scope_matches(record, self.config)
-            and _attributes(record).get("state_id") == state_id
-        ]
+        records: list[dict[str, Any]] = []
+        for _ in range(_MAX_STATE_PAGES):
+            page = self.ram.search(request)
+            records.extend(
+                record
+                for record in _items(page)
+                if _projection_scope_matches(record, self.config)
+                and _attributes(record).get("state_id") == state_id
+            )
+            token = page.get("nextPageToken") if compact else None
+            if not token:
+                break
+            request = {**request, "pageToken": token}
+        else:
+            raise PluginError(
+                "ram_contract_error",
+                "Too many current projections to find one state in the compact memory layout.",
+            )
         if not records:
             raise PluginError(
                 "state_not_found",

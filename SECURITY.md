@@ -3,13 +3,16 @@
 ## Trust boundary
 
 The plugin runs a bundled stdio MCP server with the signed-in operating-system
-user's privileges. It makes authenticated requests to the RAM endpoint and
-the configured Playbook MCP endpoint in that user's private configuration
-file. Installing it therefore grants the reviewed Python source local
-execution and access to those destinations.
+user's privileges. Through the pinned redis-iris SDK it makes authenticated
+requests to the RAM endpoint and the configured Playbooks data-plane REST
+endpoint in that user's private configuration file. On first launch it also
+contacts the Python package index to install its pinned dependencies.
+Installing it therefore grants the reviewed Python source and those pinned
+packages local execution and access to those destinations.
 
 Enterprise administrators should approve the exact repository and Git ref,
-the Python runtime, and the permitted RAM and Playbook domains. A release
+the Python runtime, the Python package index or mirror used for the one-time
+runtime install, and the permitted RAM and Playbook domains. A release
 should be pinned to a reviewed tag or commit, not an unbounded branch.
 
 ## Credentials and identity
@@ -24,18 +27,22 @@ The loader accepts only a regular, non-symlink file owned by the current user
 with mode `0600`. Never put credentials in chat, source control, plugin
 metadata, command arguments, or logs.
 
-`RAM_API_KEY` authenticates a request to RAM and `PLAYBOOK_API_KEY`
-authenticates a request to Playbook. Prefer one key per user for independent
+`IRIS_AGENT_MEMORY_API_KEY` authenticates a request to RAM and
+`IRIS_AGENT_PLAYBOOKS_API_KEY` (a runtime reader key) authenticates a request
+to Playbooks. Prefer one key per user for independent
 revocation and audit. `RAM_PARTICIPANT` is client-supplied
 contributor attribution and can be spoofed by someone who controls the local
 file; it is not authenticated human identity. Until server-validated OAuth is
 added, authorization must come from the API key and RAM service policy.
 
 For the test prototype, the same private file may also contain the exact
-optional names `RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, and
-`OPENAI_API_KEY`. The desktop MCP validates those names but does not retain the
-values in its runtime `Config`. They are reserved for administrator bootstrap;
-ordinary participants should leave them blank. Because the MCP process still
+optional administrator names `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY` (the
+read/write/publish key), `IRIS_AGENT_PLAYBOOKS_SERVICE_URL`,
+`IRIS_AGENT_PLAYBOOKS_SERVICE_TOKEN`, `IRIS_AGENT_MEMORY_SERVICE_URL`, and
+`IRIS_AGENT_MEMORY_SERVICE_TOKEN`. The desktop MCP validates those names but
+does not retain the values in its runtime `Config`. They are reserved for
+administrator provisioning; ordinary participants should leave them unset. The
+pre-0.13.0 setting names are rejected. Because the MCP process still
 opens the containing file, use a separate administrator file for any rollout
 whose threat model requires strict process-level least privilege.
 
@@ -57,23 +64,29 @@ parent is mode `0700`.
 - Endpoints must use HTTPS, except for explicit loopback development, and
   cannot contain URL credentials, a query, or a fragment.
 - The store and namespace come from local configuration, never tool arguments.
-- Every RAM request includes the configured namespace, and returned records
-  are checked again before disclosure or mutation.
+- Every RAM request includes the configured namespace, mapped to RAM's
+  first-class namespace ID, and returned records are checked again before
+  disclosure or mutation. Reads never create a namespace; the first write
+  creates the configured shared namespace, and the participant's private
+  namespace as personal and owned by `RAM_PARTICIPANT`.
 - Retrieved memory is untrusted data, never agent instructions.
 - Tool responses exclude credentials, headers, raw upstream errors, and
   unnecessary dependency payloads.
 - Namespace checks in the plugin do not replace server-side least privilege.
   Restrict each API key to the required store and operations whenever RAM
   supports that policy.
-- Organizational-state reads are fixed to the configured owner. History uses
+- Organizational-state reads are fixed to the configured shared namespace.
+  Every participant's records live there, each owned by its author; ownership
+  is attribution, not scope. History uses
   `organizational_state` with `organizational-state-v3` and accepts legacy v2 observations during migration; current/conflict views
   use `organizational_state_projection` with
   `organizational-state-projection-v1`.
-  Unnamespaced ingestion records are accepted only inside that exact lane; a
-  named namespace must match configuration.
+  Unnamespaced records are out of scope; the administrator reconcile command
+  and setup move earlier records owned by `RAM_AGENDA_OWNER_ID`, and new
+  MemoryETL output by ID, into the namespace explicitly.
 - Projection records contain only immutable supporting memory IDs. The plugin
-  reads those observations by exact ID, rechecks their owner, type, schema, and
-  namespace, and uses their RAM source links for evidence traversal.
+  reads those observations by exact ID, rechecks their namespace, type, and
+  schema, and uses their RAM source links for evidence traversal.
 - Generic relationship assertions remain inside immutable organizational-state
   observations. The projector validates their predicate, target, confidence,
   assertion status, project scope, and evidence-identifier shape. Only confirmed
@@ -84,9 +97,11 @@ parent is mode `0700`.
   concept token from an unresolved action's canonical ID. It requires at least
   two exact concepts, uses no fuzzy or model-based inference, and remains
   rebuildable projection logic rather than a mutation of source memory.
-- Playbook access is fixed to `discover_entries`, `load_skill`, and
-  `fetch_resource`. The model cannot supply a destination, credential, header,
-  or arbitrary upstream operation.
+- Playbook access is fixed to three reads through the SDK's REST data plane:
+  discover entries, load one exact Skill version, and fetch a resource that a
+  loaded Skill lists. Fetches are bounded to 1 MiB and digests are verified
+  locally. The model cannot supply a destination, credential, header, or
+  arbitrary upstream operation.
 - Agenda preparation pins `prepare-management-review-agenda`, loads its exact
   discovered version, fetches only the five required policy resources, and
   verifies SHA-256 digests before use. Loaded content is policy data, not a
@@ -135,26 +150,44 @@ projection and expected lifecycle, and copies canonical state fields from that
 projection. It cannot publish shared memory. A prepared proposal is immutable
 at promotion time; changing it requires a new proposal and confirmation.
 
-The reconciliation command is an administrator operation outside the installed
-plugin. It reads the complete scoped observation lane, runs the single
-versioned relationship-resolution/projector pass, and upserts only changed
-derived projections after an explicit `--apply`. It never turns audit
+The plugin runs reconciliation only after a confirmed promotion; the
+administrator command runs the same code after an explicit `--apply`. It reads
+the complete scoped observation lane, runs the single versioned
+relationship-resolution/projector pass, and writes only changed derived
+projections, replacing each only if it is unchanged since it was read. It never turns audit
 classifications, partial matches, or inferred "probably completed" states into
 terminal observations.
-Its scheduler checkout must be clean and pinned to the same reviewed commit or
-tag as the installed plugin so projection policy and runtime contracts cannot
-silently drift.
+The plugin's copies of the projector and policy are tested to be byte-identical
+to the versioned context model, and administrator commands should run from the
+same reviewed commit or tag as the installed plugin so they cannot drift.
 
 ## Supply chain
 
-- The installed runtime is committed Python standard-library source.
-- The plugin does not run `pip install`, `npm install`, installer scripts,
-  telemetry, or runtime downloads. Its reviewed command hooks are declared in
-  `hooks/hooks.json` and must be trusted by the user or enterprise policy.
+- The installed code is committed Python source plus the exact pinned
+  redis-iris dependency set in `server/requirements.txt`.
+- `server/launch.py` (standard library only) installs those pins once, with
+  `pip --only-binary=:all:`, into a private virtual environment under the
+  plugin data directory, from the Python package index that `pip` is
+  configured to use. It runs `pip` on first launch or `--install` only. Hooks
+  are standard-library only: they never install, load the SDK, or open a
+  network connection. They queue private events as `0600` files in a `0700`
+  directory under the plugin data directory, next to the existing private
+  ledger, and the MCP server delivers them to `RAM_PERSONAL_NAMESPACE` with
+  each event's RAM idempotency key. The plugin has no other
+  installer, telemetry, or runtime download. Its reviewed command hooks are
+  declared in `hooks/hooks.json` and must be trusted by the user or enterprise
+  policy.
+- Plugins install for the whole user account, so the hooks would otherwise see
+  every prompt in every project. Two controls keep capture to this project:
+  `scripts/setup_demo.py` disables the plugin account-wide and the
+  repository's `.codex/config.toml` re-enables it for the trusted project
+  folder; and the hook itself records nothing unless the session's `cwd` is
+  inside `RAM_CAPTURE_FOLDERS` (unset means nothing is recorded anywhere).
 - Python starts in isolated mode (`-I`), so `PYTHONPATH` and user-site packages
   cannot inject code into the process.
-- Adding an installer, executable, dependency, telemetry, network destination,
-  or generic upstream proxy requires a new security review.
+- Re-pinning a dependency, or adding a dependency, installer, executable,
+  telemetry, network destination, or generic upstream proxy, requires a new
+  security review.
 
 ## Release evidence
 

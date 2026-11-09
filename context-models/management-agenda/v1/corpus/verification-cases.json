@@ -10,6 +10,11 @@
       "caseId": "kickoff-product-scope",
       "query": "What product scope was discussed at kick-off?",
       "expectedSourceArtifactId": "ami-es2002-minutes-kickoff"
+    },
+    {
+      "caseId": "functional-design-owned-action",
+      "query": "What did Andrew agree to do after the functional design meeting?",
+      "expectedStateId": "project-ami-es2002-action-trend-watching"
     }
   ]
 }

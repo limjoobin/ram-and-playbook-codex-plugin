@@ -9,9 +9,11 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Any, Mapping, Protocol
+import threading
+import time
+from typing import Any, Callable, Mapping, Protocol
 
-from .config import Config, PluginError, SLUG, public_error
+from .config import Config, PluginError, SLUG, error_status, public_error
 from .management import LIFECYCLE_STATUSES, STATE_KINDS, _attributes
 
 
@@ -301,8 +303,12 @@ class PromotionLedger:
 
     def candidates(self) -> dict[str, dict[str, Any]]:
         candidates: dict[str, dict[str, Any]] = {}
+        private_events: list[tuple[Any, Any, str]] = []
         for event in self.events():
             payload = event["payload"]
+            if event.get("kind") == "ram_private_event" and isinstance(payload.get("ram_event_id"), str):
+                private_events.append((payload.get("session_id"), payload.get("turn_id"), payload["ram_event_id"]))
+                continue
             candidate_id = payload.get("candidate_id")
             if not isinstance(candidate_id, str):
                 continue
@@ -325,15 +331,267 @@ class PromotionLedger:
                 candidates[candidate_id].update(
                     {"status": "rejected", "rejected_at": payload.get("rejected_at")}
                 )
+        # Private events are delivered to RAM after capture, so resolve their IDs at read time.
+        for candidate in candidates.values():
+            if candidate.get("status") != "pending":
+                continue  # a promoted observation keeps the provenance it was written with
+            session, turn = candidate.get("session_id"), candidate.get("turn_id")
+            ids = list(candidate.get("source_private_event_ids") or [])
+            for event_session, event_turn, ram_event_id in private_events:
+                if event_session == session and (not turn or event_turn in {None, "", turn}) and ram_event_id not in ids:
+                    ids.append(ram_event_id)
+            candidate["source_private_event_ids"] = ids
         return candidates
+
+
+class PrivateEventOutbox:
+    """Durable local queue of private RAM session events written by hooks.
+
+    Hooks run as short-lived processes and must stay fast, so they only queue
+    the exact event here. The long-running MCP server, which already holds the
+    redis-iris SDK and a warm connection, delivers queued events. Each event
+    carries its RAM idempotency key, so a redelivery after an uncertain write
+    is deduplicated by RAM rather than blindly repeated.
+    """
+
+    _FIELDS = ("session_id", "actor_id", "namespace", "role", "text", "created_at", "metadata", "idempotency_key")
+    STALE_CLAIM_SECONDS = 300
+
+    def __init__(self, ledger: PromotionLedger) -> None:
+        self.ledger = ledger
+        self.directory = ledger.path.parent / "outbox"
+        self._lock = threading.Lock()
+        self.blocked = False
+
+    def _prepare(self) -> None:
+        self.ledger._prepare_parent()
+        self.directory.mkdir(mode=0o700, exist_ok=True)
+        if self.directory.is_symlink() or not self.directory.is_dir():
+            raise PluginError("promotion_store_invalid", "The private event outbox is not a safe directory.")
+        os.chmod(self.directory, 0o700)
+
+    def put(self, request: Mapping[str, Any], context: Mapping[str, Any]) -> None:
+        self._prepare()
+        name = re.sub(r"[^A-Za-z0-9_-]", "", str(request["idempotency_key"]))[:128]
+        record = {"request": {key: request[key] for key in self._FIELDS}, "context": dict(context)}
+        encoded = _canonical(record).encode("utf-8")
+        if len(encoded) > 4 * MAX_EVENT_BYTES:
+            raise PluginError("promotion_event_too_large", "The private event exceeds its safe size limit.")
+        temporary = self.directory / f".{name}.{os.getpid()}.tmp"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(temporary, flags, 0o600)
+            try:
+                os.write(descriptor, encoded)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            # First write wins: a duplicate hook delivery must not change the body
+            # queued (or in flight) under this idempotency key.
+            if not any(self.directory.glob(f"{name}.json.inflight-*")):
+                try:
+                    os.link(temporary, self.directory / f"{name}.json")
+                except FileExistsError:
+                    pass
+            temporary.unlink()
+        except OSError as error:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+            raise PluginError("promotion_store_unavailable", "The private event outbox could not be updated.") from error
+
+    def pending(self) -> int:
+        try:
+            return sum(1 for path in self.directory.glob("*.json"))
+        except OSError:
+            return 0
+
+    def _reclaim_stale(self) -> None:
+        now = time.time()
+        for claimed in self.directory.glob("*.json.inflight-*"):
+            owner = claimed.name.rsplit("-", 1)[-1]
+            alive = owner.isdigit() and _process_alive(int(owner))
+            try:
+                stale = now - claimed.stat().st_mtime > self.STALE_CLAIM_SECONDS
+                if not alive or stale:
+                    os.replace(claimed, claimed.with_name(claimed.name.split(".inflight-")[0]))
+            except OSError:
+                continue
+
+    def drain(self, ram: PromotionRAM, config: Config, *, limit: int = 100, timeout_ms: int = 8_000) -> int:
+        """Deliver queued events in capture order; returns how many were delivered.
+
+        Stops at the first transient failure and leaves the rest queued.
+        """
+
+        if not self.directory.is_dir():
+            self.blocked = False
+            return 0
+        delivered = attempts = 0
+        with self._lock:
+            self.blocked = False
+            self._reclaim_stale()
+            for path in sorted(self.directory.glob("*.json"), key=_mtime):
+                if attempts >= limit:
+                    break
+                claimed = path.with_name(f"{path.name}.inflight-{os.getpid()}")
+                try:
+                    os.replace(path, claimed)  # atomic claim; another server may hold it
+                except OSError:
+                    continue
+                try:
+                    record = json.loads(claimed.read_text(encoding="utf-8"))
+                    request = {key: record["request"][key] for key in self._FIELDS}
+                    context = dict(record.get("context") or {})
+                except (OSError, ValueError, KeyError, TypeError):
+                    self._set_aside(claimed, "unreadable")
+                    continue
+                if request["actor_id"] != config.participant or request["namespace"] != config.personal_namespace:
+                    # Captured under another configuration; leave it for a matching server.
+                    os.replace(claimed, path)
+                    continue
+                attempts += 1
+                try:
+                    result = ram.add_session_event(**request, timeout_ms=timeout_ms)
+                except Exception as error:
+                    status = error_status(error)  # the SDK may wrap the HTTP error
+                    if status in {400, 413, 422}:
+                        # RAM rejected this exact event; retrying cannot succeed.
+                        self._set_aside(claimed, f"http_{status}")
+                        continue
+                    stored = self._stored_event(ram, request, timeout_ms) if status == 409 else None
+                    if stored is None:
+                        # Transient, or a 409 we cannot yet resolve: retry later with the same key.
+                        os.replace(claimed, path)
+                        self.blocked = True
+                        break
+                    result = {"event": stored}  # RAM already holds this event under the key
+                ram_event_id = _ram_event_id(result)
+                if ram_event_id:
+                    self.ledger.append(
+                        "ram_private_event",
+                        {**context, "ram_event_id": ram_event_id},
+                        event_id=f"private-{request['idempotency_key']}",
+                    )
+                claimed.unlink(missing_ok=True)
+                delivered += 1
+        return delivered
+
+    @staticmethod
+    def _stored_event(ram: Any, request: Mapping[str, Any], timeout_ms: int) -> dict[str, Any] | None:
+        """Find the event RAM already stored for this key after a 409 conflict.
+
+        Role, text, and metadata are deterministic for one hook payload; only
+        the capture time can differ between redeliveries.
+        """
+
+        try:
+            # The event may already be folded into the session summary.
+            session = ram.get_session(request["session_id"], timeout_ms=timeout_ms, include_summarised=True)
+        except Exception:
+            return None
+        for event in session.get("events") or []:
+            if not isinstance(event, dict):
+                continue
+            texts = [part.get("text") for part in event.get("content") or [] if isinstance(part, dict)]
+            if (
+                str(event.get("role", "")).upper() == str(request["role"]).upper()
+                and texts == [request["text"]]
+                and event.get("metadata") == request["metadata"]
+                and event.get("actorId", event.get("actor_id")) == request["actor_id"]
+            ):
+                return event
+        return None
+
+    def _set_aside(self, claimed: Path, reason: str) -> None:
+        """Move a permanently rejected event out of the queue for operator review."""
+
+        rejected = self.directory / "rejected"
+        try:
+            rejected.mkdir(mode=0o700, exist_ok=True)
+            os.replace(claimed, rejected / claimed.name.split(".inflight-")[0])
+        except OSError:
+            return
+        self.ledger.append("ram_private_event_rejected", {"file": claimed.name.split(".inflight-")[0], "reason": reason})
+
+
+def _mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+class OutboxDelivery(threading.Thread):
+    """Background delivery of hook-queued private events from the MCP server."""
+
+    BATCH = 100
+
+    def __init__(self, outbox: PrivateEventOutbox, ram: PromotionRAM, config: Config, interval: float = 0.25) -> None:
+        super().__init__(name="private-event-delivery", daemon=True)
+        self.outbox = outbox
+        self.ram = ram
+        self.config = config
+        self.interval = interval
+        self._halt = threading.Event()  # not "_stop": that name is Thread's own method
+
+    def stop(self) -> None:
+        self._halt.set()
+
+    def run(self) -> None:
+        wait = self.interval
+        while not self._halt.is_set():
+            try:
+                delivered = self.outbox.drain(self.ram, self.config, limit=self.BATCH)
+                if self.outbox.blocked:
+                    wait = min(max(wait, self.interval) * 2, 30.0)  # RAM unavailable: back off
+                elif delivered >= self.BATCH:
+                    wait = 0.0  # more than one batch queued
+                else:
+                    wait = self.interval
+            except Exception:
+                wait = min(max(wait, self.interval) * 2, 30.0)
+            self._halt.wait(wait)
+
+
+def capture_allowed(config: Config, payload: Mapping[str, Any]) -> bool:
+    """Whether a hook event comes from a session inside a configured folder.
+
+    Plugins are installed for the whole user account, so the hooks run in every
+    project. They record nothing unless the session's working directory is one
+    of RAM_CAPTURE_FOLDERS or inside one; a missing directory records nothing.
+    """
+
+    cwd = payload.get("cwd")
+    if not config.capture_folders or not isinstance(cwd, str) or not os.path.isabs(cwd):
+        return False
+    path = os.path.realpath(cwd)
+    return any(
+        path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+        for folder in config.capture_folders
+    )
 
 
 @dataclass
 class HookCapture:
     config: Config
-    ram: PromotionRAM
+    ram: PromotionRAM | None
     ledger: PromotionLedger
     timeout_ms: int = 1_500
+    outbox: PrivateEventOutbox | None = None
 
     def _private_event(
         self,
@@ -353,6 +611,30 @@ class HookCapture:
             "tool_use_id": _bounded_text(payload.get("tool_use_id") or "", 128),
             "private_only": True,
         }
+        context = {
+            "session_id": source_session,
+            "turn_id": payload.get("turn_id"),
+            "private_session_id": private_session,
+            "hook_event": payload.get("hook_event_name"),
+        }
+        if self.outbox is not None:
+            # Fast path for hook processes: queue locally; the MCP server delivers it.
+            self.outbox.put(
+                {
+                    "session_id": private_session,
+                    "actor_id": self.config.participant,
+                    "namespace": self.config.personal_namespace,
+                    "role": role,
+                    "text": text,
+                    "created_at": _now(),
+                    "metadata": metadata,
+                    "idempotency_key": hook_id[:128],
+                },
+                context,
+            )
+            return None
+        if self.ram is None:
+            raise PluginError("configuration_missing", "Hook capture needs RAM or a private event outbox.")
         try:
             result = self.ram.add_session_event(
                 session_id=private_session,
@@ -366,28 +648,13 @@ class HookCapture:
                 timeout_ms=self.timeout_ms,
             )
         except Exception:
-            self.ledger.append(
-                "ram_private_event_pending",
-                {
-                    "session_id": source_session,
-                    "turn_id": payload.get("turn_id"),
-                    "private_session_id": private_session,
-                    "hook_event": payload.get("hook_event_name"),
-                },
-                event_id=f"pending-{hook_id}",
-            )
+            self.ledger.append("ram_private_event_pending", context, event_id=f"pending-{hook_id}")
             return None
         ram_event_id = _ram_event_id(result)
         if ram_event_id:
             self.ledger.append(
                 "ram_private_event",
-                {
-                    "session_id": source_session,
-                    "turn_id": payload.get("turn_id"),
-                    "private_session_id": private_session,
-                    "ram_event_id": ram_event_id,
-                    "hook_event": payload.get("hook_event_name"),
-                },
+                {**context, "ram_event_id": ram_event_id},
                 event_id=f"private-{hook_id}",
             )
         return ram_event_id
@@ -528,10 +795,39 @@ class HookCapture:
 
 
 class PromotionService:
-    def __init__(self, config: Config, ram: PromotionRAM, ledger: PromotionLedger) -> None:
+    def __init__(
+        self,
+        config: Config,
+        ram: PromotionRAM,
+        ledger: PromotionLedger,
+        outbox: PrivateEventOutbox | None = None,
+        refresh: Callable[[str], dict[str, Any]] | None = None,
+    ) -> None:
         self.config = config
         self.ram = ram
         self.ledger = ledger
+        self.outbox = outbox
+        # Rebuilds the current view after a confirmed promotion; see reconcile.py.
+        self.refresh = refresh
+
+    def _refresh(self, candidate_id: str) -> dict[str, Any]:
+        if self.refresh is None:
+            return {"projection_status": "pending_reconciliation"}
+        try:
+            return self.refresh(candidate_id)
+        except Exception as error:  # noqa: BLE001 - the observation is already saved
+            return {"projection_status": "pending_reconciliation", "projection_error": str(public_error(error)["code"])}
+
+    def _flush_private_events(self) -> None:
+        """Deliver queued hook events first so candidates carry their RAM event IDs."""
+
+        if self.outbox is None:
+            return
+        try:
+            self.outbox.drain(self.ram, self.config, timeout_ms=3_000)
+        except Exception:
+            # Still queued; promotion records "pending" provenance as before.
+            pass
 
     @staticmethod
     def _public(candidate: Mapping[str, Any]) -> dict[str, Any]:
@@ -565,11 +861,13 @@ class PromotionService:
         evidence_text: str,
         resolved_at: str | None = None,
     ) -> dict[str, Any]:
+        self._flush_private_events()
         source = self.ledger.prompt_source(evidence_text)
         if source is None:
             raise PluginError(
                 "private_evidence_not_found",
-                "The exact statement was not found in this user's private hook capture. Use the complete prompt text.",
+                "The exact statement was not found in this user's private hook capture. Use the complete prompt text, "
+                "and make sure the chat runs in a folder listed in RAM_CAPTURE_FOLDERS, where capture is enabled.",
             )
         current_status = current_state.get("lifecycle_status")
         if current_status != expected_current_status:
@@ -650,6 +948,7 @@ class PromotionService:
     def candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         if status not in {"pending", "promoted", "rejected", "all"}:
             raise PluginError("invalid_input", "status must be pending, promoted, rejected, or all.")
+        self._flush_private_events()
         candidates = list(self.ledger.candidates().values())
         if status != "all":
             candidates = [candidate for candidate in candidates if candidate.get("status") == status]
@@ -662,6 +961,7 @@ class PromotionService:
         }
 
     def candidate_inspect(self, candidate_id: str) -> dict[str, Any]:
+        self._flush_private_events()
         candidate = self.ledger.candidates().get(candidate_id)
         if candidate is None:
             raise PluginError("candidate_not_found", "The private promotion candidate was not found.")
@@ -769,7 +1069,7 @@ class PromotionService:
             "id": memory_id,
             "text": observation["subject"],
             "namespace": self.config.namespace,
-            "ownerId": self.config.agenda_owner_id,
+            "ownerId": self.config.participant,
             "memoryType": "organizational_state",
             "topics": [
                 "organizational-state",
@@ -792,7 +1092,8 @@ class PromotionService:
             and record.get("text") == expected["text"]
             and isinstance(namespace, str)
             and namespace.casefold() == self.config.namespace.casefold()
-            and owner == self.config.agenda_owner_id
+            # 0.13 wrote promotions under the former shared owner; a retry must still match.
+            and owner in {self.config.participant, self.config.agenda_owner_id} - {""}
             and memory_type == "organizational_state"
             and _canonical(_attributes(dict(record))) == _canonical(expected["attributes"])
         )
@@ -861,6 +1162,7 @@ class PromotionService:
     ) -> dict[str, Any]:
         if confirmed is not True:
             raise PluginError("confirmation_required", "Explicit confirmation is required before shared promotion.")
+        self._flush_private_events()
         candidate = self.ledger.candidates().get(candidate_id)
         if candidate is None:
             raise PluginError("candidate_not_found", "The private promotion candidate was not found.")
@@ -882,7 +1184,7 @@ class PromotionService:
                     "candidate_id": candidate_id,
                     "state_id": candidate.get("state_id"),
                     "observation_memory_id": candidate.get("observation_memory_id"),
-                    "projection_status": "pending_reconciliation",
+                    **self._refresh(candidate_id),
                 }
             raise PluginError(
                 "observation_required",
@@ -912,6 +1214,7 @@ class PromotionService:
                 event,
                 event_id=f"promote-{candidate_id}",
             )
+        projection = self._refresh(candidate_id)
         return {
             "ok": True,
             "outcome": (
@@ -925,10 +1228,13 @@ class PromotionService:
             "state_id": normalized["state_id"],
             "observation_memory_id": payload["id"],
             "observation_contract": OBSERVATION_SCHEMA,
-            "projection_status": "pending_reconciliation",
+            **projection,
             "message": (
-                "RAM stored the confirmed organizational-state observation directly. The central "
-                "reconciliation projector will update the current view on its next run."
+                "RAM stored the confirmed organizational-state observation and updated the team's current view."
+                if projection.get("projection_status") == "current"
+                else "RAM stored the confirmed organizational-state observation. The team's current view is "
+                "updated the next time an update is published or scripts/reconcile_management_state.py --apply runs; "
+                "do not publish this update again."
             ),
         }
 
@@ -942,6 +1248,13 @@ class PromotionFacade:
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self.base, name)
+
+    def system_status(self) -> dict[str, Any]:
+        result = self.base.system_status()
+        outbox = self.promotion.outbox
+        if outbox is not None and isinstance(result, dict):
+            result["private_capture"] = {"queued_events": outbox.pending()}
+        return result
 
     def memory_candidate_list(self, status: str = "pending", limit: int = 50) -> dict[str, Any]:
         return self.promotion.candidate_list(status=status, limit=limit)
