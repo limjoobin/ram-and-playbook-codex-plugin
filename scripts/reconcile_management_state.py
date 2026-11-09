@@ -52,17 +52,26 @@ def main(argv: list[str] | None = None) -> int:
     from admin_bootstrap.bundle import Bundle
     from ram_plugin.credentials import load_credential_file
     from ram_plugin.ram import RAMClient
-    from reconciliation.job import ReconciliationError, ReconciliationJob
+    from reconciliation.job import ReconciliationError, ReconciliationJob, adopt_unnamespaced
 
     try:
         config = load_credential_file(args.config)
         bundle = Bundle.load(ROOT / "context-models" / "management-agenda" / "v1")
-        result = ReconciliationJob(config, RAMClient(config), bundle).run(
+        ram = RAMClient(config)
+        job = ReconciliationJob(config, ram, bundle)
+        # Records written before everything lived in the shared namespace are
+        # invisible to namespace searches; --apply moves them there first.
+        adopted = adopt_unnamespaced(config, ram, apply=args.apply)
+        if adopted["moved_count"] and not job.wait_until_searchable(adopted["moved_observation_ids"]):
+            raise ReconciliationError("Moved records are not searchable yet. Run this command again in a minute.")
+        result = job.run(
             apply=args.apply,
             wait_for_candidate=args.wait_for_candidate,
             timeout_seconds=args.timeout_seconds,
             poll_seconds=args.poll_seconds,
         )
+        result["unnamespaced_record_count"] = adopted["unnamespaced_count"]
+        result["moved_into_namespace_count"] = adopted["moved_count"]
     except ReconciliationError as error:
         result = {"ok": False, "status": "failed", "message": str(error)}
     except Exception:

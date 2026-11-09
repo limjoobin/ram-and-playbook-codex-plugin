@@ -156,6 +156,7 @@ def ingest_documents(
                 "revision": revision,
                 "status": "succeeded",
                 "outputCount": len(items),
+                "memoryIds": [item for item in items if isinstance(item, str)],
             }
         )
     return {

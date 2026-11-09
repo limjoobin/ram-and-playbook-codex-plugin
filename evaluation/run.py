@@ -60,7 +60,7 @@ def _record(case: dict[str, Any], role: str = "creates") -> dict[str, Any]:
         "text": case["subject"],
         "ownerId": "ami-project-office",
         "memoryType": "organizational_state",
-        "namespace": None,
+        "namespace": "evaluation-namespace",
         "sources": [{"sourceId": f"source-{case_id}-{suffix}"}],
         "attributes": {
             "schema_version": "organizational-state-v2",
@@ -104,7 +104,7 @@ class EvaluationRAM:
                 "text": case["subject"],
                 "ownerId": "ami-project-office",
                 "memoryType": "organizational_state_projection",
-                "namespace": None,
+                "namespace": "evaluation-namespace",
                 "attributes": {
                     "schema_version": "organizational-state-projection-v1",
                     "state_id": f"state-{case['id']}",

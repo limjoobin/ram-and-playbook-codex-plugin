@@ -46,7 +46,9 @@ relevant source and tests.
 | `server/ram_plugin/playbook.py` | Allowlisted redis-iris SDK client for Playbooks REST reads |
 | `server/ram_plugin/agenda.py` | Runtime Skill verification and evidence-bound agenda preparation |
 | `server/ram_plugin/promotion.py` | Private hook capture, candidate review, and confirmed source-linked promotion |
-| `reconciliation/job.py` | Central deterministic observation-projection job using the versioned projector |
+| `server/ram_plugin/reconcile.py` | Observation-projection rebuild run after each promotion, namespace adoption, conditional writes |
+| `server/ram_plugin/projector.py`, `projection-policy.json` | Byte-identical copies of the versioned projector and policy |
+| `reconciliation/job.py` | Administrator wrapper that runs `reconcile.py` with the context-model bundle |
 | `scripts/reconcile_management_state.py` | Explicit administrator plan/apply entry point for reconciliation |
 | `server/launch.py` | Private runtime launcher; installs the pinned SDK once, then runs `main.py` |
 | `server/requirements.txt` | Exact redis-iris SDK pins |
@@ -82,9 +84,14 @@ Paths beginning with `server/` in the table are relative to
 - Keep endpoints HTTPS-only except for explicit loopback development, and
   reject credentials, queries, and fragments in the URL.
 - Keep endpoint, store, namespace, participant, and API key out of tool input.
-- Enforce the configured namespace on shared-memory reads and writes. The
-  management lane may accept unnamespaced records only when owner, memory type,
-  and schema match exactly; any named namespace must match configuration.
+- Enforce the configured namespace on shared-memory reads and writes. Every
+  management record lives in `RAM_NAMESPACE` and is in scope when namespace,
+  memory type, and schema match; unnamespaced records are out of scope.
+  `ownerId` is the author (`RAM_PARTICIPANT`) and never part of the scope.
+- Keep `server/ram_plugin/projector.py` and `projection-policy.json`
+  byte-identical to `context-models/management-agenda/v1`; change both together.
+  Projection writes must stay conditional (create never overwrites; replace
+  names the revision read) so concurrent participants cannot overwrite each other.
 - Keep hook capture in the per-user `RAM_PERSONAL_NAMESPACE`. Hooks must never
   write the shared namespace. Promote only through the explicit MCP tool after
   confirmation, by creating a new source-linked observation rather than

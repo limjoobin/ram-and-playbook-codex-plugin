@@ -38,7 +38,7 @@ def observation(
     observed: str = "2026-01-01T00:00:00Z",
     artifact: str = "minutes-a",
     revision: str = "1",
-    namespace=None,
+    namespace="shared-namespace",
     supersedes=None,
     requested_decision: str = "Approve the next step",
     impact: str = "The milestone will slip",
@@ -84,7 +84,7 @@ def projection(memory_id: str, state_id: str, supporting, *, status="open", conf
         "text": attributes["subject"],
         "ownerId": "ami-project-office",
         "memoryType": "organizational_state_projection",
-        "namespace": None,
+        "namespace": "shared-namespace",
         "attributes": {
             "schema_version": "organizational-state-projection-v1",
             "state_id": state_id,
@@ -165,7 +165,8 @@ class ManagementTests(unittest.TestCase):
             limit=100,
         )
         filters = ram.requests[0]["filter"]
-        self.assertEqual(filters["ownerId"]["eq"], "ami-project-office")
+        self.assertEqual(filters["namespace"]["eq"], "shared-namespace")
+        self.assertNotIn("ownerId", filters)
         self.assertEqual(filters["memoryType"]["eq"], "organizational_state_projection")
         self.assertEqual(filters["attributes"]["schema_version"]["string"], "organizational-state-projection-v1")
         self.assertEqual(filters["attributes"]["project_id"]["string"], "project-ami-es2002")

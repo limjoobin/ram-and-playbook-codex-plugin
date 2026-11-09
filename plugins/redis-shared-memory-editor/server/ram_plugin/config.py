@@ -14,7 +14,7 @@ from urllib.parse import SplitResult, urlsplit
 from .layout import DEFAULT_LAYOUT, LAYOUTS
 
 
-VERSION = "0.13.0"
+VERSION = "0.14.0"
 SLUG = re.compile(r"^[a-zA-Z0-9-]{1,64}$")
 PLAYBOOK_ID = re.compile(r"^pb_[0-9a-f]{32}$")
 # Redis Cloud store IDs look like st_<32 hex>; local stores may use plain slugs.
@@ -44,7 +44,10 @@ ADMIN_SETTING_NAMES = (
     "IRIS_AGENT_MEMORY_SERVICE_URL",
     "IRIS_AGENT_MEMORY_SERVICE_TOKEN",
 )
-OPTIONAL_SETTING_NAMES = ("RAM_PERSONAL_NAMESPACE", "RAM_MEMORY_LAYOUT", "RAM_CAPTURE_FOLDERS")
+# RAM_AGENDA_OWNER_ID is the shared owner earlier versions wrote management
+# records under. Records are now scoped by namespace and owned by their author;
+# the setting only identifies earlier unnamespaced records to move.
+OPTIONAL_SETTING_NAMES = ("RAM_PERSONAL_NAMESPACE", "RAM_AGENDA_OWNER_ID", "RAM_MEMORY_LAYOUT", "RAM_CAPTURE_FOLDERS")
 REQUIRED_SETTING_NAMES = tuple(
     name for name in SETTING_NAMES if name not in OPTIONAL_SETTING_NAMES
 )
@@ -66,7 +69,7 @@ class Config:
     personal_namespace: str
     participant: str
     api_key: str
-    agenda_owner_id: str
+    agenda_owner_id: str  # earlier versions' shared owner; see OPTIONAL_SETTING_NAMES
     playbook_url: str
     playbook_id: str
     playbook_api_key: str
@@ -140,7 +143,7 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         ("RAM_NAMESPACE", values["RAM_NAMESPACE"]),
         ("RAM_PERSONAL_NAMESPACE", personal_namespace),
         ("RAM_PARTICIPANT", participant),
-        ("RAM_AGENDA_OWNER_ID", values["RAM_AGENDA_OWNER_ID"]),
+        ("RAM_AGENDA_OWNER_ID", values.get("RAM_AGENDA_OWNER_ID") or "legacy-unused"),
     ):
         if not SLUG.fullmatch((value or "").strip()):
             raise PluginError(
@@ -188,7 +191,7 @@ def load_config(values: Mapping[str, str | None]) -> Config:
         personal_namespace=personal_namespace,
         participant=participant,
         api_key=api_key,
-        agenda_owner_id=(values["RAM_AGENDA_OWNER_ID"] or "").strip(),
+        agenda_owner_id=(values.get("RAM_AGENDA_OWNER_ID") or "").strip(),
         playbook_url=playbook_url,
         playbook_id=playbook_id,
         playbook_api_key=playbook_api_key,

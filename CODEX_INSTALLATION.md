@@ -7,12 +7,11 @@ Credentials stay on that user's computer.
 
 This is the participant installation guide. It assumes an administrator has
 already provisioned RAM and Playbook, declared the two memory types, published
-the agenda Skill, ingested the approved corpus, and started central
-reconciliation. For a fresh environment, complete
+the agenda Skill, and ingested the approved corpus. For a fresh environment, complete
 [DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) first.
 
 Installing the plugin does not deploy either service, run MemoryETL, hydrate
-the shared store, publish Playbook content, or install the central scheduler.
+the shared store, or publish Playbook content.
 Hook trust is also a manual per-user decision; it cannot be granted by this
 repository or by the environment administrator.
 
@@ -138,7 +137,6 @@ IRIS_AGENT_MEMORY_API_KEY=your-user-api-key
 RAM_NAMESPACE=shared-namespace
 RAM_PERSONAL_NAMESPACE=private-your-user-id
 RAM_PARTICIPANT=your-user-id
-RAM_AGENDA_OWNER_ID=ami-project-office
 IRIS_AGENT_PLAYBOOKS_URL=https://your-playbook-endpoint.redis.io
 IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID=pb_your-playbook-id
 IRIS_AGENT_PLAYBOOKS_API_KEY=your-user-playbook-reader-key
@@ -156,10 +154,10 @@ The values have these roles:
 | `IRIS_AGENT_MEMORY_URL` | Shared | HTTPS RAM data-plane base URL. URLs with embedded credentials, a query, or a fragment are rejected. |
 | `IRIS_AGENT_MEMORY_STORE_ID` | Shared | Store used by the team (Redis Cloud IDs look like `st_` plus 32 hex characters). Letters, digits, underscores, and hyphens, 1–64. |
 | `IRIS_AGENT_MEMORY_API_KEY` | Per user when supported | Credential that authenticates RAM requests. |
-| `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write. The plugin creates it as a shared namespace on first write if it does not exist; reads never create namespaces. |
+| `RAM_NAMESPACE` | Shared | Namespace that scopes every read and write, including all management records: extracted documents, published updates, and the current view. Every participant of the project uses the same value. The plugin creates it as a shared namespace on first write if it does not exist; reads never create namespaces. |
 | `RAM_PERSONAL_NAMESPACE` | Per user, optional | Private namespace for this user's captured session events and RAM-derived personal memory. It defaults to `private-{RAM_PARTICIPANT}`. Set it explicitly when participant IDs are not globally unique. On first write it is created as a personal namespace owned by `RAM_PARTICIPANT`. |
-| `RAM_PARTICIPANT` | Per user | Contributor attribution. It is not authenticated identity. |
-| `RAM_AGENDA_OWNER_ID` | Shared | Exact owner lane containing immutable `organizational_state` observations and derived `organizational_state_projection` records. |
+| `RAM_PARTICIPANT` | Per user | Contributor attribution, written as the `ownerId` of the records this user creates. It is not authenticated identity. |
+| `RAM_AGENDA_OWNER_ID` | Shared, optional | The one owner that versions before 0.14.0 wrote every management record under, normally `ami-project-office`. Records are now scoped by namespace and owned by their author; this value is used only to find that owner's earlier records that have no namespace and move them into `RAM_NAMESPACE`. Without it, nothing is moved. |
 | `IRIS_AGENT_PLAYBOOKS_URL` | Shared | Playbooks data-plane base URL only, for example `https://your-playbook-endpoint.redis.io`. Do not include an `/iris/data/v1/agent-playbooks/...` path; the SDK appends it. Loopback `http` is accepted for local development only. |
 | `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID` | Shared | Playbook ID: `pb_` followed by 32 lowercase hex characters. |
 | `IRIS_AGENT_PLAYBOOKS_API_KEY` | Per user when supported | Runtime reader key that authenticates Playbook reads. |
@@ -175,6 +173,19 @@ deliberately never copies their values into its runtime configuration.
 Ordinary participants leave them unset. The names match those used by the SDK
 and the `iris` CLI.
 
+### Upgrading from 0.13.x
+
+Version 0.14.0 keeps every management record in the shared `RAM_NAMESPACE`
+and records each one under its author's `RAM_PARTICIPANT`, instead of one
+shared owner. A confirmed promotion now updates the current view itself, so no
+scheduler is needed. The settings file needs no change; `RAM_AGENDA_OWNER_ID`
+now only identifies the earlier records to move. Once per store, an administrator runs
+`.venv/bin/python scripts/reconcile_management_state.py --apply` (or
+`scripts/setup_demo.py`) to move records from earlier versions that have no
+namespace into `RAM_NAMESPACE`; until then they are not visible. Every
+participant must update to 0.14.0, because 0.13.x does not accept projections
+owned by a participant.
+
 ### Upgrading from 0.12.x
 
 Version 0.13.0 uses the redis-iris SDK and renames the settings. There is no
@@ -189,8 +200,8 @@ fallback: the old names are rejected as unexpected. Edit the file in place.
 | `PLAYBOOK_API_KEY` | `IRIS_AGENT_PLAYBOOKS_API_KEY` (reader key) |
 | `RAM_ADMIN_API_KEY`, `PLAYBOOK_PUBLISHER_API_KEY`, `OPENAI_API_KEY` | Removed. Administrators publishing a Skill use `IRIS_AGENT_PLAYBOOKS_CONTENT_API_KEY`. |
 
-`RAM_NAMESPACE`, `RAM_PERSONAL_NAMESPACE`, `RAM_PARTICIPANT`, and
-`RAM_AGENDA_OWNER_ID` are unchanged. Python 3.11+ is now required, and the new
+`RAM_NAMESPACE`, `RAM_PERSONAL_NAMESPACE`, and `RAM_PARTICIPANT` are
+unchanged. `RAM_AGENDA_OWNER_ID` is optional (see the table above). Python 3.11+ is now required, and the new
 runtime must be installed (step 4).
 
 The hook definitions are unchanged from 0.12.x, so existing hook trust still
@@ -237,8 +248,8 @@ slow. Export the same `PLUGIN_DATA` that the MCP server and hooks use:
 
 ```sh
 export PLUGIN_DATA="${CODEX_HOME:-$HOME/.codex}/plugins/data/redis-shared-memory-editor-redis-field-engineering"
-python3 "${CODEX_HOME:-$HOME/.codex}/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.13.0/server/launch.py" --install
-python3 "${CODEX_HOME:-$HOME/.codex}/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.13.0/server/launch.py" --check
+python3 "${CODEX_HOME:-$HOME/.codex}/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.14.0/server/launch.py" --install
+python3 "${CODEX_HOME:-$HOME/.codex}/plugins/cache/redis-field-engineering/redis-shared-memory-editor/0.14.0/server/launch.py" --check
 ```
 
 `--check` exits 0 when the runtime is ready. The launcher is macOS/Linux only.
@@ -342,8 +353,9 @@ candidate and ask for explicit confirmation before calling
 `memory_candidate_promote`. `PostToolUse` and `Stop` remain inactive.
 
 After promotion, the shared observation is already stored and verified; there
-is no MemoryETL wait. The central administrator then runs the versioned
-reconciliation job from a repository checkout:
+is no MemoryETL wait. The plugin then rebuilds the current view and returns
+`projection_status: current`. If it returns `pending_reconciliation` instead,
+run the versioned reconciliation job from a repository checkout:
 
 ```sh
 .venv/bin/python scripts/reconcile_management_state.py \
@@ -359,11 +371,10 @@ locator must match the reviewed update. A subsequent agenda should cite this
 RAM-memory reference for completed work rather than only the original
 assignment document.
 
-The environment administrator's PoC host also runs the same command centrally
-every five minutes with `--apply --quiet-no-changes`. This catches document and
-session extraction that does not originate from an interactive promotion.
-RAM's ingestion webhook is a blocking decision hook, not a completion
-notification, so it is not used as a post-extraction trigger.
+Document ingestion through `scripts/setup_demo.py` rebuilds the current view
+when it finishes. After ingesting documents any other way, run the same command
+with `--apply`. RAM's ingestion webhook is a blocking decision hook, not a
+completion notification, so it is not used as a post-extraction trigger.
 
 Expected: the deterministic current projection changes to the confirmed
 lifecycle. An unconfirmed or merely
@@ -381,10 +392,8 @@ python3 -m venv .venv
 .venv/bin/python evaluation/run.py
 ```
 
-The administrator-owned central scheduler checkout must be clean and pinned to
-that same approved commit or tag. Detach it at the approved SHA, kick the
-scheduler once, and confirm `git rev-parse HEAD` matches the plugin release
-before completing the live acceptance test. See
+Run administrator commands from a clean checkout of that same approved
+commit or tag, so they use the same projector as the installed plugin. See
 [DEMO_ENVIRONMENT_SETUP.md](DEMO_ENVIRONMENT_SETUP.md) and
 [docs/management-reconciliation.md](docs/management-reconciliation.md).
 
@@ -437,11 +446,11 @@ remove it through the laptop's approved file-management process.
 | A pre-0.13.0 setting name is reported as unexpected | Rename it using the "Upgrading from 0.12.x" table. |
 | "Private RAM capture is unavailable" | The hook could not read the credential file or write the local queue. Check the credential file and that the plugin data directory is writable. |
 | `private_capture.queued_events` keeps growing | The MCP server cannot reach RAM. Fix the error `system_status` reports for RAM; queued events are delivered once it recovers. Events RAM rejects outright are moved to `promotion/outbox/rejected/`. |
-| `configuration_missing` | Create the file at the exact path above and fill the nine required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
+| `configuration_missing` | Create the file at the exact path above and fill the eight required settings. `RAM_PERSONAL_NAMESPACE` may be omitted when `private-{RAM_PARTICIPANT}` is acceptable. |
 | Hooks do not capture | Review the plugin's hooks in Codex, confirm they are trusted/enabled, and start a new chat. Confirm the MCP runtime is installed (`launch.py --check`) so the server can deliver queued events. |
 | Private events exist but no personal memories appear | Confirm the RAM session worker and model provider are running and the store has the intended personal custom extraction enabled. |
 | Promotion returns `write_unverified` | Read the deterministic observation ID from the candidate before attempting another write. Do not blindly resubmit. |
-| History contains the promoted observation but current state is unchanged | Run the central reconciliation job for the returned candidate ID, or wait for the five-minute central schedule. Do not promote again. |
+| Promotion returned `pending_reconciliation`, or history contains the promoted observation but current state is unchanged | Run `scripts/reconcile_management_state.py --apply --wait-for-candidate <id>` for the returned candidate ID. Do not promote again. |
 | Credential file permission or owner error | Confirm the file belongs to the signed-in OS user and run `chmod 600 ~/.config/redis-shared-memory/editor.env`. |
 | `authentication_failed`, `access_denied`, or `playbook_authentication_failed` | Replace or reissue the affected service key and confirm its least-privilege access. |
 | `network_error` or `playbook_unavailable` | Check both HTTPS endpoints, VPN, DNS, proxy, and enterprise allowlist. |

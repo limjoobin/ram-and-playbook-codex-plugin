@@ -10,6 +10,7 @@ from .config import Config, PluginError, VERSION
 from .playbook import ALLOWED_TOOLS, PlaybookClient
 from .ram import RAMClient, _field, _items
 from .layout import COMPACT
+from .reconcile import in_lane
 
 _MAX_STATE_PAGES = 50
 
@@ -226,31 +227,11 @@ def _sort_key(record: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _scope_matches(record: dict[str, Any], config: Config) -> bool:
-    attributes = _attributes(record)
-    namespace = record.get("namespace")
-    namespace_matches = namespace in {None, ""} or (
-        isinstance(namespace, str) and namespace.casefold() == config.namespace.casefold()
-    )
-    return (
-        _field(record, "ownerId", "owner_id") == config.agenda_owner_id
-        and _field(record, "memoryType", "memory_type") == OBSERVATION_TYPE
-        and attributes.get("schema_version") in OBSERVATION_SCHEMAS
-        and namespace_matches
-    )
+    return in_lane(record, config, OBSERVATION_TYPE, OBSERVATION_SCHEMAS)
 
 
 def _projection_scope_matches(record: dict[str, Any], config: Config) -> bool:
-    attributes = _attributes(record)
-    namespace = record.get("namespace")
-    namespace_matches = namespace in {None, ""} or (
-        isinstance(namespace, str) and namespace.casefold() == config.namespace.casefold()
-    )
-    return (
-        _field(record, "ownerId", "owner_id") == config.agenda_owner_id
-        and _field(record, "memoryType", "memory_type") == PROJECTION_TYPE
-        and attributes.get("schema_version") == PROJECTION_SCHEMA
-        and namespace_matches
-    )
+    return in_lane(record, config, PROJECTION_TYPE, (PROJECTION_SCHEMA,))
 
 
 def _observation(record: dict[str, Any]) -> dict[str, Any]:
@@ -447,7 +428,7 @@ class PluginService:
         schema_version: str,
     ) -> dict[str, Any]:
         filters: dict[str, Any] = {
-            "ownerId": {"eq": self.config.agenda_owner_id},
+            "namespace": {"eq": self.config.namespace},
             "memoryType": {"eq": memory_type},
             "attributes": {
                 "schema_version": {"string": schema_version},
@@ -506,7 +487,7 @@ class PluginService:
                 "view": view,
                 "schema_version": OBSERVATION_SCHEMA,
                 "supported_schema_versions": sorted(OBSERVATION_SCHEMAS),
-                "owner_id": self.config.agenda_owner_id,
+                "namespace": self.config.namespace,
                 "applied_filters": history_attributes,
                 "observations": observations[:limit],
                 "has_more": len(observations) > limit,
@@ -541,7 +522,7 @@ class PluginService:
             "ok": True,
             "view": view,
             "schema_version": PROJECTION_SCHEMA,
-            "owner_id": self.config.agenda_owner_id,
+            "namespace": self.config.namespace,
             "applied_filters": projection_attributes,
             "states": states,
             "has_more": len(scoped) > limit,

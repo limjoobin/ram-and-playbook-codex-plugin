@@ -23,6 +23,7 @@ from .promotion import (
     PromotionService,
 )
 from .ram import RAMClient, SharedMemory
+from .reconcile import ReconciliationJob
 
 
 READ_ANNOTATIONS = {
@@ -236,7 +237,7 @@ TOOLS = [
     {
         "name": "memory_candidate_promote",
         "title": "Promote confirmed memory candidate",
-        "description": "Directly store a new shared organizational-state observation from an inspected private candidate only after the user explicitly confirms the exact observation. This preserves the private source, verifies the write by exact ID, and is safely idempotent. The central projector updates the current view separately.",
+        "description": "Directly store a new shared organizational-state observation from an inspected private candidate only after the user explicitly confirms the exact observation. This preserves the private source, verifies the write by exact ID, is safely idempotent, and then updates the team's current view (projection_status current) or reports pending_reconciliation.",
         "inputSchema": _object_schema(
             {
                 "candidate_id": {"type": "string", "pattern": "^candidate-[a-f0-9]{48}$"},
@@ -306,7 +307,8 @@ def default_service() -> Any:
         base = PluginService(config, ram, PlaybookClient(config), SharedMemory(config, ram))
         ledger = PromotionLedger.from_environment()
         outbox = PrivateEventOutbox(ledger)
-        promotion = PromotionService(config, ram, ledger, outbox)
+        refresh = ReconciliationJob(config, ram).refresh_after_promotion
+        promotion = PromotionService(config, ram, ledger, outbox, refresh)
         # One SDK client and warm connection deliver every hook-queued private event.
         OutboxDelivery(outbox, RAMClient(config), config).start()
         _DEFAULT_SERVICE = PromotionFacade(base, promotion)

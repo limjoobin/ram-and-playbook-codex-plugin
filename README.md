@@ -155,6 +155,8 @@ The extractor reads the demo documents and turns them into memory records.
 
 3. Enter the **Name** `organizational-state-documents`, keep **Memory type**
    set to `organizational_state`, and leave **Destination namespace** empty.
+   The setup command moves what it extracts into the project's shared
+   namespace, `real-reaction`.
    Switch on **Customize extraction prompt for documents** and paste the prompt
    (**⌘ V**) into the box that appears. Select **Save**.
 
@@ -435,20 +437,11 @@ changed since.
 
    > Yes, publish it to shared memory.
 
-   Look for: a confirmation that the update was published. Publish it only
-   once.
+   Look for: a confirmation that the update was published and that the team's
+   current view is updated. Publish it only once. Ask prompt 2 again: the
+   action is now completed, for you and for everyone else using the project.
 
-5. **Refresh the team's current view.** Published updates reach the current
-   view when the current state is rebuilt. Paste this into Terminal from the
-   project folder:
-
-   ```sh
-   .venv/bin/python scripts/reconcile_management_state.py --apply
-   ```
-
-   Then ask prompt 2 again in the chat: the action is now completed.
-
-6. **Prepare an agenda** (this takes about two minutes)
+5. **Prepare an agenda** (this takes about two minutes)
 
    This is where the Playbook comes in. ChatGPT doesn't decide on its own
    what belongs on a management agenda. It follows the agenda Skill you
@@ -491,7 +484,7 @@ changed since.
 
    ![The agenda's eight management topics with leads, requested outcomes, and timings](docs/images/getting-started/local-11-chatgpt-agenda-topics.png)
 
-7. **See which rules it followed**
+6. **See which rules it followed**
 
    > Which Playbook Skill and version did you use for that agenda, and which
    > rule files did you check?
@@ -502,14 +495,14 @@ changed since.
    fingerprint recorded in the published Skill, and refuses to prepare the
    agenda if one doesn't match.
 
-8. **Ask about history**
+7. **Ask about history**
 
    > What is the entire history of the LCD discussion?
 
    Look for: the LCD and talk-back decisions, then the later decision that
    removed the LCD and the advanced chip.
 
-9. **Ask a precise question**
+8. **Ask a precise question**
 
    > Has Laura already published the meeting minutes?
 
@@ -539,7 +532,7 @@ Presenters should also read the
 | `network_error` or `playbook_unavailable` | Check your internet and VPN connection. |
 | The first chat is very slow or times out | Run the setup command again (Step 11, item 4). |
 | Your updates are not being captured | Allow the plugin's two hooks in ChatGPT's settings (Step 12), then quit and reopen ChatGPT. |
-| A published update is not in the current view yet | Run the command in tour prompt 5. Do not publish it again. |
+| ChatGPT says the update was saved but the current view will update later | Paste `.venv/bin/python scripts/reconcile_management_state.py --apply` into Terminal from the project folder. Do not publish the update again. |
 
 For every error code and more detail, see the troubleshooting table in
 [CODEX_INSTALLATION.md](CODEX_INSTALLATION.md#troubleshooting).

@@ -51,6 +51,7 @@ def record(
         "id": memory_id,
         "text": f"Current state for {state_id}",
         "ownerId": "ami-project-office",
+        "namespace": "shared-namespace",
         "memoryType": "organizational_state",
         "sources": [{"sourceId": f"source-{memory_id}"}] if sources else [],
         "attributes": {
@@ -89,6 +90,7 @@ def projection_record(records):
         "id": f"projection-{attributes['state_id']}",
         "text": attributes["subject"],
         "ownerId": "ami-project-office",
+        "namespace": "shared-namespace",
         "memoryType": "organizational_state_projection",
         "attributes": {
             "schema_version": "organizational-state-projection-v1",

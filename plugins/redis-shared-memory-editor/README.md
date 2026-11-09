@@ -28,7 +28,7 @@ environment under the plugin data directory; this needs HTTPS access to the
 Python package index. The reviewed session-capture hooks are standard-library
 only and never load the SDK: they queue each private event locally and the
 running MCP server, which loads the SDK once, delivers it to RAM. Version
-0.13.0 is macOS/Linux only.
+0.13.0 and later are macOS/Linux only.
 The active `UserPromptSubmit` and `SessionEnd` hooks write only to the
 configured personal namespace. Automatic candidate creation is paused while
 `PostToolUse` and `Stop` are inactive. A likely lifecycle report instead causes
@@ -44,7 +44,7 @@ Each user creates a private configuration file at:
 
 Users in one collaboration group configure the same
 `IRIS_AGENT_MEMORY_URL`, `IRIS_AGENT_MEMORY_STORE_ID`, `RAM_NAMESPACE`,
-`RAM_AGENDA_OWNER_ID`, `IRIS_AGENT_PLAYBOOKS_URL` (base URL only), and
+`IRIS_AGENT_PLAYBOOKS_URL` (base URL only), and
 `IRIS_AGENT_PLAYBOOKS_PLAYBOOK_ID`. Each user configures their own `RAM_PERSONAL_NAMESPACE`,
 `RAM_PARTICIPANT`, and,
 preferably, their own service API keys.

@@ -75,15 +75,18 @@ parent is mode `0700`.
 - Namespace checks in the plugin do not replace server-side least privilege.
   Restrict each API key to the required store and operations whenever RAM
   supports that policy.
-- Organizational-state reads are fixed to the configured owner. History uses
+- Organizational-state reads are fixed to the configured shared namespace.
+  Every participant's records live there, each owned by its author; ownership
+  is attribution, not scope. History uses
   `organizational_state` with `organizational-state-v3` and accepts legacy v2 observations during migration; current/conflict views
   use `organizational_state_projection` with
   `organizational-state-projection-v1`.
-  Unnamespaced ingestion records are accepted only inside that exact lane; a
-  named namespace must match configuration.
+  Unnamespaced records are out of scope; the administrator reconcile command
+  and setup move earlier records owned by `RAM_AGENDA_OWNER_ID`, and new
+  MemoryETL output by ID, into the namespace explicitly.
 - Projection records contain only immutable supporting memory IDs. The plugin
-  reads those observations by exact ID, rechecks their owner, type, schema, and
-  namespace, and uses their RAM source links for evidence traversal.
+  reads those observations by exact ID, rechecks their namespace, type, and
+  schema, and uses their RAM source links for evidence traversal.
 - Generic relationship assertions remain inside immutable organizational-state
   observations. The projector validates their predicate, target, confidence,
   assertion status, project scope, and evidence-identifier shape. Only confirmed
@@ -147,15 +150,16 @@ projection and expected lifecycle, and copies canonical state fields from that
 projection. It cannot publish shared memory. A prepared proposal is immutable
 at promotion time; changing it requires a new proposal and confirmation.
 
-The reconciliation command is an administrator operation outside the installed
-plugin. It reads the complete scoped observation lane, runs the single
-versioned relationship-resolution/projector pass, and upserts only changed
-derived projections after an explicit `--apply`. It never turns audit
+The plugin runs reconciliation only after a confirmed promotion; the
+administrator command runs the same code after an explicit `--apply`. It reads
+the complete scoped observation lane, runs the single versioned
+relationship-resolution/projector pass, and writes only changed derived
+projections, replacing each only if it is unchanged since it was read. It never turns audit
 classifications, partial matches, or inferred "probably completed" states into
 terminal observations.
-Its scheduler checkout must be clean and pinned to the same reviewed commit or
-tag as the installed plugin so projection policy and runtime contracts cannot
-silently drift.
+The plugin's copies of the projector and policy are tested to be byte-identical
+to the versioned context model, and administrator commands should run from the
+same reviewed commit or tag as the installed plugin so they cannot drift.
 
 ## Supply chain
 

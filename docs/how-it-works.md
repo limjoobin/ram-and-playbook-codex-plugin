@@ -168,10 +168,13 @@ immutable shared `organizational_state` observation. This already-structured
 human update is written directly to RAM; it does not pass through document
 MemoryETL.
 
-One central idempotent reconciliation job reads the complete observation lane,
-applies relationship and lifecycle policy, and upserts only changed current
-projections. The PoC runs it every five minutes from one pinned scheduler
-checkout. It is not installed independently by every plugin user. See
+Right after the write, the plugin runs the idempotent reconciliation code: it
+reads the complete observation lane, applies relationship and lifecycle policy,
+and writes only changed current projections, so the update reaches the team's
+current view at once. Replacements name the revision they read, so two people
+publishing at the same moment cannot overwrite each other; the loser reads
+again and retries. The setup command and an administrator script run the same
+code after document ingestion. See
 [management-state reconciliation](management-reconciliation.md) and
 [private session promotion](private-session-promotion.md).
 
@@ -207,12 +210,13 @@ through the same SDK.
 
 Provision or deploy these separately:
 
-- a RAM service with an endpoint, store, API key, management owner lane,
-  configured custom memory types, and MemoryETL;
+- a RAM service with an endpoint, store, API key, configured custom memory
+  types, and MemoryETL;
 - a Playbook with the agenda Skill published and a readable data-plane REST
   endpoint, playbook ID, and reader key;
-- one shared namespace plus a distinct private namespace per participant; and
-- one central host for the five-minute reconciliation scheduler.
+- one shared namespace for every management record (documents, published
+  updates, and the current view), plus a distinct private namespace per
+  participant. Each record's `ownerId` is the participant who wrote it.
 
 Every user supplies the shared endpoints and scope plus private service keys
 and a participant value in `~/.config/redis-shared-memory/editor.env`. API keys
@@ -220,7 +224,7 @@ authenticate requests. The participant value records attribution but is not
 proof of identity.
 
 Installing the plugin does not provision RAM or Playbook, publish the Skill,
-declare custom memory types, or start a scheduler. The service-independent
+or declare custom memory types. The service-independent
 context contract is executable offline; RAM control-plane declarations and
 Playbook publication still use the supported administrator surface for the
 deployed release. The current configured-services bootstrap adapter remains

@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import threading
 import time
-from typing import Any, Mapping, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
 from .config import Config, PluginError, SLUG, error_status, public_error
 from .management import LIFECYCLE_STATUSES, STATE_KINDS, _attributes
@@ -800,11 +800,22 @@ class PromotionService:
         ram: PromotionRAM,
         ledger: PromotionLedger,
         outbox: PrivateEventOutbox | None = None,
+        refresh: Callable[[str], dict[str, Any]] | None = None,
     ) -> None:
         self.config = config
         self.ram = ram
         self.ledger = ledger
         self.outbox = outbox
+        # Rebuilds the current view after a confirmed promotion; see reconcile.py.
+        self.refresh = refresh
+
+    def _refresh(self, candidate_id: str) -> dict[str, Any]:
+        if self.refresh is None:
+            return {"projection_status": "pending_reconciliation"}
+        try:
+            return self.refresh(candidate_id)
+        except Exception as error:  # noqa: BLE001 - the observation is already saved
+            return {"projection_status": "pending_reconciliation", "projection_error": str(public_error(error)["code"])}
 
     def _flush_private_events(self) -> None:
         """Deliver queued hook events first so candidates carry their RAM event IDs."""
@@ -1057,7 +1068,7 @@ class PromotionService:
             "id": memory_id,
             "text": observation["subject"],
             "namespace": self.config.namespace,
-            "ownerId": self.config.agenda_owner_id,
+            "ownerId": self.config.participant,
             "memoryType": "organizational_state",
             "topics": [
                 "organizational-state",
@@ -1080,7 +1091,8 @@ class PromotionService:
             and record.get("text") == expected["text"]
             and isinstance(namespace, str)
             and namespace.casefold() == self.config.namespace.casefold()
-            and owner == self.config.agenda_owner_id
+            # 0.13 wrote promotions under the former shared owner; a retry must still match.
+            and owner in {self.config.participant, self.config.agenda_owner_id} - {""}
             and memory_type == "organizational_state"
             and _canonical(_attributes(dict(record))) == _canonical(expected["attributes"])
         )
@@ -1171,7 +1183,7 @@ class PromotionService:
                     "candidate_id": candidate_id,
                     "state_id": candidate.get("state_id"),
                     "observation_memory_id": candidate.get("observation_memory_id"),
-                    "projection_status": "pending_reconciliation",
+                    **self._refresh(candidate_id),
                 }
             raise PluginError(
                 "observation_required",
@@ -1201,6 +1213,7 @@ class PromotionService:
                 event,
                 event_id=f"promote-{candidate_id}",
             )
+        projection = self._refresh(candidate_id)
         return {
             "ok": True,
             "outcome": (
@@ -1214,10 +1227,13 @@ class PromotionService:
             "state_id": normalized["state_id"],
             "observation_memory_id": payload["id"],
             "observation_contract": OBSERVATION_SCHEMA,
-            "projection_status": "pending_reconciliation",
+            **projection,
             "message": (
-                "RAM stored the confirmed organizational-state observation directly. The central "
-                "reconciliation projector will update the current view on its next run."
+                "RAM stored the confirmed organizational-state observation and updated the team's current view."
+                if projection.get("projection_status") == "current"
+                else "RAM stored the confirmed organizational-state observation. The team's current view is "
+                "updated the next time an update is published or scripts/reconcile_management_state.py --apply runs; "
+                "do not publish this update again."
             ),
         }
 

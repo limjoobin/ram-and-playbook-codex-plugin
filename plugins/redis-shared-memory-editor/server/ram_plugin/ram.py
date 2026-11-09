@@ -274,11 +274,27 @@ class RAMClient:
             self.sdk.bulk_create_long_term_memories(memories=records, timeout_ms=self.timeout_ms)
         )
 
-    def upsert(self, memory: dict[str, Any]) -> dict[str, Any]:
-        """Create or fully replace one record, attributes included."""
+    def upsert(self, memory: dict[str, Any], expected_revision: str | None = None) -> dict[str, Any]:
+        """Create or fully replace one record, attributes included.
+
+        With ``expected_revision`` the replacement applies only if the record
+        has not changed since it was read; RAM returns 412 otherwise.
+        """
+
+        arguments = self._sdk_record(memory)
+        if expected_revision:
+            arguments["expected_revision"] = expected_revision
+        return _dump(self.sdk.upsert_long_term_memory(**arguments, timeout_ms=self.timeout_ms))
+
+    def move(self, memory_ids: list[str], namespace: str) -> dict[str, Any]:
+        """Move explicit records into the named namespace, creating it on first use."""
 
         return _dump(
-            self.sdk.upsert_long_term_memory(**self._sdk_record(memory), timeout_ms=self.timeout_ms)
+            self.sdk.move_long_term_memories(
+                memory_ids=memory_ids,
+                namespace_id=self.namespace_id(namespace, create=True),
+                timeout_ms=30_000,
+            )
         )
 
     def update(self, memory_id: str, changes: dict[str, Any]) -> dict[str, Any]:

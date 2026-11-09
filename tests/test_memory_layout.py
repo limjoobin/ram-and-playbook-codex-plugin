@@ -54,6 +54,14 @@ SETTINGS = {
 }
 
 
+class RAMStatusError(Exception):
+    """Stand-in for a redis-iris SDK HTTP error, which exposes status_code."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"status {status_code}")
+        self.status_code = status_code
+
+
 class StoreSDK:
     """An in-memory Agent Memory store speaking the generated SDK's shapes."""
 
@@ -75,14 +83,24 @@ class StoreSDK:
                 errors.append({"memoryId": item["memory_id"], "status": 409})
                 continue
             # RAM stores the JSON it was given; a round trip must not depend on object identity.
-            self.records[item["memory_id"]] = json.loads(json.dumps(item))
+            self.records[item["memory_id"]] = {**json.loads(json.dumps(item)), "revision": "1"}
             created.append(item["memory_id"])
         return {"created": created, "errors": errors}
 
     def upsert_long_term_memory(self, **kwargs):
         kwargs.pop("timeout_ms", None)
+        expected = kwargs.pop("expected_revision", None)
+        current = self.records.get(kwargs["memory_id"])
+        if expected is not None and (current is None or current.get("revision") != expected):
+            raise RAMStatusError(412)
+        kwargs["revision"] = str(int((current or {}).get("revision") or 0) + 1)
         self.records[kwargs["memory_id"]] = json.loads(json.dumps(kwargs))
         return self._wire(self.records[kwargs["memory_id"]])
+
+    def move_long_term_memories(self, **kwargs):
+        for memory_id in kwargs["memory_ids"]:
+            self.records[memory_id]["namespace_id"] = kwargs["namespace_id"]
+        return {"moved": list(kwargs["memory_ids"])}
 
     @staticmethod
     def _wire(item: dict) -> dict:
@@ -93,6 +111,7 @@ class StoreSDK:
             "memoryType": item.get("memory_type"),
             "topics": item.get("topics", []),
             "attributes": item.get("attributes", {}),
+            "revision": item["revision"],
         }
         if item.get("namespace_id"):
             wire["namespaceId"] = item["namespace_id"]
@@ -103,6 +122,10 @@ class StoreSDK:
 
         def matches(item: dict) -> bool:
             if "owner_id" in clause and item.get("owner_id") != clause["owner_id"]["eq"]:
+                return False
+            if "namespace_id" in clause and item.get("namespace_id") != clause["namespace_id"]["eq"]:
+                return False
+            if clause.get("unnamespaced") and item.get("namespace_id"):
                 return False
             if "memory_type" in clause and item.get("memory_type") != clause["memory_type"]["eq"]:
                 return False
@@ -129,7 +152,8 @@ def _observations() -> list[dict]:
         {
             "id": record["id"],
             "text": record["text"],
-            "ownerId": CONFIG.agenda_owner_id,
+            "ownerId": CONFIG.participant,
+            "namespace": CONFIG.namespace,
             "memoryType": "organizational_state",
             "topics": ["organizational-state"],
             "attributes": record["attributes"],

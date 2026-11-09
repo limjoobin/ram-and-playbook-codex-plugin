@@ -273,7 +273,7 @@ class PromotionTests(unittest.TestCase):
         self.assertEqual(len(self.ram.created), 1)
         shared = self.ram.created[0][0]
         self.assertEqual(shared["namespace"], CONFIG.namespace)
-        self.assertEqual(shared["ownerId"], CONFIG.agenda_owner_id)
+        self.assertEqual(shared["ownerId"], CONFIG.participant)  # the author
         self.assertEqual(shared["memoryType"], "organizational_state")
         self.assertEqual(shared["attributes"]["schema_version"], OBSERVATION_SCHEMA)
         self.assertEqual(
@@ -444,8 +444,9 @@ class PromotionTests(unittest.TestCase):
             )
             self.assertEqual(self.ram.created[-1][0]["namespace"], CONFIG.namespace)
             self.assertEqual(bob_ram.created[-1][0]["namespace"], CONFIG.namespace)
-            self.assertEqual(self.ram.created[-1][0]["ownerId"], CONFIG.agenda_owner_id)
-            self.assertEqual(bob_ram.created[-1][0]["ownerId"], CONFIG.agenda_owner_id)
+            # Same shared namespace, each update owned by its author.
+            self.assertEqual(self.ram.created[-1][0]["ownerId"], "alice")
+            self.assertEqual(bob_ram.created[-1][0]["ownerId"], "bob")
             self.assertNotEqual(self.ram.created[-1][0]["id"], bob_ram.created[-1][0]["id"])
 
 

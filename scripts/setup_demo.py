@@ -254,6 +254,8 @@ def collect(existing: dict[str, str]) -> tuple[dict[str, str], str]:
         "RAM_NAMESPACE": namespace,
         "RAM_PERSONAL_NAMESPACE": f"private-{participant}",
         "RAM_PARTICIPANT": participant,
+        # Earlier versions wrote the demo under this one owner; it is used only
+        # to find those records and move them into the namespace.
         "RAM_AGENDA_OWNER_ID": existing.get("RAM_AGENDA_OWNER_ID", "ami-project-office"),
         "RAM_MEMORY_LAYOUT": existing.get("RAM_MEMORY_LAYOUT", "compact"),
         # The private-capture hooks record only sessions in this project.
@@ -327,7 +329,7 @@ def main(argv: list[str]) -> int:
     from ram_plugin.credentials import load_credential_file
     from ram_plugin.playbook import PlaybookClient
     from ram_plugin.ram import RAMClient
-    from reconciliation.job import ReconciliationError, ReconciliationJob
+    from reconciliation.job import ReconciliationError, ReconciliationJob, adopt_unnamespaced, move_into_namespace
 
     say("Redis Shared Memory + Playbook setup")
     path = config_path(args.config)
@@ -356,7 +358,7 @@ def main(argv: list[str]) -> int:
     step(3, "Check the connection")
     ram = RAMClient(config, timeout_ms=30_000)
     try:
-        ram.search({"filter": {"ownerId": {"eq": config.agenda_owner_id}}, "limit": 1})
+        ram.search({"filter": {"ownerId": {"eq": config.participant}}, "limit": 1})
         say("  ✓ Agent Memory accepted the key.")
     except Exception as error:  # noqa: BLE001 - report the public code only
         say(f"  ✗ Agent Memory: {public_error(error)['message']}")
@@ -375,6 +377,15 @@ def main(argv: list[str]) -> int:
     if not args.skip_load:
         step(4, "Load the demo documents")
         try:
+            # Everything for the project lives in the shared namespace. Records
+            # from older setups that have no namespace are moved there first, so
+            # they are not mistaken for missing documents and loaded twice.
+            adopted = adopt_unnamespaced(config, ram, apply=True)
+            if adopted["moved_count"]:
+                say(f"  Moved {adopted['moved_count']} earlier record(s) into the {config.namespace} namespace.")
+                if not job.wait_until_searchable(adopted["moved_observation_ids"]):
+                    say("  ✗ The moved records are not searchable yet. Wait a minute and run this command again.")
+                    return 1
             existing_observations = job.load_observations()
         except (ReconciliationError, PluginError) as error:
             say(f"  ✗ {error}")
@@ -394,20 +405,30 @@ def main(argv: list[str]) -> int:
                 result = ingest_documents(
                     ram,
                     documents,
-                    owner_id=config.agenda_owner_id,
+                    owner_id=config.participant,
                     extractor_id=extractor_id,
                     timeout_seconds=900,
                     poll_seconds=5,
                 )
+                created = [memory_id for item in result.get("artifacts", []) for memory_id in item.get("memoryIds", [])]
+                # MemoryETL places its output by the extractor's settings, so move
+                # it into the shared namespace explicitly.
+                move_into_namespace(config, ram, created)
             except (MemoryETLError, PluginError) as error:
                 say(f"  ✗ {error}")
                 say("  Check the extractor ID and that the extractor uses the organizational_state type.")
+                return 1
+            except ReconciliationError as error:
+                say(f"  ✗ {error}")
                 return 1
             except Exception as error:  # noqa: BLE001
                 say(f"  ✗ {public_error(error)['message']}")
                 return 1
             outputs = sum(item.get("outputCount", 0) for item in result.get("artifacts", []))
             say(f"  ✓ Extraction finished ({outputs} records).")
+            if not job.wait_until_searchable(created):
+                say("  ✗ The new records are not searchable yet. Wait a minute and run this command again.")
+                return 1
         try:
             applied = job.run(apply=True)
         except ReconciliationError as error:

@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     from admin_bootstrap.memory_etl import MemoryETLError, ingest_documents
     from ram_plugin.credentials import load_credential_file
     from ram_plugin.ram import RAMClient
+    from reconciliation.job import ReconciliationError, move_into_namespace
 
     try:
         bundle = Bundle.load(ROOT / "context-models" / "management-agenda" / "v1")
@@ -67,16 +68,21 @@ def main(argv: list[str] | None = None) -> int:
             }
         else:
             config = load_credential_file(args.config)
+            ram = RAMClient(config)
             result = ingest_documents(
-                RAMClient(config),
+                ram,
                 documents,
-                owner_id=config.agenda_owner_id,
+                owner_id=config.participant,
                 extractor_id=args.extractor_id,
                 timeout_seconds=args.timeout_seconds,
                 poll_seconds=args.poll_seconds,
                 rehydration_id=args.rehydration_id,
             )
-    except (BundleError, MemoryETLError) as error:
+            # MemoryETL places output by the extractor's settings; every
+            # management record belongs in the shared namespace.
+            created = [memory_id for item in result["artifacts"] for memory_id in item.get("memoryIds", [])]
+            result["movedToNamespace"] = len(move_into_namespace(config, ram, created))
+    except (BundleError, MemoryETLError, ReconciliationError) as error:
         result = {"ok": False, "status": "failed", "message": str(error)}
     except Exception as error:
         status = getattr(error, "status_code", None)

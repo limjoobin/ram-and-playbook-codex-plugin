@@ -53,7 +53,6 @@ Before changing a service, record these values outside the repository:
 - the approved Git release tag or commit SHA;
 - RAM data-plane endpoint, store ID, shared namespace, and an administrator
   credential for the approved service operations;
-- the management owner lane, normally `ami-project-office`;
 - a configured RAM model/embedding provider and running MemoryETL worker;
 - Playbooks data-plane base URL, playbook ID (`pb_` plus 32 lowercase hex), a
   read/write/publish content key, and a separate runtime reader key; and
@@ -142,7 +141,7 @@ Before continuing, verify:
 
 - RAM and Playbook are reachable from the central host and tester laptops;
 - RAM has its model provider and asynchronous MemoryETL processing available;
-- the shared namespace and management owner lane are agreed; and
+- the shared namespace is agreed (every management record lives there); and
 - the Playbooks content (publish) key is held only by the administrator.
 
 Managed Redis Agent Memory provisions its model and embedding provider with
@@ -292,7 +291,7 @@ an administrator must additionally
 obtain the approved normalized corpus and a reviewed ingestion adapter; those
 13 artifacts are not checked into this repository.
 
-## 7. Build current state and start reconciliation
+## 7. Build current state
 
 Run a read-only projection plan first:
 
@@ -300,29 +299,23 @@ Run a read-only projection plan first:
 .venv/bin/python scripts/reconcile_management_state.py
 ```
 
-Review the target scope and proposed changes, then apply:
+Review the target scope and proposed changes, including any management
+records that have no namespace, then apply:
 
 ```sh
 .venv/bin/python scripts/reconcile_management_state.py --apply
 ```
 
-The command reads immutable observations, applies the checked-in relationship
-and lifecycle policy, and upserts only changed projections by deterministic
-ID. Repeated runs are idempotent.
+The command moves any unnamespaced management records into the shared
+namespace, reads the observations, applies the checked-in relationship and
+lifecycle policy, and writes only changed projections by deterministic ID.
+Repeated runs are idempotent.
 
-For the current PoC, run the same command centrally every five minutes:
-
-```sh
-.venv/bin/python scripts/reconcile_management_state.py --apply --quiet-no-changes
-```
-
-Install that schedule once on the central host, not through every user's
-plugin. Keep its checkout clean and detached at the same approved release used
-by participants. The repository currently documents the macOS LaunchAgent
-contract but does not ship an installer; follow
-[docs/management-reconciliation.md](docs/management-reconciliation.md) and the
-host's approved operations process. Confirm the job's last exit status is zero
-after pinning or updating the release.
+No scheduler is needed. The installed plugin rebuilds the current view itself
+after every confirmed promotion, with the same code. Run this command again
+after ingesting documents outside `scripts/setup_demo.py`, or when a promotion
+reports `pending_reconciliation`. See
+[docs/management-reconciliation.md](docs/management-reconciliation.md).
 
 ## 8. Install one participant and accept the environment
 
@@ -373,6 +366,5 @@ visible handover limitation.
 A future live bootstrap adapter may automate the administrator stages only if
 every mutation has an exact pre-check, deterministic idempotency key, bounded
 asynchronous wait, post-write readback, sanitized attestation, and a safe
-answer for ambiguous writes. It must also provide reviewed scheduler
-install/status/uninstall operations. Do not add those capabilities by routing
+answer for ambiguous writes. Do not add those capabilities by routing
 arbitrary HTTP or MCP calls through the desktop plugin.
