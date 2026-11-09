@@ -198,6 +198,11 @@ owned by a participant.
 Version 0.13.0 uses the redis-iris SDK and renames the settings. There is no
 fallback: the old names are rejected as unexpected. Edit the file in place.
 
+0.13.0 also defaults to the new compact storage layout. A store created by
+0.12.x uses the two expanded custom memory types, so add
+`RAM_MEMORY_LAYOUT=expanded` to every participant's settings file; without it
+the existing records are not found.
+
 | 0.12.x | 0.13.0 |
 | --- | --- |
 | `RAM_ENDPOINT` | `IRIS_AGENT_MEMORY_URL` |
@@ -211,8 +216,8 @@ fallback: the old names are rejected as unexpected. Edit the file in place.
 unchanged. `RAM_AGENDA_OWNER_ID` is optional (see the table above). Python 3.11+ is now required, and the new
 runtime must be installed (step 4).
 
-The hook definitions are unchanged from 0.12.x, so existing hook trust still
-applies. Hooks stay standard-library only and never load the SDK or touch the
+The `SessionEnd` hook gained a status message in 0.13.0, so ChatGPT asks you to
+review the hooks again once after upgrading. Hooks stay standard-library only and never load the SDK or touch the
 network: each hook writes its private event to a local queue (`0600` files in
 a `0700` directory under the plugin data directory) and returns. The running
 MCP server, which loads the SDK once per session, delivers queued events to

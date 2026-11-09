@@ -108,6 +108,22 @@ class ContextPipelineTests(unittest.TestCase):
             all(item["idempotency_key"] for item in ram.submissions)
         )
         self.assertIn("reconcile_management_state.py --apply", result["nextStep"])
+        # Output IDs are kept so setup can move them into the shared namespace.
+        self.assertEqual(result["artifacts"][0]["memoryIds"], ["memory-ingestion-1"])
+
+    def test_output_ids_are_read_from_strings_as_the_sdk_returns_them(self):
+        result = ingest_documents(
+            CurrentContractMemoryETL(),
+            ingestion_documents(self.bundle),
+            owner_id="andrew",
+            extractor_id="organizational-state-documents",
+            poll_seconds=0.01,
+            sleep=lambda _: None,
+        )
+        self.assertEqual(
+            [item["memoryIds"] for item in result["artifacts"]],
+            [["memory-ingestion-1"], ["memory-ingestion-2"], ["memory-ingestion-3"]],
+        )
 
     def test_rehydration_id_scopes_idempotency_without_changing_documents(self):
         documents = ingestion_documents(self.bundle)

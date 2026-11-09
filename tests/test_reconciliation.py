@@ -156,7 +156,7 @@ class FakeRAM:
         self.idempotent_events[key] = result
         return result
 
-    def get_session(self, session_id, timeout_ms=None):
+    def get_session(self, session_id, timeout_ms=None, include_summarised=False):
         return {"events": list(self.sessions.get(session_id, []))}
 
 

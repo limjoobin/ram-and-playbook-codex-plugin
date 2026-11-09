@@ -378,12 +378,19 @@ class RAMClient:
             )
         )
 
-    def get_session(self, session_id: str, timeout_ms: int | None = None) -> dict[str, Any]:
-        """Read a session for idempotency and promotion provenance checks."""
+    def get_session(
+        self, session_id: str, timeout_ms: int | None = None, include_summarised: bool = False
+    ) -> dict[str, Any]:
+        """Read a session for idempotency and promotion provenance checks.
 
-        session = _dump(
-            self.sdk.get_session_memory(session_id=session_id, timeout_ms=self._timeout(timeout_ms))
-        )
+        ``include_summarised`` also returns events already folded into the
+        session summary, which a redelivery conflict may need to find.
+        """
+
+        arguments: dict[str, Any] = {"session_id": session_id, "timeout_ms": self._timeout(timeout_ms)}
+        if include_summarised:
+            arguments["include_summarised_events"] = True
+        session = _dump(self.sdk.get_session_memory(**arguments))
         namespace_id = session.pop("namespaceId", None)
         if isinstance(namespace_id, str) and namespace_id:
             session["namespace"] = self.namespace_name(namespace_id)

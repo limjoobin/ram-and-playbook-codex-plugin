@@ -53,8 +53,11 @@ class ConflictRAM(FakePromotionRAM):
         wrapped.__cause__ = StatusError(409)
         raise wrapped
 
-    def get_session(self, session_id, timeout_ms=None):
-        return {"sessionId": session_id, "events": self.stored.sessions.get(session_id, [])}
+    def get_session(self, session_id, timeout_ms=None, include_summarised=False):
+        # The stored event is already folded into the session summary, so RAM
+        # returns it only when summarised events are requested.
+        events = self.stored.sessions.get(session_id, []) if include_summarised else []
+        return {"sessionId": session_id, "events": events}
 
 
 class OutboxTests(unittest.TestCase):

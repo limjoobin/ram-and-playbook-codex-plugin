@@ -50,6 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     from admin_bootstrap.bundle import Bundle, BundleError
     from admin_bootstrap.context_pipeline import ingestion_documents
     from admin_bootstrap.memory_etl import MemoryETLError, ingest_documents
+    from ram_plugin.config import error_chain, error_status
     from ram_plugin.credentials import load_credential_file
     from ram_plugin.ram import RAMClient
     from reconciliation.job import ReconciliationError, move_into_namespace
@@ -85,8 +86,16 @@ def main(argv: list[str] | None = None) -> int:
     except (BundleError, MemoryETLError, ReconciliationError) as error:
         result = {"ok": False, "status": "failed", "message": str(error)}
     except Exception as error:
-        status = getattr(error, "status_code", None)
-        error_type = getattr(getattr(error, "data", None), "type", None)
+        # The SDK can wrap the HTTP error; read the status and type through the cause chain.
+        status = error_status(error)
+        error_type = next(
+            (
+                value
+                for item in error_chain(error)
+                if isinstance(value := getattr(getattr(item, "data", None), "type", None), str) and value
+            ),
+            None,
+        )
         problem = f" ({error_type})" if isinstance(error_type, str) and error_type else ""
         if status == 409:
             message = (

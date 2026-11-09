@@ -487,7 +487,8 @@ class PrivateEventOutbox:
         """
 
         try:
-            session = ram.get_session(request["session_id"], timeout_ms=timeout_ms)
+            # The event may already be folded into the session summary.
+            session = ram.get_session(request["session_id"], timeout_ms=timeout_ms, include_summarised=True)
         except Exception:
             return None
         for event in session.get("events") or []:

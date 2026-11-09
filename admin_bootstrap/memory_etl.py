@@ -156,7 +156,12 @@ def ingest_documents(
                 "revision": revision,
                 "status": "succeeded",
                 "outputCount": len(items),
-                "memoryIds": [item for item in items if isinstance(item, str)],
+                # The SDK returns ID strings; accept {"memoryId": ...} objects too.
+                "memoryIds": [
+                    item if isinstance(item, str) else str(item.get("memoryId") or item.get("memory_id") or "")
+                    for item in items
+                    if isinstance(item, str) or isinstance(item, dict)
+                ],
             }
         )
     return {
