@@ -52,8 +52,6 @@ python3 -c 'import sys; print("Python", sys.version.split()[0], "OK" if sys.vers
 
 You should see a line ending in **OK**.
 
-![Terminal showing the Python version check ending in OK](docs/images/getting-started/local-01-terminal-python-check.png)
-
 **If you see `TOO OLD` or "command not found":** install the latest Python from
 [python.org/downloads](https://www.python.org/downloads/macos/) (or ask IT for
 the approved version), close Terminal, open it again, and repeat this step.
@@ -243,8 +241,6 @@ The plugin only reads from the Playbook, so give it a read-only key.
    selected. The summary reads **Agent Playbooks · 1 resource · read**.
 4. Select **Create key** and copy the key into your password manager.
 
-   ![The full API key page with only read selected for the Playbook](docs/images/getting-started/console-20-playbook-reader-key.png)
-
 ---
 
 ## Part 3: Connect your computer
@@ -348,12 +344,8 @@ hooks:
    asked again only if a future version changes the hooks.
 3. ChatGPT may ask permission before using the plugin. Allow it.
 
-   ![ChatGPT asking permission to use a Redis Shared Memory tool](docs/images/getting-started/local-08-chatgpt-tool-approval.png)
-
 You should see that the connection is **verified**, with your namespace,
 your participant name, and the plugin version.
-
-![ChatGPT reporting a verified connection](docs/images/getting-started/local-09-chatgpt-connection-status.png)
 
 If anything shows as an error, see [If something goes wrong](#if-something-goes-wrong).
 
