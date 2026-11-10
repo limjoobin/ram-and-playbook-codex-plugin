@@ -235,8 +235,7 @@ The plugin only reads from the Playbook, so give it a read-only key.
 
 1. Select **Connect** at the top of the Playbook page, then **Create an API key**.
 2. In the dialog, select **Customize in the full page**. The small dialog
-   currently cannot switch off **full** access
-   ([MOD-20988](https://redislabs.atlassian.net/browse/MOD-20988)).
+   currently cannot switch off **full** access.
 3. Under **Agent Playbooks**, uncheck **full** so that only **read** stays
    selected. The summary reads **Agent Playbooks · 1 resource · read**.
 4. Select **Create key** and copy the key into your password manager.
@@ -534,3 +533,12 @@ login; access is controlled by your keys. Details are in
 - [docs/management-agenda-demo-runbook.md](docs/management-agenda-demo-runbook.md):
   presenter notes
 - [AGENTS.md](AGENTS.md) and [SECURITY.md](SECURITY.md): for maintainers
+
+## License
+
+This repository (the example plugin, scripts, documentation, and synthetic
+demo data) is available under the [MIT License](LICENSE). That license covers
+only this repository. Redis Iris, including Redis Agent Memory and Redis Agent
+Playbooks, is offered under a separate Redis license; see
+[redis.io/iris](https://redis.io/iris). The two AMI Meeting Corpus documents in
+the demo keep their original CC BY 4.0 license.

@@ -158,7 +158,7 @@ and one document extractor using
 [`extraction-prompt-compact.txt`](context-models/management-agenda/v1/extraction-prompt-compact.txt).
 Both are entered in the Redis Cloud console; the README's Steps 4 and 5 walk
 through it with screenshots. Redis Cloud does not yet offer a customer API for
-custom memory types (MOD-18619, MOD-18732), which is why the compact layout is
+custom memory types, which is why the compact layout is
 small enough to enter by hand.
 
 The **expanded** layout (`RAM_MEMORY_LAYOUT=expanded`) keeps the original two
@@ -209,7 +209,7 @@ On Redis Cloud the simplest path is the console: `python3 scripts/package_skill.
 builds the Skill ZIP from the checked-in files after verifying every digest and
 prints the alias, intents, and attributes for **Upload Skill**; then publish the
 version (README Step 7). Give runtime users a read-only key created through
-**Customize in the full page** (MOD-20988).
+**Customize in the full page**; the small dialog cannot switch off full access.
 
 The current bootstrap adapter cannot publish to a live Playbook. The bundled
 `iris` CLI can: export `IRIS_AGENT_PLAYBOOKS_URL`,
