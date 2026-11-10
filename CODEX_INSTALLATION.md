@@ -87,14 +87,14 @@ The steps below are the manual equivalent.
 
 ## 1. Add the marketplace
 
-The current development ref is:
+The development branch is `main`:
 
 ```sh
-codex plugin marketplace add redis-field-engineering/ram-and-playbook-codex-plugin --ref plugin-wireframe
+codex plugin marketplace add redis-field-engineering/ram-and-playbook-codex-plugin --ref main
 codex plugin marketplace list
 ```
 
-For a customer rollout, replace `plugin-wireframe` with the administrator-
+For a customer rollout, replace `main` with the administrator-
 approved release tag or commit SHA. If the repository is private, Git access
 and credentials must already be configured for the user; the plugin does not
 bypass GitHub or enterprise policy.
@@ -102,7 +102,7 @@ bypass GitHub or enterprise policy.
 To review and install from a local checkout instead:
 
 ```sh
-git clone --branch plugin-wireframe --single-branch https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin.git
+git clone --branch main --single-branch https://github.com/redis-field-engineering/ram-and-playbook-codex-plugin.git
 cd ram-and-playbook-codex-plugin
 codex plugin marketplace add "$PWD"
 ```
@@ -437,7 +437,7 @@ and refresh the installed cache explicitly:
 
 ```sh
 cd /path/reported/for/redis-field-engineering
-git pull --ff-only origin plugin-wireframe
+git pull --ff-only origin main
 codex plugin remove redis-shared-memory-editor@redis-field-engineering
 codex plugin add redis-shared-memory-editor@redis-field-engineering
 ```
