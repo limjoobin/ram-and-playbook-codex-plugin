@@ -234,12 +234,9 @@ The Playbook holds the instructions ChatGPT follows to prepare an agenda.
 The plugin only reads from the Playbook, so give it a read-only key.
 
 1. Select **Connect** at the top of the Playbook page, then **Create an API key**.
-2. In the dialog, select **Customize in the full page**. The small dialog
-   currently cannot switch off **full** access
-   ([MOD-20988](https://redislabs.atlassian.net/browse/MOD-20988)).
-3. Under **Agent Playbooks**, uncheck **full** so that only **read** stays
+2. Under **What can this key do**, uncheck **full** so that only **read** stays
    selected. The summary reads **Agent Playbooks · 1 resource · read**.
-4. Select **Create key** and copy the key into your password manager.
+3. Select **Create key** and copy the key into your password manager.
 
 ---
 
